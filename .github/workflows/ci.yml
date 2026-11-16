@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Windows is not optional: the shell is WPF and the TFM is net8.0-windows10.0.19041.0.
+# The WebView2 runtime gate (--selftest) and every human row stay off CI on purpose:
+# they need a desktop session and a signed-in service, so a green CI run means
+# "compiles clean and the pure logic is correct", never "phase gate passed".
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: nuget-
+
+      # Locked mode makes a silently floating version a build failure, which is the point
+      # of checking the lock files in.
+      - name: Restore
+        run: dotnet restore --locked-mode
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Unit tests
+        run: dotnet test --no-build -c Release --filter "Category!=Integration" --logger "console;verbosity=normal"
