@@ -44,7 +44,12 @@ public sealed class FileLog : ILog
                     line += Environment.NewLine + exception;
                 }
 
-                File.AppendAllText(_path, line + Environment.NewLine);
+                // Shared writes on purpose: a second launch logs its own start while the
+                // resident instance is still writing, and losing that line made a delivered
+                // toast click look like it never arrived.
+                using var stream = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+                using var writer = new StreamWriter(stream);
+                writer.WriteLine(line);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

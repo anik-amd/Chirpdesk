@@ -29,8 +29,12 @@ public partial class HostWindow : Window
 
     public void ClearServiceContent() => ServiceLayer.Children.Clear();
 
-    /// <summary>User-requested show: normal app window, taskbar button, Alt+Tab entry.</summary>
-    public void ShowForUser()
+    /// <summary>
+    /// User-requested show: normal app window, taskbar button, Alt+Tab entry.
+    /// Returns whether Windows actually granted the foreground, which is the part that
+    /// silently fails when the request comes from the shell rather than from this process.
+    /// </summary>
+    public bool ShowForUser()
     {
         WindowChrome.MakeAppWindow(Handle);
 
@@ -49,7 +53,7 @@ public partial class HostWindow : Window
 
         // Activate() alone loses to Windows' foreground lock when the request came from a
         // toast; asking directly is the only lever a desktop app has.
-        _ = Interop.NativeMethods.SetForegroundWindow(Handle);
+        return Interop.NativeMethods.SetForegroundWindow(Handle);
     }
 
     /// <summary>Hide without tearing anything down: the webviews keep running.</summary>

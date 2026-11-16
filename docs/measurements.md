@@ -53,6 +53,12 @@ The probe harness passed throughout, because a synthetic notification does not c
 
 `hidden-warm` is the R2 evidence: a page ticking once a second, parked in an off-screen 1×1 webview, ticked 60 times in 60 seconds. Chromium's default throttling would have cut that to roughly one tick per minute.
 
+## Soak, 2026-11-16 → 2026-11-17
+
+One process, `pid 10568`, started 22:33 and hidden until 01:04 (2.53 h). Messages at 01:00 and 01:01 both produced toasts, and nothing was replayed on the way back. Between 00:08 and 00:37 the unread title changed several times without a `NotificationReceived`; those were read-state syncs, not new messages, and the absence of any drop log confirms the bridge was never handed an event to reject.
+
+The soak proves the socket survived 2.5 h of occlusion and that the anti-throttle flags hold past the first minute. It does not prove delivery if the machine sleeps — there is no sleep policy until phase 2 — and the machine was on AC with standby disabled.
+
 `pwsh scripts/gate.ps1` runs that plus the teardown checks, which need a second process to observe:
 
 ```

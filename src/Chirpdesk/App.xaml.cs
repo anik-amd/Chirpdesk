@@ -37,7 +37,7 @@ public partial class App : Application
 
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
-        _log.Info($"starting with {e.Args.Length} argument(s)");
+        _log.Info($"starting with {e.Args.Length} argument(s), pid {Environment.ProcessId}");
 
         if (!SingleInstance.TryAcquire(out _singleInstance))
         {
@@ -199,7 +199,11 @@ public partial class App : Application
     }
 
     /// <summary>Raised by a second launch (a toast click or the shortcut) on the listener thread.</summary>
-    private void OnShowRequested(object? sender, EventArgs e) => Dispatcher.Invoke(ShowHost);
+    private void OnShowRequested(object? sender, EventArgs e)
+    {
+        _log?.Info("show requested by another launch");
+        Dispatcher.Invoke(ShowHost);
+    }
 
     private void OnHostKeyDown(object sender, KeyEventArgs e)
     {
@@ -233,9 +237,16 @@ public partial class App : Application
 
     private void ShowHost()
     {
-        _log?.Info("showing the window on request");
+        if (_host is null)
+        {
+            return;
+        }
+
+        var wasVisible = _host.IsVisible;
         _service?.Activate();
-        _host?.ShowForUser();
+        var foreground = _host.ShowForUser();
+
+        _log?.Info($"window shown: wasVisible={wasVisible} foreground={foreground} visible={_host.IsVisible}");
     }
 
     private void HideHost()

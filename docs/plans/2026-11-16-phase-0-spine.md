@@ -353,7 +353,7 @@ The show path for these steps is `Chirpdesk.exe --open=whatsapp`: it seeds the W
 - [x] **Sign in once** with the window shown (the documented phase-0 exception), then hide it. WhatsApp logged in via `--open=whatsapp`, window hidden with Esc afterwards.
 - [x] Notification capability for WhatsApp recorded as `native` — the real message fired `NotificationReceived` at 22:07:21, and a notification raised inside the WhatsApp page reached a toast.
 - [x] Message from a second phone toasts, titled "Chirpdesk", after the two gate defects were fixed (see `docs/measurements.md`, live gate findings).
-- [ ] 3 hours tray-hidden: a second message still toasts (socket alive), and there is no toast backlog on resume.
+- [x] 3 hours tray-hidden: a second message still toasts (socket alive), and there is no toast backlog on resume. Same process (pid 10568) from 22:33 to 01:04, 2.53 h hidden; messages at 01:00 and 01:01 both toasted; no burst on the way back.
 - [x] Clicking the toast shows the app on WhatsApp (no deep link required while resident). Confirmed by the human after activation was marshalled to the UI thread.
 - [x] The window was never visible except for the deliberate sign-in and toast clicks. Alt+Tab shows nothing while it is hidden (reported by the human, and asserted as `WS_EX_TOOLWINDOW` set / `WS_EX_APPWINDOW` clear by `--selftest`).
 - [x] Task Manager: no runaway CPU; RAM recorded — 547 MB private for the warm WhatsApp instance, and 158 MB of profile.
