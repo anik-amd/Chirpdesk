@@ -302,7 +302,7 @@ site calls new Notification(...)  ──►  CoreWebView2.NotificationReceived
                                         ├─ Handled = true (suppress WebView2 default UI)
                                         ├─ boot cutoff: drop notifications older than process start
                                         ├─ dedupe (one per service instance): tag + sender/title + SHA-256(body) for 3 s
-                                        ├─ warm-up gate: drop until service ready + 5 s stable title
+                                        ├─ warm-up gate: drop until the page has been ready for 5 s (time-based, never title-based: a message changes the title at the same instant it notifies)
                                         ├─ per-service mute / global DND filter
                                         └─► ToastNotification via AUMID
                                               shown ──► ReportShown
@@ -321,6 +321,8 @@ Per-service capability probe, done in phase 0 and recorded per definition:
 | `title-only` | `DocumentTitleChanged` + unread count → generic toast ("New message in WhatsApp") | background service-worker push only; degraded but never silent |
 
 The mode is a property of the service definition, overridable per instance, and shown in Settings. The shim is built-in host code, not a plugin permission: `inject-js` remains unavailable to plugins. If a site needs background push with content and WebView2 cannot provide it, that is an ADR-0003 failure recorded at the gate, not something to paper over.
+
+Phase 0 measured WhatsApp Web as **`native`**: a real message on 2026-11-16 fired `NotificationReceived` with title and body, and the toast carried both (`docs/measurements.md`). No shim is needed for it; the mode field stays because the other services are still unmeasured.
 
 - **Origin check:** a notification whose `SenderOrigin` is not the service origin or an allowed subdomain is dropped. Otherwise an ad iframe could toast.
 - **AUMID:** `Chirpdesk` + a Start-menu shortcut carrying `System.AppUserModel.ID`, created on first run (IShellLink). Without it Windows shows "(unknown app)". Uninstall removes it.
