@@ -330,7 +330,9 @@ Phase 0 measured WhatsApp Web as **`native`**: a real message on 2026-11-16 fire
 - **Sound:** per-service mute respected; otherwise the Windows toast sound plays.
 - **DND:** toast suppressed, badge keeps counting; optional schedule. Notifications that expire during DND are dropped, not replayed.
 - **OS-level block:** if Windows notifications are disabled for the app, `ToastNotifier.Setting` is detected and Settings says so instead of silently swallowing toasts.
-- **Click when the app is not running:** v1 is autostart-resident, so the normal path is click → show service. Deep-linking a cold app needs a COM notification activator and is **not** promised in v1; the toast still opens the app.
+- **Click when the app is not running:** a click from the Action Center activates the app through a per-user COM class (ADR 0009); the resident instance shows the toast's service, and if nothing is running the COM-launched process signals the app into existence. Cold-start deep links are still not promised.
+- **Click destination:** a click opens the service the toast came from, not the last one used. It does **not** open the conversation: WebView2 exposes title, body, tag and icon, and a chat route cannot be derived from those reliably.
+- **Deep link into a conversation:** a property of a **definition**, not of an arbitrary site. A definition may ship an `activation` template (`urlTemplate` over `{tag}`, with a required tag pattern), because only the definition knows the site's routing. An arbitrary site gets "opens the site" and no more; that asymmetry is deliberate and is the reason to ship definitions for services rather than only adding URLs.
 - **Inline reply:** out of scope for v1 (COM activation + toast input). Click-to-open only.
 
 ---

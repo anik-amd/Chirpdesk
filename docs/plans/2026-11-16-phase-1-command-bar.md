@@ -16,11 +16,13 @@ Read before writing code: `PLAN.md` §5.1, §6, §11, §12; ADR 0002 (bar and ke
 - Create: `src/Chirpdesk.Core/Definitions/ServiceDefinition.cs`, `ThemeDefinition.cs`, `PluginManifest.cs`, `DefinitionValidator.cs`
 - Test: `tests/Chirpdesk.Core.Tests/Definitions/DefinitionValidatorTests.cs`
 
-A definition is data-only (ADR 0007). Fields that matter now: `id`, `name`, `url`, `icon` (relative file name inside the plugin), `unreadRegex`, `notificationMode` (`native|shim|title-only`), `userAgent`, `minApiVersion`, `apiVersion`.
+A definition is data-only (ADR 0007). Fields that matter now: `id`, `name`, `url`, `icon` (relative file name inside the plugin), `unreadRegex`, `notificationMode` (`native|shim|title-only`), `userAgent`, `activation` (optional `urlTemplate` and `tagPattern`, see below), `minApiVersion`, `apiVersion`.
 
 Validation is fail-open: an invalid definition is skipped and logged, never fatal, never silently replaced. Rules: ids match `^[a-z0-9][a-z0-9-]{0,31}$`; `url` is absolute https with no credentials; `notificationMode` is one of the three; `minApiVersion` ≤ host API version; `icon` has no separators or `..`; unknown JSON fields are ignored.
 
 **Tests:** each rule accepted and rejected at least once; unknown field ignored; a definition with no icon still loads.
+
+`activation` is the one field that exists purely for the click. It is a URL template such as `https://web.whatsapp.com/send?phone={tag}` plus a `tagPattern` the tag must match before substitution; if the tag does not match, the click opens the service and nothing more. The host substitutes only the tag, never arbitrary notification text, so a hostile page cannot steer the resulting URL. This is the concrete reason a definition beats a bare URL: only the definition knows how its site addresses a conversation.
 
 **Commit:** `feat(core): validate data-only service and theme definitions`.
 
