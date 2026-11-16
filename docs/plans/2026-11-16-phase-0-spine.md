@@ -308,24 +308,31 @@ dotnet add src/Chirpdesk package Microsoft.Web.WebView2 --version 1.0.4314.35
 
 ### 11.1 Automated — `Chirpdesk.exe --selftest` (headless, exit code is the verdict)
 
-Every check prints one `PASS`/`FAIL` line; a single `FAIL` exits 1. No human, no login, no phone.
+Every check prints one `PASS`/`FAIL` line to `%LOCALAPPDATA%\Chirpdesk\logs\selftest.log` and to the parent console; a single `FAIL` exits 1, `WARN` does not. No human, no login, no phone. A throwing check fails one line, never the run.
 
 | Check | Asserts |
 |---|---|
-| settings | round-trip in a temp dir, atomic replace, `.corrupt` quarantine |
-| AUMID | shortcut exists, `ProcessExplicitAppUserModelID` returns `Chirpdesk` |
-| window styles | `WS_EX_TOOLWINDOW` set, `WS_EX_APPWINDOW` clear, rect off-screen, `IsWindowVisible` true, `ShowInTaskbar` untouched |
-| single instance | second process exits ≤ 500 ms, first HWND unchanged |
-| tray | icon created, `TaskbarCreated` re-add path registered |
-| environment | `CoreWebView2Environment` creates with the three anti-throttle flags, profile folder under `%LOCALAPPDATA%\Chirpdesk\profiles\` |
-| **hidden-warm probe** | loads a bundled local page that ticks a counter with `setInterval`; parked hidden for `--soak-minutes` (default 10); counter rate ≥ 0.9/s and `readyState === complete` afterwards |
-| **notification capability** | permission auto-granted, synthetic `new Notification("probe")` fires `NotificationReceived` → records `native`, else `title-only` |
-| toast pipeline | synthetic event through `WarmUpGate` + `Dedupe` reaches `ToastService.Show`; toast appears in `ToastNotificationManager.History` (skipped with a warning when OS notifications are off) |
-| orphan processes | after `Quit`, no `msedgewebview2.exe` child of the app remains |
+| `webview2-runtime` | an Evergreen WebView2 runtime is installed; reports its version |
+| `settings` | round-trip through the real store, atomic replace, `.corrupt` quarantine of unparseable JSON |
+| `app-identity` | `Chirpdesk.lnk` exists, a toast notifier can be created, and the process AUMID reads back as `Chirpdesk` |
+| `tray` | a tray icon can be created from the drawn image source |
+| `window-hidden` | `WS_EX_TOOLWINDOW` set, `WS_EX_APPWINDOW` clear, `IsWindowVisible` true, rect off-screen |
+| `single-instance` | a second process exits 0 within 5 s and never creates a window |
+| `environment` | `CoreWebView2Environment` creates with the three anti-throttle flags, profile folder under `%LOCALAPPDATA%\Chirpdesk\profiles\` |
+| **`hidden-warm`** | a page ticking `setInterval` once per second, parked in a 1×1 off-screen webview for `--soak-seconds` (default 60), still ticks at ≥ 80 % of the expected rate and ends `readyState === complete` |
+| **`notification-capability`** | permission is granted through the real `PermissionRequested` path, a synthetic `new Notification("probe")` fires `NotificationReceived` → `native`; no event would mean `title-only` |
+| `toast-shown` | a toast reaches `ToastNotificationManager.History` — **soft**, because notifications-off is a user setting, not a defect |
+| `profile-released` | the probe's profile folder can be deleted after dispose, which is the orphan-process proof: Chromium keeps files open in the profile while it lives |
 
-The hidden-warm probe is the important one: it proves R2's mechanism (timer keeps running while off-screen) in ten minutes instead of a three-hour wait, and it needs no WhatsApp account. WhatsApp-specific socket behaviour is the only thing left to the real soak.
+Known limits of the harness, stated rather than papered over: it uses the probe origin, not WhatsApp; it cannot see whether anything *visibly* flashed; and it does not exercise the site's socket. Those are exactly the rows in 11.2.
+
+**Run on 2026-11-16:** exit 0, eleven checks, all `PASS`. The raw output and the RAM/disk numbers are in `docs/measurements.md`. R2's mechanism is therefore proven for a parked webview; what remains is WhatsApp's own socket, which is the soak below.
+
+The hidden-warm probe is the important one: it proves R2's mechanism (timer keeps running while off-screen) in a minute instead of a three-hour wait, and it needs no WhatsApp account. WhatsApp-specific socket behaviour is the only thing left to the real soak.
 
 ### 11.2 Human — the parts a machine cannot judge
+
+The show path for these steps is `Chirpdesk.exe --open=whatsapp`: it seeds the WhatsApp instance once, opens it warm, and puts the window on screen. `Esc`, the tray menu's **Hide**, or the tray icon all hide it again; the service keeps running parked. Toasts are titled "Chirpdesk" and clicking one shows the window again.
 
 - Scan the QR once with the window shown.
 - Send a real message from a second phone and see the toast (sender, text, icon).
@@ -345,5 +352,14 @@ The hidden-warm probe is the important one: it proves R2's mechanism (timer keep
 - [ ] Quit from tray leaves no orphan `msedgewebview2.exe` process tree.
 
 If any item fails, do **not** proceed to phase 1. Record the failure mode in `docs/adr/0003-hidden-warm-host.md` as a consequence and apply the documented fallback (1×1 `WS_EX_NOACTIVATE` window at the screen edge, then minimised to taskbar).
+
+### 11.4 Budget deviations measured in phase 0
+
+Both are recorded rather than hidden, and neither is fixed by quietly changing the target:
+
+1. **Shell RAM.** 90 MB working set against the 70 MB target in §2, but only 36 MB private — the difference is file-backed framework pages. Phase 1 measures a real service first; if the shell still looks heavy, the candidate fixes are a trimmed GC heap limit and dropping the tray library's XAML load, in that order.
+2. **App disk.** 26.6 MB published against the 10 MB target, because 24.3 MB is `Microsoft.Windows.SDK.NET.dll` — the generated WinRT projection for the three toast interfaces. Replacing it with a hand-written `IToastNotificationManagerStatics`/`IToastNotifier`/`IXmlDocument` projection would bring the app under 5 MB. That is a phase-1 decision with an ADR, not something to slip in during the gate.
+
+The per-warm-service figure (404 MB for a probe page) is inside the 150–400 MB band only if the app process is counted separately; §2 also says the per-service cost is the site's, so the number to watch is ADR 0005's 1.6 GB at four warm services.
 
 **Commit:** `test: phase 0 soak results` with the measurements file.
