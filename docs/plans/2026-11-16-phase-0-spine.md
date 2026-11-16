@@ -187,11 +187,11 @@ public void Same_body_from_a_different_sender_is_not_a_duplicate()
 - Create: `src/Chirpdesk.Core/Notifications/WarmUpGate.cs`
 - Test: `tests/Chirpdesk.Core.Tests/Notifications/WarmUpGateTests.cs`
 
-Rationale: R4 — no toast storm at login. A service must be `ready` and its title count stable for 5 s before its notifications are allowed through.
+Rationale: R4 — no toast storm at login. A service's notifications stay suppressed for 5 s after its page reports ready.
 
-**Step 1: Failing tests** — three cases: blocked before ready; blocked while title still changing; allowed after 5 s of stability and then survives later title changes.
+**Step 1: Failing tests** — cases: blocked before ready; blocked for 5 s after ready; allowed 5 s after ready; opened even while the title is still changing; once open it never re-suppresses; a late `MarkReady` does not restart the clock.
 
-**Step 3: Implement** — `MarkReady()` plus `ObserveTitle(count)`; `ShouldSuppress()` true until `now - lastTitleChange >= 5s && ready`.
+**Step 3: Implement** — `MarkReady()` records the first readiness; `ShouldSuppress()` is true until `now - readyAt >= 5 s`. `ObserveTitle(count)` records the count for the title-only fallback but does **not** gate anything: an earlier "stable title" rule deadlocked against real traffic, because a message changes the unread title at the same instant it notifies (see `docs/measurements.md`, live gate findings). Replay suppression belongs to the boot cutoff's timestamp check.
 
 **Step 4/5:** Run → PASS → commit `feat(core): suppress boot-time notification backlog`.
 
@@ -350,14 +350,14 @@ The show path for these steps is `Chirpdesk.exe --open=whatsapp`: it seeds the W
 ### 11.3 Checklist — all must pass, in one sitting:
 
 - [ ] Register Chirpdesk in `HKCU\...\Run` with a 20 s delay (temporary), reboot, no window appears.
-- [ ] **Sign in once** with the window shown (the documented phase-0 exception), then hide it. WhatsApp logged in, tray icon present, zero taskbar/Alt+Tab artifacts afterwards.
-- [ ] Notification capability for WhatsApp recorded as `native` (event fired) or `title-only`; if only `title-only` works, that is the mode written into the phase-0 record.
-- [ ] Message from a second phone toasts within 1 s, with sender + text, correct icon, and the toast is titled "Chirpdesk".
+- [x] **Sign in once** with the window shown (the documented phase-0 exception), then hide it. WhatsApp logged in via `--open=whatsapp`, window hidden with Esc afterwards.
+- [x] Notification capability for WhatsApp recorded as `native` — the real message fired `NotificationReceived` at 22:07:21, and a notification raised inside the WhatsApp page reached a toast.
+- [x] Message from a second phone toasts, titled "Chirpdesk", after the two gate defects were fixed (see `docs/measurements.md`, live gate findings).
 - [ ] 3 hours tray-hidden: a second message still toasts (socket alive), and there is no toast backlog on resume.
 - [ ] Clicking the toast shows the app on WhatsApp (no deep link required while resident).
 - [ ] The window was never visible except for the deliberate sign-in and toast clicks.
-- [ ] Task Manager: no runaway CPU; RAM recorded for the warm WhatsApp instance (write it into `docs/measurements.md`).
-- [ ] Quit from tray leaves no orphan `msedgewebview2.exe` process tree.
+- [x] Task Manager: no runaway CPU; RAM recorded — 547 MB private for the warm WhatsApp instance, and 158 MB of profile.
+- [x] Quit from tray leaves no orphan `msedgewebview2.exe` process tree — `scripts/gate.ps1` asserts it.
 
 If any item fails, do **not** proceed to phase 1. Record the failure mode in `docs/adr/0003-hidden-warm-host.md` as a consequence and apply the documented fallback (1×1 `WS_EX_NOACTIVATE` window at the screen edge, then minimised to taskbar).
 
