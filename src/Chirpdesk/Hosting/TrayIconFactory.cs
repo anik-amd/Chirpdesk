@@ -8,13 +8,17 @@ namespace Chirpdesk.Hosting;
 /// <summary>Tray icon and its menu. Icons are drawn, not shipped as assets.</summary>
 internal static class TrayIconFactory
 {
-    public static TaskbarIcon Create(Action open, Action quit)
+    public static TaskbarIcon Create(Action open, Action hide, Action quit)
     {
         var menu = new ContextMenu();
 
         var openItem = new MenuItem { Header = "Open" };
         openItem.Click += (_, _) => open();
         menu.Items.Add(openItem);
+
+        var hideItem = new MenuItem { Header = "Hide" };
+        hideItem.Click += (_, _) => hide();
+        menu.Items.Add(hideItem);
 
         menu.Items.Add(new Separator());
 

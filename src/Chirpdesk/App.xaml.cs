@@ -1,7 +1,10 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Input;
 using Chirpdesk.Core.Notifications;
+using Chirpdesk.Core.Settings;
+using Chirpdesk.Core.Time;
 using Chirpdesk.Diagnostics;
 using Chirpdesk.Hosting;
 using Chirpdesk.Logging;
@@ -12,10 +15,20 @@ namespace Chirpdesk;
 
 public partial class App : Application
 {
+    /// <summary>The phase-0 gate service. Phase 1 replaces this with shipped definitions.</summary>
+    private static readonly ServiceInstance WhatsAppSeed = new()
+    {
+        InstanceId = "whatsapp",
+        Name = "WhatsApp",
+        Url = "https://web.whatsapp.com/",
+        WarmAtBoot = true,
+    };
+
     private FileLog? _log;
     private SingleInstance? _singleInstance;
     private HostWindow? _host;
     private TaskbarIcon? _tray;
+    private ServiceRuntime? _service;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -37,6 +50,7 @@ public partial class App : Application
         // WebView2 in it. Neither needs the tray icon.
         _host = new HostWindow();
         _host.Show();
+        _host.KeyDown += OnHostKeyDown;
 
         if (options.SelfTest)
         {
@@ -50,15 +64,30 @@ public partial class App : Application
             return;
         }
 
-        _tray = TrayIconFactory.Create(OpenHost, Quit);
+        _tray = TrayIconFactory.Create(OpenHost, HideHost, Quit);
         _host.Attach(_tray);
 
         _log.Info("started hidden");
+
+        if (options.OpenService is not null)
+        {
+            _ = OpenServiceAsync(options.OpenService);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _tray?.Dispose();
+
+        try
+        {
+            _service?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            _log?.Warn($"service dispose on exit: {ex.Message}");
+        }
+
         _singleInstance?.Dispose();
         _log?.Info("exited");
         base.OnExit(e);
@@ -92,6 +121,79 @@ public partial class App : Application
         Terminate(0);
     }
 
+    /// <summary>
+    /// Phase 0's one show path for a service: create it, put it on screen and let the user sign
+    /// in. Everything else about it (warm, parked, notifying) is the normal runtime.
+    /// </summary>
+    private async Task OpenServiceAsync(string requestedId)
+    {
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+            var instance = ResolveInstance(settings, requestedId, store);
+
+            if (instance is null)
+            {
+                _log?.Warn($"no service matches '{requestedId}'; nothing to open");
+                return;
+            }
+
+            _service = await ServiceRuntime.CreateAsync(
+                _host!,
+                instance,
+                _log!,
+                SystemClock.Instance,
+                new ToastService(_log!, _ => OpenHost()),
+                DateTimeOffset.UtcNow);
+
+            ShowHost();
+            _log?.Info($"opened '{instance.InstanceId}' for the user");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException)
+        {
+            _log?.Error($"could not open '{requestedId}'", ex);
+        }
+    }
+
+    private static ServiceInstance? ResolveInstance(AppSettings settings, string requestedId, SettingsStore store)
+    {
+        var match = string.IsNullOrEmpty(requestedId)
+            ? settings.Services.OrderBy(s => s.Order).FirstOrDefault()
+            : settings.Services.FirstOrDefault(s => string.Equals(s.InstanceId, requestedId, StringComparison.OrdinalIgnoreCase));
+
+        if (match is not null || (!string.IsNullOrEmpty(requestedId) && !requestedId.Equals("whatsapp", StringComparison.OrdinalIgnoreCase)))
+        {
+            return match;
+        }
+
+        // The phase-0 gate needs exactly one real service; create it once, on request.
+        settings.Services.Add(WhatsAppSeed);
+        store.Save(settings);
+        return WhatsAppSeed;
+    }
+
+    private void OnHostKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            HideHost();
+        }
+    }
+
+    private void ShowHost()
+    {
+        _service?.Activate();
+        _host?.ShowForUser();
+    }
+
+    private void HideHost()
+    {
+        _service?.Park();
+        _host?.HideToBackground();
+    }
+
     private void RegisterAppIdentity()
     {
         try
@@ -106,7 +208,7 @@ public partial class App : Application
         }
     }
 
-    private void OpenHost() => _host?.ShowForUser();
+    private void OpenHost() => ShowHost();
 
     private void Terminate(int exitCode)
     {
