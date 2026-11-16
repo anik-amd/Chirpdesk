@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Time;
@@ -37,6 +38,15 @@ public partial class App : Application
 
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
+
+        // Windows starts this process to answer a toast click that has left the screen.
+        // It is not the app: no tray, no webviews, one call, then exit.
+        if (ToastActivation.IsServerMode(e.Args))
+        {
+            RunActivationServer();
+            return;
+        }
+
         _log.Info($"starting with {e.Args.Length} argument(s), pid {Environment.ProcessId}");
 
         if (!SingleInstance.TryAcquire(out _singleInstance))
@@ -53,6 +63,7 @@ public partial class App : Application
         _singleInstance!.ShowRequested += OnShowRequested;
 
         RegisterAppIdentity();
+        RegisterToastActivation();
 
         // Both diagnostic modes need the real window, because the thing under test is a hidden
         // WebView2 in it. Neither needs the tray icon.
@@ -78,7 +89,11 @@ public partial class App : Application
 
         _log.Info("started hidden");
 
-        if (options.OpenService is not null)
+        if (options.AddSite is not null)
+        {
+            _ = AddSiteAsync(options.AddSite, show: !options.Hidden);
+        }
+        else if (options.OpenService is not null)
         {
             _ = OpenServiceAsync(options.OpenService, show: !options.Hidden, probe: options.NotifyTest);
         }
@@ -91,6 +106,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        ToastActivation.RevokeClassObject();
         _tray?.Dispose();
 
         try
@@ -153,32 +169,126 @@ public partial class App : Application
                 return;
             }
 
-            var service = await ServiceRuntime.CreateAsync(
-                _host!,
-                instance,
-                _log!,
-                SystemClock.Instance,
-                new ToastService(_log!, _ => Dispatcher.Invoke(ShowHost)),
-                DateTimeOffset.UtcNow);
-            _service = service;
-
-            if (show)
-            {
-                ShowHost();
-            }
-
-            if (probe)
-            {
-                var raised = await service.RaiseProbeNotificationAsync(TimeSpan.FromSeconds(30));
-                _log?.Info($"probe notification issued for '{instance.InstanceId}': {raised}");
-            }
-
-            _log?.Info($"opened '{instance.InstanceId}'{(show ? " for the user" : " parked")}");
+            await OpenInstanceAsync(instance, show, probe);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException)
         {
             _log?.Error($"could not open '{requestedId}'", ex);
         }
+    }
+
+    /// <summary>Creates (or reuses) the runtime for one instance and optionally shows it.</summary>
+    private async Task OpenInstanceAsync(ServiceInstance instance, bool show, bool probe)
+    {
+        var service = await ServiceRuntime.CreateAsync(
+            _host!,
+            instance,
+            _log!,
+            SystemClock.Instance,
+            new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
+            DateTimeOffset.UtcNow);
+        _service = service;
+
+        if (show)
+        {
+            ShowHost();
+        }
+
+        if (probe)
+        {
+            var raised = await service.RaiseProbeNotificationAsync(TimeSpan.FromSeconds(30));
+            _log?.Info($"probe notification issued for '{instance.InstanceId}': {raised}");
+        }
+
+        _log?.Info($"opened '{instance.InstanceId}'{(show ? " for the user" : " parked")}");
+    }
+
+    /// <summary>
+    /// The built-in add-any-site flow, command-line edition until the settings UI lands:
+    /// <c>--add-site "My Chat|https://chat.example.com/"</c>. The instance it creates is a
+    /// custom site (no definition), which is exactly what the UI will write in phase 2.
+    /// </summary>
+    private async Task AddSiteAsync(string spec, bool show)
+    {
+        var separator = spec.IndexOf('|', StringComparison.Ordinal);
+        if (separator <= 0 || separator == spec.Length - 1)
+        {
+            _log?.Warn("--add-site needs Name|https://url");
+            return;
+        }
+
+        var name = spec[..separator].Trim();
+        var rawUrl = spec[(separator + 1)..].Trim();
+
+        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            _log?.Warn("--add-site needs an absolute https url");
+            return;
+        }
+
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+
+            var id = MakeInstanceId(name, settings);
+            var instance = new ServiceInstance
+            {
+                InstanceId = id,
+                Name = name,
+                Url = uri.ToString(),
+                WarmAtBoot = true,
+            };
+
+            settings.Services.Add(instance);
+            store.Save(settings);
+            _log?.Info($"added site '{id}'");
+
+            await OpenInstanceAsync(instance, show, probe: false);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Error("could not add the site", ex);
+        }
+    }
+
+    /// <summary>Stable, path-safe id from a display name; collisions get a numeric suffix.</summary>
+    private static string MakeInstanceId(string name, AppSettings settings)
+    {
+        var slug = new string(name.ToLowerInvariant()
+            .Select(c => char.IsLetterOrDigit(c) && c < 128 ? c : '-')
+            .ToArray());
+
+        while (slug.Contains("--", StringComparison.Ordinal))
+        {
+            slug = slug.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        slug = slug.Trim('-');
+
+        if (slug.Length == 0)
+        {
+            slug = "site";
+        }
+
+        if (!char.IsLetterOrDigit(slug[0]))
+        {
+            slug = "site-" + slug;
+        }
+
+        if (slug.Length > 32)
+        {
+            slug = slug[..32].TrimEnd('-');
+        }
+
+        var unique = slug;
+        var suffix = 2;
+        while (settings.Services.Exists(s => s.InstanceId == unique))
+        {
+            unique = $"{slug}-{suffix++}";
+        }
+
+        return unique;
     }
 
     private static ServiceInstance? ResolveInstance(AppSettings settings, string requestedId, SettingsStore store)
@@ -249,6 +359,33 @@ public partial class App : Application
         _log?.Info($"window shown: wasVisible={wasVisible} foreground={foreground} visible={_host.IsVisible}");
     }
 
+    /// <summary>
+    /// Shows the window for the service a toast came from. Phase 0 has one warm service; the
+    /// id is still read and logged, so an activation for a service that is not warm is never
+    /// silently attributed to the wrong one, and phase 1's registry has a seam to fill.
+    /// </summary>
+    private void ShowHostFor(string? serviceId)
+    {
+        var id = string.IsNullOrWhiteSpace(serviceId) ? null : Uri.UnescapeDataString(serviceId);
+
+        if (id is null)
+        {
+            ShowHost();
+            return;
+        }
+
+        if (_service is not null && !string.Equals(id, _service.InstanceId, StringComparison.OrdinalIgnoreCase))
+        {
+            _log?.Info($"activation for '{id}', which is not warm; showing '{_service.InstanceId}'");
+        }
+        else
+        {
+            _log?.Info($"activation for '{id}'");
+        }
+
+        ShowHost();
+    }
+
     private void HideHost()
     {
         _service?.Park();
@@ -259,14 +396,87 @@ public partial class App : Application
     {
         try
         {
+            var executable = Environment.ProcessPath ?? throw new InvalidOperationException("no process path");
+
             Aumid.SetProcessAppUserModelId();
-            Aumid.EnsureShortcut(Environment.ProcessPath ?? throw new InvalidOperationException("no process path"));
+            Aumid.EnsureShortcut(executable);
+
+            // Same registration the shortcut points at: without it Windows has no COM class
+            // to call when a toast is clicked from the Action Center.
+            ToastActivation.RegisterServer(executable);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or COMException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or COMException or System.Security.SecurityException)
         {
             // Fail open: the app still runs, but a toast may show "(unknown app)".
             _log?.Error("could not register the app identity; toasts may not appear", ex);
         }
+    }
+
+    /// <summary>
+    /// Publishes the toast CLSID for this session. Registering here, in the resident process,
+    /// is the part that makes Action Center clicks arrive: Windows routes an activation to an
+    /// already-registered class object instead of launching <c>LocalServer32</c> a second time.
+    /// </summary>
+    private void RegisterToastActivation()
+    {
+        ToastActivation.Log = message => _log?.Info(message);
+        ToastActivationCallback.Activated = args =>
+        {
+            _log?.Info("toast activation: callback received");
+
+            if (!_quitting)
+            {
+                Dispatcher.Invoke(() => ShowHostFor(args));
+            }
+        };
+
+        try
+        {
+            ToastActivation.RegisterClassObject();
+            _log?.Info("toast activation class object registered");
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            _log?.Error("could not register toast activation; Action Center clicks will not open the app", ex);
+        }
+    }
+
+    /// <summary>
+    /// Serves exactly one toast activation. COM launches the exe with <c>-Embedding</c>, so
+    /// this process registers the class object, waits for the call, signals the resident
+    /// instance and exits. The timeout exists so a failed activation cannot leave a stray
+    /// process behind.
+    /// </summary>
+    private void RunActivationServer()
+    {
+        ToastActivation.Log = message => _log?.Info(message);
+
+        ToastActivationCallback.Activated = _ =>
+        {
+            _log?.Info("toast activation: callback received");
+            var signalled = SingleInstance.SignalShow();
+            _log?.Info($"toast activation: show requested={signalled}");
+            Shutdown(signalled ? 0 : 1);
+        };
+
+        try
+        {
+            ToastActivation.RegisterClassObject();
+            _log?.Info($"toast activation server ready (pid {Environment.ProcessId})");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or COMException or PlatformNotSupportedException)
+        {
+            _log?.Error("could not register the toast activation server", ex);
+            Shutdown(1);
+            return;
+        }
+
+        var timeout = new DispatcherTimer(
+            TimeSpan.FromSeconds(60),
+            DispatcherPriority.Normal,
+            (_, _) => Shutdown(0),
+            Dispatcher);
+        timeout.Start();
     }
 
     private void OpenHost() => ShowHost();

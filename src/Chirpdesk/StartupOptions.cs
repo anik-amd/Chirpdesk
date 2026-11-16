@@ -12,10 +12,12 @@ internal sealed record StartupOptions(
     string? OpenService,
     TimeSpan? QuitAfter,
     bool Hidden,
-    bool NotifyTest)
+    bool NotifyTest,
+    string? AddSite)
 {
     private const string SoakPrefix = "--soak-seconds=";
     private const string QuitPrefix = "--quit-after=";
+    private const string AddSitePrefix = "--add-site=";
     private const string OpenPrefix = "--open";
 
     public static StartupOptions Parse(string[] args)
@@ -28,6 +30,7 @@ internal sealed record StartupOptions(
         var soak = TimeSpan.FromSeconds(60);
         TimeSpan? quitAfter = null;
         string? open = null;
+        string? addSite = null;
 
         foreach (var arg in args)
         {
@@ -43,6 +46,12 @@ internal sealed record StartupOptions(
                 continue;
             }
 
+            if (arg.StartsWith(AddSitePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                addSite = arg[AddSitePrefix.Length..].Trim();
+                continue;
+            }
+
             // Bare --open means "the first configured service"; --open=whatsapp names one.
             if (arg.Equals(OpenPrefix, StringComparison.OrdinalIgnoreCase))
             {
@@ -54,7 +63,7 @@ internal sealed record StartupOptions(
             }
         }
 
-        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest);
+        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, addSite);
     }
 
     /// <summary>Any timeout is clamped to something a human would accept (10 s to 1 h).</summary>

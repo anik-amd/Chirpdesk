@@ -29,7 +29,7 @@ internal static class Aumid
     /// </summary>
     public static void EnsureShortcut(string executablePath)
     {
-        ShellLink.Create(ShortcutPath, executablePath, AppId);
+        ShellLink.Create(ShortcutPath, executablePath, AppId, ToastActivation.Clsid);
     }
 
     /// <summary>Reads back the process AUMID the shell actually accepted.</summary>

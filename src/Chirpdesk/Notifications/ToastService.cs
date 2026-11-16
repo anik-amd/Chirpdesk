@@ -13,6 +13,14 @@ namespace Chirpdesk.Notifications;
 /// </summary>
 internal sealed class ToastService : IToastSink
 {
+    /// <summary>
+    /// Windows raises <c>Activated</c> on the object that created the toast, not on the AUMID.
+    /// If the <see cref="ToastNotification"/> has been collected, a click in the Action Center
+    /// silently does nothing, which is exactly what happened until this list existed.
+    /// Timed-out toasts stay here because that is when they are clickable from the panel.
+    /// </summary>
+    private readonly List<ToastNotification> _liveToasts = [];
+    private readonly object _liveGate = new();
     private readonly ILog _log;
     private readonly Action<string?>? _onActivated;
     private ToastNotifier? _notifier;
@@ -51,9 +59,12 @@ internal sealed class ToastService : IToastSink
             document.LoadXml(xml);
 
             var toast = new ToastNotification(document);
+            Remember(toast);
+
             toast.Activated += (_, _) =>
             {
                 _log.Info($"toast activated by the user for '{message.ServiceId}'");
+                Forget(toast);
 
                 try
                 {
@@ -64,14 +75,53 @@ internal sealed class ToastService : IToastSink
                     _log.Error("toast activation handler failed", ex);
                 }
             };
-            toast.Dismissed += (_, args) => _log.Info($"toast dismissed ({args.Reason}) for '{message.ServiceId}'");
-            toast.Failed += (_, args) => _log.Warn($"toast failed: {args.ErrorCode}");
+
+            toast.Dismissed += (_, args) =>
+            {
+                _log.Info($"toast dismissed ({args.Reason}) for '{message.ServiceId}'");
+
+                // TimedOut means it moved to the Action Center and is still clickable there,
+                // so it must stay referenced. Any other reason means it is gone.
+                if (args.Reason != ToastDismissalReason.TimedOut)
+                {
+                    Forget(toast);
+                }
+            };
+
+            toast.Failed += (_, args) =>
+            {
+                _log.Warn($"toast failed: {args.ErrorCode}");
+                Forget(toast);
+            };
 
             Notifier.Show(toast);
         }
         catch (Exception ex) when (IsExpected(ex))
         {
             _log.Error("could not show a toast", ex);
+        }
+    }
+
+    private void Remember(ToastNotification toast)
+    {
+        lock (_liveGate)
+        {
+            _liveToasts.Add(toast);
+
+            // A long session must not grow this without bound; the oldest entries are the
+            // least likely to still be waiting in the Action Center.
+            if (_liveToasts.Count > 64)
+            {
+                _liveToasts.RemoveAt(0);
+            }
+        }
+    }
+
+    private void Forget(ToastNotification toast)
+    {
+        lock (_liveGate)
+        {
+            _liveToasts.Remove(toast);
         }
     }
 

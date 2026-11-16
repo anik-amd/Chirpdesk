@@ -12,11 +12,13 @@ namespace Chirpdesk.Interop;
 internal static class ShellLink
 {
     private const ushort VtLpwStr = 31;
+    private const ushort VtClsid = 72;
 
     private static readonly Guid AppUserModelIdFormatId = new("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3");
     private const uint AppUserModelIdPropertyId = 5;
+    private const uint ToastActivatorClsidPropertyId = 26;
 
-    public static void Create(string shortcutPath, string targetPath, string? appUserModelId)
+    public static void Create(string shortcutPath, string targetPath, string? appUserModelId, Guid? toastActivatorClsid = null)
     {
         var directory = Path.GetDirectoryName(shortcutPath);
         if (!string.IsNullOrEmpty(directory))
@@ -37,20 +39,41 @@ internal static class ShellLink
                 link.SetWorkingDirectory(workingDirectory);
             }
 
-            if (!string.IsNullOrEmpty(appUserModelId))
+            if (!string.IsNullOrEmpty(appUserModelId) || toastActivatorClsid is not null)
             {
                 var store = (IPropertyStore)link;
-                var key = new PropertyKey(AppUserModelIdFormatId, AppUserModelIdPropertyId);
-                var value = PropVariant.FromString(appUserModelId);
-                try
+
+                if (!string.IsNullOrEmpty(appUserModelId))
                 {
-                    store.SetValue(ref key, ref value);
-                    store.Commit();
+                    var idKey = new PropertyKey(AppUserModelIdFormatId, AppUserModelIdPropertyId);
+                    var idValue = PropVariant.FromString(appUserModelId);
+                    try
+                    {
+                        store.SetValue(ref idKey, ref idValue);
+                    }
+                    finally
+                    {
+                        idValue.Clear();
+                    }
                 }
-                finally
+
+                if (toastActivatorClsid is { } clsid)
                 {
-                    value.Clear();
+                    // Without this property Windows has no COM class to call for a toast that
+                    // has left the screen, so Action Center clicks are silently dropped.
+                    var clsidKey = new PropertyKey(AppUserModelIdFormatId, ToastActivatorClsidPropertyId);
+                    var clsidValue = PropVariant.FromGuid(clsid);
+                    try
+                    {
+                        store.SetValue(ref clsidKey, ref clsidValue);
+                    }
+                    finally
+                    {
+                        clsidValue.Clear();
+                    }
                 }
+
+                store.Commit();
             }
 
             ((IPersistFile)link).Save(shortcutPath, true);
@@ -166,6 +189,19 @@ internal static class ShellLink
             _vt = VtLpwStr,
             _pointer = Marshal.StringToCoTaskMemUni(value),
         };
+
+        /// <summary>VT_CLSID: the pointer addresses a 16-byte GUID, not a string.</summary>
+        public static PropVariant FromGuid(Guid value)
+        {
+            var pointer = Marshal.AllocCoTaskMem(16);
+            Marshal.Copy(value.ToByteArray(), 0, pointer, 16);
+
+            return new PropVariant
+            {
+                _vt = VtClsid,
+                _pointer = pointer,
+            };
+        }
 
         public void Clear()
         {

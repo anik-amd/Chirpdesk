@@ -25,8 +25,37 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     private WebNotificationBridge? _bridge;
     private WarmUpGate? _gate;
+    private NotificationDedupe? _fallbackDedupe;
     private int _lastUnread;
     private bool _disposed;
+
+    /// <summary>
+    /// Routes <c>ServiceWorkerRegistration.showNotification</c> through the page's own
+    /// <c>new Notification()</c>. WebView2 does not surface service-worker notifications, so
+    /// without this a site that notifies from a registration gets no toast at all. The
+    /// override only applies when the call is made from page context; a worker calling it
+    /// inside its own scope is invisible to every host-side hook, and that site falls back to
+    /// the unread-title toast instead.
+    /// </summary>
+    private const string NotificationShimScript = """
+        (function () {
+          try {
+            if (!self.ServiceWorkerRegistration || !ServiceWorkerRegistration.prototype) { return; }
+            var proto = ServiceWorkerRegistration.prototype;
+            if (proto.__chirpdeskShim || typeof proto.showNotification !== 'function') { return; }
+            var original = proto.showNotification;
+            proto.showNotification = function (title, options) {
+              try {
+                new Notification(title, options || {});
+                return Promise.resolve();
+              } catch (e) {
+                return original.apply(this, arguments);
+              }
+            };
+            Object.defineProperty(proto, '__chirpdeskShim', { value: true });
+          } catch (e) { }
+        })();
+        """;
 
     private ServiceRuntime(
         HostWindow host,
@@ -45,6 +74,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     }
 
     public string? NotificationMode { get; private set; }
+
+    public string InstanceId => _instance.InstanceId;
 
     public int ReceivedNotifications => _bridge?.Received ?? 0;
 
@@ -113,12 +144,14 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         var core = _view.CoreWebView2;
 
         _gate = new WarmUpGate(_clock, TimeSpan.FromSeconds(5));
+        _fallbackDedupe = new NotificationDedupe(_clock, TimeSpan.FromSeconds(3));
         _bridge = new WebNotificationBridge(
             core,
             _toast,
             _gate,
             new NotificationDedupe(_clock, TimeSpan.FromSeconds(3)),
             _log,
+            _instance.InstanceId,
             _instance.Name,
             HostOf(_instance.Url),
             _startedAt);
@@ -147,6 +180,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             // Ask once, before the page loads: a site that checks Notification.permission
             // without calling requestPermission would otherwise never notify.
             await GrantNotificationsAsync(core);
+
+            // Installed before navigation so it is in place before any app script runs.
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(NotificationShimScript);
             core.Navigate(_instance.Url);
         }
     }
@@ -251,11 +287,46 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         var count = Core.Unread.UnreadParser.Parse(_view.CoreWebView2.DocumentTitle, _instance.UnreadRegex ?? @"\((\d+)\)");
         _gate?.ObserveTitle(count);
 
-        if (count != _lastUnread)
+        var previous = _lastUnread;
+        _lastUnread = count;
+
+        if (count == previous)
         {
-            _lastUnread = count;
-            _log.Info($"unread {count} for '{_instance.InstanceId}'");
+            return;
         }
+
+        _log.Info($"unread {count} for '{_instance.InstanceId}'");
+
+        if (count > previous && count > 0 && _gate?.IsOpen == true)
+        {
+            _ = ShowTitleOnlyFallbackAsync();
+        }
+    }
+
+    /// <summary>
+    /// The safety net that makes an arbitrary site usable: if the unread count rose and no
+    /// page notification arrived shortly after, raise a generic toast. A site using a service
+    /// worker from its own scope, or one whose notification API WebView2 does not surface,
+    /// then degrades to "New message in X" instead of silence. When the real notification
+    /// does arrive, the bridge's shown counter changes first and this returns quietly.
+    /// </summary>
+    private async Task ShowTitleOnlyFallbackAsync()
+    {
+        var shownBefore = _bridge?.Shown ?? 0;
+
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
+        if (_disposed
+            || (_bridge?.Shown ?? 0) != shownBefore
+            || (_gate?.ShouldSuppress() ?? true)
+            || _fallbackDedupe is null
+            || !_fallbackDedupe.ShouldShow("title-only", _instance.InstanceId, string.Empty))
+        {
+            return;
+        }
+
+        _log.Info($"title-only fallback toast for '{_instance.InstanceId}'");
+        _toast.Show(new ToastMessage(_instance.Name, "New message", null, _instance.InstanceId));
     }
 
     private static string? HostOf(string? url) =>
