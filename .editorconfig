@@ -1,0 +1,45 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{cs,csproj,props,targets,sln}]
+indent_size = 4
+
+[*.{json,json5,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2
+
+[*.{ps1,psm1}]
+indent_size = 4
+
+[*.{cmd,bat}]
+end_of_line = crlf
+
+[*.{\u002Axaml}]
+indent_size = 2
+
+# Generated / vendored
+[bin/**]
+ignore = true
+[obj/**]
+ignore = true
+[artifacts/**]
+ignore = true
+
+[*.{cs,vb}]
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_style_readonly_field = true:warning
+dotnet_diagnostic.CA2007.severity = none

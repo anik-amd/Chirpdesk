@@ -6,6 +6,16 @@ Status: **planning complete, implementation not started.**
 License: MIT. Repo: private until v1 works.
 Target: Windows 10 1809+ / Windows 11, x64 and arm64.
 
+**Document map**
+
+| Doc | Purpose |
+|---|---|
+| `PLAN.md` (this file) | requirements, architecture, phases, risks |
+| `docs/plans/2026-11-16-phase-0-spine.md` | bite-sized TDD task list for phase 0 |
+| `docs/testing-strategy.md` | what gets tested, how, and what is deliberately manual |
+| `docs/adr/` | one file per irreversible-ish decision |
+| `docs/engineering.md` | conventions, commit style, definition of done |
+
 ---
 
 ## 1. What this is
@@ -34,6 +44,25 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | R10 | Small on disk and RAM | WPF + WebView2, framework-dependent, cache trimming |
 | R11 | **Block ads, trackers and junk scripts** in the web clients | Request-level filter engine + cosmetic CSS, fail-open |
 | R12 | **See and reclaim disk** used by these chat apps | Per-service size breakdown, safe cleanup, orphan scan |
+
+## 2.1 Non-functional targets and constraints
+
+| Dimension | Target | Why this number |
+|---|---|---|
+| Command Bar open | < 50 ms perceived, < 120 ms before the row list paints | it is the only UI; latency here is the product |
+| Service switch | < 100 ms warm, no reload, no scroll reset | warm webviews are the whole point |
+| Toast latency | < 1 s from the site calling `new Notification()` | slower than the site's own toast feels broken |
+| Boot to all-warm | < 40 s after login, staggered | earlier than that fights Explorer/AV and loses |
+| Idle CPU | < 0.5 % average with 3 warm services | background app must not be felt |
+| RAM | shell < 70 MB, 150–400 MB per warm service | per-service cost is the site's, not ours |
+| Disk | app < 10 MB, total < 150 MB after a week of 3 warm services | the original complaint |
+| Soak | 8 h tray-hidden with sockets alive, zero missed test notifications | R2 is unprovable otherwise |
+| Dependencies | ≤ 2 NuGet packages, 0 native libraries | security surface + auditability |
+| Build | one command from clean clone on a machine with .NET 8 SDK only | no VS, no SDK installs, no MSIX |
+
+Hard constraints: single developer, ~13 GB free disk, Windows 11 dev machine and Windows 10 compatibility target, no code-signing certificate in v1 (unsigned installer, documented), no backend service ever.
+
+Testability constraint that shapes the code: everything with logic must be injectable and headless — `IClock`, `IToastSink`, `IServiceStore`, `IProcessProbe` — so the test suite never needs a WebView2 or a toast to run. UI and WebView2 code is thin by design and verified manually.
 
 ## 3. Non-goals (v1)
 
@@ -482,3 +511,23 @@ Open:
 - Title bar: minimal custom bar showing `service · unread`, or none at all.
 - `Ctrl+1..9` direct jump: keep or drop for a pure two-key model.
 - Blocking default: tier 1 + cosmetic on, list import off (assumed).
+
+---
+
+## 19. Trade-offs accepted, and what would make us revisit
+
+Every entry is a cost we are knowingly paying. If the revisit trigger fires, the decision is re-opened deliberately, not silently drifted.
+
+| Decision | Cost we accept | Revisit if |
+|---|---|---|
+| WebView2 hosting instead of native protocol clients | 150–400 MB RAM per warm service; we inherit whatever Meta ships | TDLib-class clients appear for WhatsApp/Messenger, or a service publishes an official API |
+| Single hidden host window for all webviews | one window's HWND is the liveness anchor; a stuck renderer can stall it | two consecutive reports of the window refusing to show, or renderer crashes surviving a reload |
+| Per-service `CoreWebView2Environment` | more processes, more RAM, slower first boot | total RAM with 4 warm services exceeds ~1.6 GB on a 12 GB machine |
+| Fail-open filtering | some ads slip through when a filter file is broken | a service breaks *because* of a filter and fail-open did not prevent it |
+| Cosmetic filtering with CSS selectors | selectors rot when sites redesign | more than one breakage per month per service |
+| No auto-update in v1 → signed self-update after | users on old builds for longer | v1 sees daily use, or a security fix needs shipping fast |
+| Custom WPF chrome instead of native title bar | DPI and window-chrome edge cases are ours to handle | visible chrome glitches on multi-monitor or fractional scaling |
+| Command Bar as sole navigation | discoverability depends on the first-run overlay | a user cannot find settings after the overlay is dismissed |
+| One shared cookie jar *within* a service instance | two logins for the same site need two entries | users routinely need more than two accounts per site |
+| MIT, private repo, solo maintenance | no external contributors during v1 | v1 ships and is public — then CONTRIBUTING and issue templates get added |
+

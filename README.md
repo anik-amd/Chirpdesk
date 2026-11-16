@@ -36,6 +36,15 @@ No bundled Chromium. No Electron. No sidebar. No subscription.
 
 C# / .NET 8 / WPF + WebView2, published framework-dependent. No Visual Studio, no Windows SDK, no MSIX.
 
+## Docs
+
+- [PLAN.md](PLAN.md) — requirements, architecture, phases, risks, accepted trade-offs
+- [docs/plans/](docs/plans/) — task-by-task implementation plans (phase 0 ready)
+- [docs/testing-strategy.md](docs/testing-strategy.md) — test pyramid, seams, manual E2E matrix
+- [docs/adr/](docs/adr/) — architecture decision records
+- [docs/engineering.md](docs/engineering.md) — conventions, commits, definition of done
+- [AGENTS.md](AGENTS.md) — invariants for coding agents working in this repo
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
