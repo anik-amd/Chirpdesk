@@ -38,6 +38,9 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | `FilterMatcher` | `\|\|host^` exact/trailing-dot/subdomain, `@@` exception wins, allowlist beats every tier, fail-open on malformed rule, O(1) cache hit path |
 | `PathGuard` | traversal (`..`), symlink/junction escape, path outside allowlisted roots, drive-relative paths, long paths |
 | `TrimPlanner` | never selects `Cookies`/`Local Storage`/`IndexedDB`/`Service Worker`, respects budgets, oldest-first order, refuses while service warm |
+| `PluginManifest` | missing required field, bad id pattern, unknown `apiVersion`, unimplemented permission rejected, asset path traversal rejected |
+| `PluginRegistry` | user plugin overrides bundled with same id, duplicate ids across repos require a choice, rescan picks up a new folder, broken plugin disabled not fatal |
+| `RepoIndex` | bad signature rejected, hash mismatch rejected, size mismatch rejected, `minAppVersion` gating, key change blocks until re-trust, index cache TTL |
 
 Coverage target: **≥ 85 % line coverage in `Chirpdesk.Core`**, with 100 % of the "must never happen" cases above. No coverage target for `src/Chirpdesk` (UI + interop); it is kept deliberately thin.
 

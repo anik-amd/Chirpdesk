@@ -33,6 +33,9 @@ dotnet run --project src/Chirpdesk -- --test-toast   # toast identity check
 6. **Never add a dependency** without an ADR. Budget is ≤ 2 NuGet packages.
 7. **Never run the app's own update path in tests.** Signature verification is unit-tested with fixtures.
 8. **Fail open.** If a filter, scheme file or setting is invalid, allow/ignore and log — never block the user out of a messenger.
+9. **Never load plugin code in-process.** v1 plugins are data only; `integration` plugins run as separate processes, phase 7 at the earliest.
+10. **Never install an unverified plugin or accept a changed repo key silently.** Signed index → hash from that index → schema validation. Key change blocks the repo until the user re-trusts it by fingerprint.
+11. **Never let a plugin alter the global auth/WebSocket allowlist.** A filter plugin may add to it, never remove from it.
 
 ## Style
 

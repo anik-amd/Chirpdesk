@@ -44,6 +44,8 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | R10 | Small on disk and RAM | WPF + WebView2, framework-dependent, cache trimming |
 | R11 | **Block ads, trackers and junk scripts** in the web clients | Request-level filter engine + cosmetic CSS, fail-open |
 | R12 | **See and reclaim disk** used by these chat apps | Per-service size breakdown, safe cleanup, orphan scan |
+| R13 | Services, themes and filter packs are **plugins** with one manifest format | Data-only plugin kind in v1; code plugins out-of-process, later |
+| R14 | Ship a **plugin directory** in the repo; users may add **their own plugin repos** | Signed indexes, per-repo trust consent, data-only installs |
 
 ## 2.1 Non-functional targets and constraints
 
@@ -91,6 +93,112 @@ Target framework: `net8.0-windows10.0.19041.0` (WinRT toast projections without 
 Third-party dependencies, deliberately few: `Hardcodet.NotifyIcon.Wpf` (MIT, tray) and `Inno Setup` (build-time installer only, not shipped in the app). Filter lists are parsed by our own code.
 
 ---
+
+## 4.1 Plugin architecture (cross-cutting)
+
+Everything the app can be extended with is a **plugin**: a folder with a `plugin.json` manifest. This costs little because the payloads were already data.
+
+| Kind | Payload | Code? | Trust tier | Ships |
+|---|---|---|---|---|
+| `service` | url, icon, unread regex, optional CSS, filter refs, accent | no | bundled | WhatsApp, Messenger, Telegram, Facebook |
+| `theme` | tokens (`bg.*`, `text.*`, …), `kind: dark\|light`, preview | no | bundled | Dracula, Catppuccin, Nord, … |
+| `filter` | curated host list, cosmetic CSS | no | bundled | tier 1 + cosmetic packs |
+| `integration` | optional helper executable + JSON-RPC contract (e.g. TDLib for Telegram) | **yes** | user-installed, explicit consent | phase 6 only |
+
+**Layout**
+
+```
+plugins/<id>/
+├─ plugin.json          # id, kind, name, version, apiVersion, author, permissions[]
+├─ icon.png|svg
+├─ service.json         # kind: service  (url, unreadRegex, css ref, blocking ref)
+├─ theme.json           # kind: theme    (tokens, kind, preview)
+├─ filters.json         # kind: filter   (hosts, cosmetic selectors)
+└─ README.md            # optional, shown in the plugin manager
+```
+
+Bundled plugins live in the app's install directory; user plugins in `%APPDATA%\Chirpdesk\plugins\<id>\`. Both are scanned the same way, so shipped and user content follow identical rules.
+
+**Lifecycle**
+
+- Scan on startup and on `FileSystemWatcher` change; parse and validate each manifest; a broken plugin is skipped, logged, and marked in the manager — it never prevents the app from starting.
+- `apiVersion` mismatch → plugin disabled with a clear message, not a crash.
+- Enable/disable per plugin, persisted in settings; disabling a theme falls back to the scheme default, disabling a service leaves its profile on disk intact.
+- Commands: `> plugins`, `> plugin: disable <id>`, `> theme <id>` (themes are addressable as plugins without exposing the word "plugin" in normal use).
+
+**Why no in-process code plugins**
+
+The app holds every logged-in session. A .NET assembly loaded in-process is full trust: it can read cookies, intercept keystrokes, exfiltrate anything. Assembly-level isolation (`AssemblyLoadContext`) does not sandbox that. Therefore code extensions are out-of-process only: a helper process the app starts, talking JSON-RPC over a named pipe, with a manifest-declared command surface, a timeout, and no shared memory. A hung or malicious helper can be killed and cannot touch the tray, the webviews or the settings store.
+
+**What "plugin" does not buy**
+
+It does not create new UI. Plugins cannot add panels or windows in v1 — an integration can contribute commands to the Command Bar and nothing else. UI extension points are deliberately out of scope; they are the fastest route to the sidebar we explicitly rejected.
+
+**Cost accepted**
+
+A public manifest schema is an API we must keep stable; every field is a compatibility promise. Mitigation: `apiVersion` is validated, unknown fields are ignored, and the v1 schema is documented in `docs/plugins.md` with a JSON Schema file the loader enforces.
+
+## 4.2 Plugin repositories
+
+A repository is a static HTTPS folder — no server logic. The repo's own `registry/` directory is exactly that, so our directory and a third party's follow the same rules.
+
+```
+registry/
+├─ index.json          # catalogue: plugins, versions, hashes
+└─ index.json.sig      # Ed25519 signature over index.json
+```
+
+```jsonc
+{
+  "schema": 1,
+  "name": "Chirpdesk Official",
+  "generated": "2026-11-16T10:00:00Z",
+  "keyFingerprint": "ed25519:9f3c…",
+  "plugins": [
+    {
+      "id": "filters-meta",
+      "kind": "filter",
+      "name": "Meta ad & tracker filters",
+      "version": "1.4.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.3.0",
+      "sha256": "b1946ac9…",
+      "size": 18432,
+      "url": "plugins/filters-meta-1.4.0.zip",
+      "permissions": ["filters", "css"]
+    }
+  ]
+}
+```
+
+**Install chain, in order — any failure aborts:**
+
+1. Fetch `index.json` + `index.json.sig` over HTTPS.
+2. Verify the index signature against the pinned key for that repo.
+3. Filter entries by `apiVersion` and `minAppVersion`; anything incompatible is shown as unsupported, never installed.
+4. Download the plugin archive; verify `sha256` **from the signed index**, then `size`.
+5. Unpack to a temp dir, validate `plugin.json` and payload against schema, then move into `%APPDATA%\Chirpdesk\plugins\<id>\`.
+6. Enable only if the user toggled it on; otherwise install disabled.
+
+**Trust tiers and pinning**
+
+| Tier | Source | Key | Consent |
+|---|---|---|---|
+| Bundled | `<install>\plugins\` | app build signature | implicit |
+| Official | repo URL shipped in settings | key pinned at build | one prompt on first install |
+| Community | URL the user adds | TOFU — fingerprint pinned on first fetch | prompt showing fingerprint + what it may do |
+
+If a pinned key changes, the repo is **blocked** until the user re-trusts it by explicitly comparing the new fingerprint. That is the only protection against a repo being taken over, so it must never be silent.
+
+**Limits and refusals**
+
+- Data plugin archive ≤ 5 MB, ≤ 200 files, no executables, no absolute paths, no `..`.
+- A repo can never modify the global auth/WebSocket allowlist, and can never install silently.
+- `integration` kind requires a second, separate consent screen naming the executable and its declared commands.
+- Unreachable or invalid repo → skipped and logged; the app starts and keeps working with what is installed.
+- Index cached with a 24 h TTL; updates are **check-on-demand** by default, auto-update only if the user turns it on per repo.
+
+Commands: `> repo add <url>` · `> repo list` · `> repo remove <name>` · `> repo sync` · `> plugins` (manager) · `> plugin: disable <id>`.
 
 ## 5. Architecture
 
@@ -404,8 +512,8 @@ Segoe UI Variable for UI; `Cascadia Mono` for the Command Bar query line — the
 | Path | Contents |
 |---|---|
 | `%APPDATA%\Chirpdesk\settings.json` | services, appearance, autostart, DND, blocking, update channel |
-| `%APPDATA%\Chirpdesk\schemes\*.json` | user scheme overrides |
-| `%APPDATA%\Chirpdesk\filters\` | cosmetic packs, imported lists, compiled matchers |
+| `%APPDATA%\Chirpdesk\plugins\<id>\` | user-installed plugins of any kind |
+| `%APPDATA%\Chirpdesk\filters\compiled\` | compiled matchers from imported lists |
 | `%APPDATA%\Chirpdesk\updates\` | downloaded installer + manifest, deleted after apply |
 | `%LOCALAPPDATA%\Chirpdesk\profiles\<id>\` | per-service WebView2 data |
 | `%LOCALAPPDATA%\Chirpdesk\icons\` | cached favicons |
@@ -431,12 +539,13 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 | Phase | Scope | Done when |
 |---|---|---|
 | **0 — Spine** | SDK install, project skeleton, hidden host, one service (WhatsApp), toast pipeline + AUMID, single instance | 3 h tray-hidden, inbound message toasts with correct text and icon; click opens the bar on WhatsApp; never appears in Alt+Tab |
-| **1 — Command Bar** | multi-service hosting, per-service profiles, Command Bar with cycle + search modes, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type → filter → `Enter` works as one continuous interaction; cold services appear in search but never in cycle; half-typed text survives switching |
+| **1 — Command Bar** | plugin loader + manifest validation, services and themes as plugins, multi-service hosting, per-service profiles, Command Bar (cycle + search), cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type → filter → `Enter` works as one continuous interaction; cold services appear in search but never in cycle; half-typed text survives switching |
 | **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, add-URL flow, per-service regex, storage panel, trim policy, orphan scan | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 150 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
 | **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
 | **4 — Design** | token pipeline, scheme loader, 10 families, system light/dark, live preview from `> theme`, contrast validator, `PreferredColorScheme` sync | Theme switch is instant and previewable from the bar; shipped schemes pass AA; a dropped-in scheme file appears in `> theme` |
-| **5 — Ship** | Inno Setup installer, portable zip, self-updater with signature verification, first-run overlay teaching `Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine: run setup, add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered manifest |
-| **6 — Optional** | ABP list import (tier 3), Telegram via TDLib, live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
+| **5 — Plugin ecosystem** | plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
+| **6 — Ship** | Inno Setup installer, portable zip, self-updater with signature verification, first-run overlay teaching `Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine: run setup, add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered manifest |
+| **7 — Optional** | ABP list import (tier 3), out-of-process integration plugin host (TDLib as first integration), live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
 
 Each phase ends with a build you can actually run.
 
@@ -452,6 +561,12 @@ Each phase ends with a build you can actually run.
 | Cache deletion logs the user out | Re-pairing WhatsApp | Cache and data are separate directories, separate buttons, separate confirmations |
 | Orphan scan deletes something it shouldn't | Data loss | Fixed root allowlist, path re-verification, Recycle Bin for user data, in-use detection, nothing pre-checked |
 | Tampered update package | Code execution | Ed25519 + SHA-256 verification, refuse and log on mismatch, updates opt-in |
+| Malicious plugin | Session theft, keylogging | v1 plugins are data-only (no code path exists); code only out-of-process with explicit consent; no in-process assembly loading, ever |
+| Plugin schema drift | Community plugins break each release | `apiVersion` validation, unknown fields ignored, only additive changes within a major version, schema published |
+| Broken plugin hides a service | User thinks the app lost their account | Invalid plugins are skipped and flagged; disabling never deletes a profile |
+| Malicious filter pack | Blocks logins, or beacons out via CSS | Host rules cannot touch the global allowlist; CSS sanitised (no `@import`, no remote `url()`); permissions listed before install |
+| Compromised plugin repo | Serves a tampered plugin | Ed25519-signed index, pinned per-repo key, explicit re-trust prompt on key change, hash from the signed index, no silent installs |
+| Repo outage or stale index | Filters age, manager errors | Cached index (24 h TTL), installed plugins keep working offline, failures logged not fatal |
 | `Ctrl+P` steals a site's print shortcut | Minor | `Ctrl+Shift+P` passthrough documented |
 | Meta changes the web client / sniffs the UA | Service breaks | Stock Edge UA like Meta's own Windows app; per-service UA override |
 | Google sign-in refuses embedded browsers | Some services unusable | Detect + explain; open-in-browser escape hatch |
@@ -470,13 +585,16 @@ Chirpdesk/
 ├─ README.md
 ├─ PLAN.md
 ├─ LICENSE                    # MIT
-├─ schemes/                   # shipped colour schemes (JSON)
-├─ filters/
-│  ├─ curated/                # tier-1 host lists per service
-│  └─ cosmetic/               # per-service CSS packs
+├─ plugins/                   # every bundled extension, one folder each
+│  ├─ whatsapp/               # kind: service
+│  ├─ theme-dracula/          # kind: theme
+│  └─ filters-meta/           # kind: filter
+├─ registry/                  # the official plugin repo: index.json + index.json.sig
+├─ schemas/                   # plugin.json / service / theme / filter JSON Schemas
 ├─ installer/                 # Inno Setup script, signing keys (public only)
 ├─ src/Chirpdesk/
 │  ├─ App.xaml(.cs)           # startup, single instance, autostart
+│  ├─ Plugins/                # discovery, manifest validation, registry, hot rescan
 │  ├─ Hosting/                # hidden window, webview manager, profiles
 │  ├─ Services/               # definitions, store, add-URL flow
 │  ├─ Notifications/          # toast pipeline, AUMID, permission policy
@@ -501,6 +619,8 @@ Decided:
 - License **MIT**; repo stays **private** until v1 works.
 - Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
 - One Command Bar for navigation, commands and theme switching.
+- **Plugin-shaped architecture**: services, themes and filter packs are plugins with one manifest; data-only in v1; code only out-of-process, phase 6.
+- Adblock packs ship as `filter` plugins, maintained in the repo's `plugins/` + `registry/`, installable from the official repo or any user-added repo.
 - `Ctrl+Tab` cycles, `Ctrl+P` searches; `Ctrl+K` removed.
 - No sidebar, tab strip, menu bar or landing page.
 - Self-updating signed installer, opt-in, stable channel only.
@@ -530,4 +650,6 @@ Every entry is a cost we are knowingly paying. If the revisit trigger fires, the
 | Command Bar as sole navigation | discoverability depends on the first-run overlay | a user cannot find settings after the overlay is dismissed |
 | One shared cookie jar *within* a service instance | two logins for the same site need two entries | users routinely need more than two accounts per site |
 | MIT, private repo, solo maintenance | no external contributors during v1 | v1 ships and is public — then CONTRIBUTING and issue templates get added |
+| Plugin manifest is a published schema | compatibility burden on every field | a second consumer of the schema appears (mobile, web) or community plugins break on a minor bump |
+| Users can add third-party plugin repos | supply-chain trust is partly delegated to them | repo key pinning plus an explicit fingerprint prompt; only data plugins are installable in v1 |
 
