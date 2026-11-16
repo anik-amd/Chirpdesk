@@ -11,15 +11,22 @@ The app has no sidebar, tab strip or menu bar by requirement. Navigation, comman
 One overlay component with two entry modes:
 
 - `Ctrl+Tab` (hold) → **cycle** mode: MRU list of warm services, commit on `Ctrl` release.
+- A printable key while cycling (or `Ctrl+P`) → **latch** into search mode with the highlight retained; releasing `Ctrl` then does not commit.
 - `Ctrl+P` → **search** mode: sticky input, warm services → cold services → commands.
-- Typing during cycle mode converts it into search mode with the highlight retained.
+- The bar takes focus when it opens, so it receives those keys; reserved accelerators (`Ctrl+W`, `Ctrl+1..9`, `Esc`) keep their meaning.
+
+There is deliberately no "second `Tab`" latch: with `Ctrl` still held, another `Tab` produces the same `Ctrl+Tab` event as the first (and as auto-repeat), so it cannot be distinguished.
+
+Because a tray-only app has no focus, `Ctrl+Tab` cannot be the only entry: `Ctrl+Alt+Space` is a global `RegisterHotKey` summon into search mode, with tray left-click as the fallback when registration fails.
 
 `Ctrl+K` and the `@` scope are rejected. `Ctrl+Shift+P` is passed to the page.
 
 ## Consequences
 
 - One row template, one focus model, one place to theme; the bar is the whole UI.
-- Discoverability depends on the first-run overlay and the tray tooltip.
+- Discoverability depends on the first-run overlay and the tray tooltip; the global hotkey is partly a mitigation.
+- The global hotkey can collide with another app. Registration failure is surfaced in Settings, never silent, and the tray remains a complete entry point.
 - `Ctrl+P` collides with the sites' print shortcut; accepted, with `Ctrl+Shift+P` as the documented escape hatch.
 - Commit-on-release cannot rely on WebView2 delivering modifier key-up, so it is polled via `GetAsyncKeyState` at 30 ms. This is a deliberate impurity in a hot path, isolated in one class.
+- WPF cannot paint over a WebView2 HWND, so opening the bar collapses the active webview and closing restores it. The control is not disposed; scroll and page input state survive. A separate overlay window was rejected as more focus/DPI failure modes for the same behaviour.
 - Revisit if users ask for a persistent surface (then the answer is probably a hover-revealed strip, not a sidebar).

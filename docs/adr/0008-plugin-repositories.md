@@ -8,7 +8,7 @@ ADR 0007 made services, themes and adblock packs plugins. Users should be able t
 
 ## Decision
 
-- A repository is a **static HTTPS directory**: `index.json` plus an Ed25519 signature, and content-addressed plugin archives.
+- A repository is a **static HTTPS directory**: `index.json` plus an ECDSA P-256 signature, and versioned plugin archives verified by SHA-256 from that signed index.
 - The official repo is `registry/` in this repository, built and signed in CI. Its key is pinned in the app at build time.
 - User-added repos are trusted on first use (TOFU): fingerprint pinned on first successful fetch, and a later change blocks the repo until the user explicitly re-trusts it, showing both fingerprints.
 - Integrity chain: signed index → `sha256` + `size` of the archive → re-validation of the unpacked manifest against the schema. Any mismatch aborts the install.

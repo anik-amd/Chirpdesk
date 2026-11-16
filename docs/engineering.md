@@ -7,7 +7,7 @@ Read `PLAN.md` for what we are building, `AGENTS.md` for the invariants that mus
 | Project | Rule |
 |---|---|
 | `src/Chirpdesk.Core` | pure .NET 8, **no WPF, no WebView2, no OS calls**. Everything else depends on it. |
-| `src/Chirpdesk` | WPF shell + WebView2 interop. Thin: wiring, rendering, P/Invoke. No business rules. |
+| `src/Chirpdesk` | WPF shell + WebView2 interop. Thin: wiring, rendering, P/Invoke. No business rules. Logging goes through `ILog`, defined in Core. |
 | `tests/Chirpdesk.Core.Tests` | unit tests only; no integration category by default |
 
 A pull request that puts a decision in `Chirpdesk` instead of `Chirpdesk.Core` is wrong even if it works — it becomes untestable.
@@ -61,17 +61,17 @@ After each phase task, request review with the **Requesting Code Review** skill:
 - Nullable reference types on, `ImplicitUsings` on, file-scoped namespaces.
 - No `async void` except event handlers; no `.Result`/`.Wait()` on async paths.
 - P/Invoke lives in `Interop/` files, one class per Win32 area, with `SetLastError` and a throwing wrapper.
-- Logging: `Microsoft.Extensions.Logging` abstractions, rolling file sink, 2 MB cap. **Never log message bodies, contacts or URLs with query strings.**
+- Logging: a tiny built-in `ILog` in `Chirpdesk.Core` with a rolling file sink (2 MB cap). **Never log message bodies, contacts or URLs with query strings.** `Microsoft.Extensions.Logging` would be a third runtime package and is deliberately not used.
 - Errors surfaced to the user must name the service and the next action, never a bare HRESULT.
 
 ## Secrets and sensitive data
 
-- No signing keys, tokens or certificates in the repo or CI logs.
+- No signing keys, tokens or certificates in the repo or CI logs. The ECDSA private key lives off-repo; only the public SPKI key ships.
 - The repo stays private until v1; even then, no user data, no crash dumps with session data.
 - Filter packs and cosmetic packs are data; they must not contain site cookies or tokens.
 
 ## Versioning and releases
 
 - SemVer, starting `0.1.0` at the end of phase 0.
-- Tags `v0.1.0` build the installer + zip and sign the manifest (phase 5 onward).
+- Tags `v0.1.0` build the installer + zip and sign the manifest with ECDSA P-256 (phase 6 onward).
 - Release notes are generated from Conventional Commits and curated by hand; no auto-published drafts.

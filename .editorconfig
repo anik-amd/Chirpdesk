@@ -24,7 +24,7 @@ indent_size = 4
 [*.{cmd,bat}]
 end_of_line = crlf
 
-[*.{\u002Axaml}]
+[*.xaml]
 indent_size = 2
 
 # Generated / vendored

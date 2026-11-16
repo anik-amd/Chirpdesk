@@ -11,7 +11,7 @@ WebView2 can cancel requests in `WebResourceRequested`. A chat client that canno
 Three tiers — curated hosts (on), cosmetic CSS (on), imported ABP lists (off) — evaluated by one compiled matcher with a per-host verdict cache. Policy:
 
 1. Any matcher exception, invalid filter file, or ambiguous rule → **allow**.
-2. An allowlist covering auth, WebSocket and update endpoints is applied **after** all tiers, so nothing can override it.
+2. An allowlist covering auth, WebSocket and update endpoints is applied **after** all tiers, so nothing can override it. The service's own origin is allowlisted automatically before any pack loads, and a filter pack can only add entries, never remove one.
 3. Per-service disable is a single command (`> blocking: off`).
 
 ## Consequences

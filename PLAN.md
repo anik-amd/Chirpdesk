@@ -13,6 +13,8 @@ Target: Windows 10 1809+ / Windows 11, x64 and arm64.
 | `PLAN.md` (this file) | requirements, architecture, phases, risks |
 | `docs/plans/2026-11-16-phase-0-spine.md` | bite-sized TDD task list for phase 0 |
 | `docs/testing-strategy.md` | what gets tested, how, and what is deliberately manual |
+| `docs/plugins.md` | plugin manifest, kinds, payloads, repositories |
+| `docs/measurements.md` | recorded RAM, disk, latency and soak results |
 | `docs/adr/` | one file per irreversible-ish decision |
 | `docs/engineering.md` | conventions, commit style, definition of done |
 
@@ -32,21 +34,21 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 
 | # | Requirement | Implication |
 |---|---|---|
-| R1 | Starts at boot, **tray only** — no window, no taskbar entry | Hidden host window + login-time autostart |
+| R1 | Starts at boot, **tray only** — no window, no taskbar entry until you ask for one | Hidden host window by default; a visible conversation window exists only on demand |
 | R2 | Selected services are **warm** at boot and notify even if never opened | Real loaded webviews, background throttling disabled |
 | R3 | Services not selected stay **cold** until invoked | Webview created on demand, spinner while loading |
-| R4 | Notifications = native Windows toasts, no backlog storm at login | `NotificationReceived` → toast, dedupe, warm-up suppression |
+| R4 | Notifications = native Windows toasts, no backlog storm at login | `NotificationReceived` → toast, dedupe, warm-up suppression, capability probe per service |
 | R5 | **One** command surface for everything; no sidebar, tab strip or menu | Unified Command Bar, zero permanent chrome |
-| R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search/commands | Single overlay component, two entry modes |
-| R7 | Add **any** chat site by URL | Generic service definition, favicon fetch, no recipe catalogue |
-| R8 | Isolated session per service (multiple accounts) | Per-service `WebView2` user-data folder |
+| R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search/commands | Single overlay component, two entry modes, one global summon hotkey |
+| R7 | Add **any** chat site by URL | Built-in add flow creates a service **instance**; curated definitions are optional, never required |
+| R8 | Isolated session per service (multiple accounts) | One `WebView2` profile per service **instance** |
 | R9 | Theme system: popular families, each with dark **and** light variants built in, live switch | Theme plugins with `variants[]`, token pipeline, instant `DynamicResource` swap |
 | R10 | Small on disk and RAM | WPF + WebView2, framework-dependent, cache trimming |
 | R11 | **Block ads, trackers and junk scripts** in the web clients | Request-level filter engine + cosmetic CSS, fail-open |
-| R12 | **See and reclaim disk** used by these chat apps | Per-service size breakdown, safe cleanup, orphan scan |
-| R13 | Services, themes, templates, tools and filter packs are **plugins** with one manifest format | Data-only in v1; code plugins out-of-process, later |
+| R12 | **See and reclaim disk** used by these chat apps | Per-profile size breakdown, safe cleanup, orphan scan |
+| R13 | Shipped service **definitions**, themes, filter packs and tool panels are **plugins** with one manifest | Data-only in v1; user service instances are settings, not plugins |
 | R14 | Ship a **plugin directory** in the repo; users may add **their own plugin repos** | Signed indexes, per-repo trust consent, data-only installs |
-| R15 | Shell first, catalogue later | Core ships with: loader, Command Bar, webview host, notification pipeline, storage primitives. Themes/services/tools arrive as plugins |
+| R15 | Shell first, catalogue later | Core ships with: loader, Command Bar, webview host, notification pipeline, storage primitives, any-site add flow. Catalogue content arrives as plugins |
 
 ## 2.1 Non-functional targets and constraints
 
@@ -56,14 +58,14 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | Service switch | < 100 ms warm, no reload, no scroll reset | warm webviews are the whole point |
 | Toast latency | < 1 s from the site calling `new Notification()` | slower than the site's own toast feels broken |
 | Boot to all-warm | < 40 s after login, staggered | earlier than that fights Explorer/AV and loses |
-| Idle CPU | < 0.5 % average with 3 warm services | background app must not be felt |
+| Idle CPU | < 1.5 % average with 3 warm services (shell alone < 0.2 %) | three Chromium renderers idle are never free; 0.5 % was wishful |
 | RAM | shell < 70 MB, 150–400 MB per warm service | per-service cost is the site's, not ours |
-| Disk | app < 10 MB, total < 150 MB after a week of 3 warm services | the original complaint |
+| Disk | app < 10 MB, total < 200 MB after a week of 3 warm services | the original complaint; 150 MB was tighter than WhatsApp's cache allows |
 | Soak | 8 h tray-hidden with sockets alive, zero missed test notifications | R2 is unprovable otherwise |
-| Dependencies | ≤ 2 NuGet packages, 0 native libraries | security surface + auditability |
-| Build | one command from clean clone on a machine with .NET 8 SDK only | no VS, no SDK installs, no MSIX |
+| Dependencies | ≤ 2 runtime NuGet packages (WebView2 + tray), 0 native libraries we author | security surface + auditability; test packages and targeting packs are excluded |
+| Build | one command from clean clone on a machine with .NET 8 SDK only | no VS, no full Windows SDK, no MSIX |
 
-Hard constraints: single developer, ~13 GB free disk, Windows 11 dev machine and Windows 10 compatibility target, no code-signing certificate in v1 (unsigned installer, documented), no backend service ever.
+Hard constraints: single developer, ~13 GB free disk, Windows 11 dev machine and Windows 10 compatibility target, no code-signing certificate in v1 (unsigned installer, documented), no backend service ever. Windows 10 needs the WebView2 Evergreen Runtime; every clean machine (10 or 11) needs the .NET 8 Desktop Runtime, because the app is framework-dependent. The installer handles both (phase 6); the portable zip documents them.
 
 Testability constraint that shapes the code: everything with logic must be injectable and headless — `IClock`, `IToastSink`, `IServiceStore`, `IProcessProbe` — so the test suite never needs a WebView2 or a toast to run. UI and WebView2 code is thin by design and verified manually.
 
@@ -75,6 +77,7 @@ Testability constraint that shapes the code: everything with logic must be injec
 - No general-purpose adblocker for your browser — blocking applies inside Chirpdesk's webviews only.
 - No marketing site / landing page.
 - No inbound call guarantee (WebRTC works only if the embedded permission flow allows it — see risks).
+- No custom download manager in v1: WebView2's default download flow is used, with no bespoke UI.
 - No MSIX / Store distribution.
 
 ---
@@ -83,7 +86,7 @@ Testability constraint that shapes the code: everything with logic must be injec
 
 | Candidate | Verdict | Reason |
 |---|---|---|
-| **WPF + WebView2 (chosen)** | ✅ | Both runtimes already on Windows; ~5 MB app; `CoreWebView2.NotificationReceived` gives page **and** service-worker notifications; direct control of profiles, permissions, background flags and request filtering. One language. ~1.5–2 GB dev disk. |
+| **WPF + WebView2 (chosen)** | ✅ | WebView2 ships with Windows 11 (Windows 10 needs the Evergreen Runtime) and setup installs the .NET 8 Desktop Runtime; ~5 MB app; `CoreWebView2.NotificationReceived` gives page notifications, with service-worker notifications an explicit phase-0 gate (see §6); direct control of profiles, permissions, background flags and request filtering. One language. ~1.5–2 GB dev disk. |
 | Tauri v2 (Limusic's stack) | ✗ | Same WebView2 engine underneath, so no runtime advantage. Its two weakest points are exactly our two critical ones: notification interception and `WebResourceRequested` require raw `webview2-com` COM interop in Rust, and multi-webview-in-one-window sits behind an unstable flag. Costs 3–5 GB dev disk and three languages. |
 | WinUI 3 | ✗ | Windows App SDK dependency (~50–80 MB) for no feature we need |
 | Electron | ✗ | Defeats the premise (bundles Chromium, 200 MB+) |
@@ -91,24 +94,28 @@ Testability constraint that shapes the code: everything with logic must be injec
 
 Target framework: `net8.0-windows10.0.19041.0` (WinRT toast projections without extra packages), `UseWPF=true`, published **framework-dependent**.
 
-Third-party dependencies, deliberately few: `Hardcodet.NotifyIcon.Wpf` (MIT, tray) and `Inno Setup` (build-time installer only, not shipped in the app). Filter lists are parsed by our own code.
+Runtime NuGet packages, deliberately few: `Microsoft.Web.WebView2` (engine binding) and `Hardcodet.NotifyIcon.Wpf` (MIT, tray). Test packages, the Windows SDK projection pack and `Inno Setup` (build-time only) are not runtime dependencies and are not shipped in the app. Filter lists are parsed by our own code; so is logging — `Microsoft.Extensions.Logging` would be a third package, so the app uses a tiny `ILog` with a rolling file sink written in `Chirpdesk.Core`.
 
 ---
 
 ## 4.1 Plugin architecture (cross-cutting)
 
-Everything the app can be extended with is a **plugin**: a folder with a `plugin.json` manifest. This costs little because the payloads were already data.
+Every **distributable content pack** is a plugin: a folder with a `plugin.json` manifest. User data — the services you add, their URLs, names and window state — is settings, not a plugin. That distinction is the whole model:
+
+- **Definition** = a plugin (shipped or installed from a repo): url, icon, unread regex, skin CSS, filter pack ref, accent.
+- **Instance** = a row in `settings.json`: `definitionId` + optional overrides, one profile directory, one warm/cold state.
+
+Adding `https://web.telegram.org/` is therefore a **built-in flow** that creates an instance. It never writes a plugin folder, never needs a manifest, and never touches the plugin loader. WhatsApp-as-a-plugin means its *definition* can be updated from a repo — not that clicking "add service" installs a plugin.
 
 | Kind | Payload | Code? | Trust tier | Ships in v1 |
 |---|---|---|---|---|
-| `service` | url, icon, unread regex, optional CSS, filter refs, accent | no | bundled | WhatsApp, Messenger, Telegram, Facebook |
-| `template` | a `service` plugin flagged `"template": true` plus `urlTemplate`, `suggestedName` — the "add any site" flow | no | bundled | Any-site, Any-site (mobile) |
-| `theme` | `variants[]` with `mode: dark\|light`, `tokens{}`, optional `preview` | no | bundled | Dracula, Catppuccin, Nord, … |
-| `filter` | curated host list, cosmetic CSS | no | bundled | tier 1 + cosmetic packs |
-| `tool` | declarative `panel.json` (list/table + actions from host primitives) | no | bundled | Disk cleaner, plugin manager, diagnostics |
+| `service` | definition: url, icon, unread regex, optional CSS, filter refs, accent | no | bundled / repo | WhatsApp, Messenger, Telegram, Facebook |
+| `theme` | `variants[]` with `mode: dark\|light`, `tokens{}`, optional `preview` | no | bundled / repo | Dracula, Catppuccin, Nord, … |
+| `filter` | curated host list, cosmetic CSS | no | bundled / repo | tier 1 + cosmetic packs |
+| `tool` | declarative `panel.json` (list/table + actions from host primitives) | no | **bundled only in v1** | Disk cleaner |
 | `integration` | optional helper executable + JSON-RPC contract (e.g. TDLib for Telegram) | **yes** | user-installed, explicit consent | phase 7 only |
 
-A `template` is not a separate kind in the schema — it is a `service` plugin with `"template": true`, so the add-service flow, the profile machinery and the repo format are shared. Selecting a template instantiates a normal service plugin in the user's plugin folder with a fresh instance id.
+There is no `template` kind and no `"template": true` flag. Any-site is a built-in form that takes the pasted `https` URL, pre-fills a display name and the default unread regex, and writes an instance — not a plugin. A repo can still distribute a **curated** service definition for a site with a tricky unread regex or cosmetic CSS; that is optional polish, never the only way to add a site.
 
 **Layout**
 
@@ -116,7 +123,7 @@ A `template` is not a separate kind in the schema — it is a `service` plugin w
 plugins/<id>/
 ├─ plugin.json          # id, kind, name, version, apiVersion, author, permissions[]
 ├─ icon.png|svg
-├─ service.json         # kind: service / template
+├─ service.json         # kind: service  (definition only)
 ├─ theme.json           # kind: theme    (variants[], each with mode + tokens)
 ├─ filters.json         # kind: filter   (hosts, cosmetic selectors)
 ├─ panel.json           # kind: tool     (list/table + host action primitives)
@@ -129,7 +136,7 @@ Bundled plugins live in the app's install directory; user plugins in `%APPDATA%\
 
 - Scan on startup and on `FileSystemWatcher` change; parse and validate each manifest; a broken plugin is skipped, logged, and marked in the manager — it never prevents the app from starting.
 - `apiVersion` mismatch → plugin disabled with a clear message, not a crash.
-- Enable/disable per plugin, persisted in settings; disabling a theme falls back to the compiled baseline, disabling a service leaves its profile on disk intact.
+- Enable/disable per plugin, persisted in settings; disabling a theme falls back to the compiled baseline, disabling a service definition leaves existing instances and their profiles on disk intact (the instances show `definition missing` until it is re-enabled or removed).
 - Commands: `> plugins`, `> plugin: disable <id>`, `> theme <id>` (themes are addressable as plugins without exposing the word "plugin" in normal use).
 
 **Why no in-process code plugins**
@@ -138,11 +145,13 @@ The app holds every logged-in session. A .NET assembly loaded in-process is full
 
 **What "plugin" does not buy**
 
-Plugins do not invent UI. A `tool` plugin declares a panel in `panel.json` using **host primitives only** — `list`, `table`, `progress`, `text`, `button` — and may invoke a fixed set of **host actions** (`scanOrphans`, `trim`, `revealFolder`, `openSettings`, `enablePlugin`, `syncRepo`). There is no XAML, no code-behind, no arbitrary command execution; the host renders the panel and validates every action and every argument against its allowlist. A `tool` cannot open a window, draw chrome, or place anything outside the settings surface. That keeps "everything is a plugin" from eroding the zero-chrome design: the desk cleaner is a plugin, and it still looks and behaves like the rest of the app.
+Plugins do not invent UI, and they do not invent capabilities. A `tool` plugin declares a panel in `panel.json` using **host primitives only** — `list`, `table`, `text`, `progress`, `button`, `separator` — and may invoke a fixed set of **host actions** (`storageReport`, `trimCache`, `scanOrphans`, `deleteOrphan`, `revealFolder`, `openSettings`). There is no XAML, no code-behind, no filesystem path, no arbitrary command execution; the host renders the panel and validates every action and every argument against its allowlist. A `tool` cannot open a window, draw chrome, or place anything outside the settings surface.
+
+Because a tool can only surface built-in capability, **user-installed tools are disabled in v1**. The cleaner ships as a bundled tool panel so it is data (disableable, inspectable, replaceable in a repo later) without pretending third-party tools add function. The **plugin manager and diagnostics are built-in shell UI, never plugins** — a plugin cannot manage the plugin system that loaded it.
 
 **Shell first, catalogue later**
 
-The v1 shell ships the loader, Command Bar, webview host, notification pipeline and storage primitives, with a minimal bundled catalogue (4 services, 1 any-site template, 2-3 themes, 1 cleaner tool). Everything else — the other 10 theme families, more services, more filter packs — arrives through the plugin repo, not through a rebuild. That ordering is what makes the extensibility pay off: adding Catppuccin Frappé is a data change, not a release.
+The v1 shell ships the loader, Command Bar, webview host, notification pipeline, storage primitives and the built-in any-site flow, with a minimal bundled catalogue (4 service definitions, 2–3 themes, 1 cleaner panel). Everything else — the other theme families, more service definitions, more filter packs — arrives through the plugin repo, not through a rebuild. That ordering is what makes the extensibility pay off: adding Catppuccin Frappé is a data change, not a release.
 
 **Cost accepted**
 
@@ -155,7 +164,7 @@ A repository is a static HTTPS folder — no server logic. The repo's own `regis
 ```
 registry/
 ├─ index.json          # catalogue: plugins, versions, hashes
-└─ index.json.sig      # Ed25519 signature over index.json
+└─ index.json.sig      # ECDSA P-256 signature over index.json
 ```
 
 ```jsonc
@@ -163,7 +172,7 @@ registry/
   "schema": 1,
   "name": "Chirpdesk Official",
   "generated": "2026-11-16T10:00:00Z",
-  "keyFingerprint": "ed25519:9f3c…",
+  "keyFingerprint": "ecdsa-p256:9f3c…",
   "plugins": [
     {
       "id": "filters-meta",
@@ -187,14 +196,14 @@ registry/
 2. Verify the index signature against the pinned key for that repo.
 3. Filter entries by `apiVersion` and `minAppVersion`; anything incompatible is shown as unsupported, never installed.
 4. Download the plugin archive; verify `sha256` **from the signed index**, then `size`.
-5. Unpack to a temp dir, validate `plugin.json` and payload against schema, then move into `%APPDATA%\Chirpdesk\plugins\<id>\`.
+5. Unpack to a temp dir: reject absolute paths, `..`, reparse points and zip-slip entries; validate `plugin.json` and payload against schema, then move into `%APPDATA%\Chirpdesk\plugins\<id>\`.
 6. Enable only if the user toggled it on; otherwise install disabled.
 
 **Trust tiers and pinning**
 
 | Tier | Source | Key | Consent |
 |---|---|---|---|
-| Bundled | `<install>\plugins\` | app build signature | implicit |
+| Bundled | `<install>\plugins\` | trusted by install location (no network fetch) | implicit |
 | Official | repo URL shipped in settings | key pinned at build | one prompt on first install |
 | Community | URL the user adds | TOFU — fingerprint pinned on first fetch | prompt showing fingerprint + what it may do |
 
@@ -215,8 +224,8 @@ Commands: `> repo add <url>` · `> repo list` · `> repo remove <name>` · `> re
 ```
 Chirpdesk.exe (single instance, mutex-guarded)
 │
-├─ Host window (HWND always alive, never in taskbar)
-│   ├─ WS_EX_TOOLWINDOW, ShowInTaskbar=false, ShowActivated=false
+├─ Host window (HWND always alive; off-screen and invisible until asked)
+│   ├─ WS_EX_TOOLWINDOW while hidden; WS_EX_APPWINDOW while shown; ShowInTaskbar never toggled
 │   ├─ starts off-screen at (-32000, -32000), 2×2 px
 │   ├─ Service X webview  (warm: visible when active, 1×1 when parked)
 │   ├─ Service Y webview
@@ -231,9 +240,15 @@ Chirpdesk.exe (single instance, mutex-guarded)
 └─ Settings store (%APPDATA%\Chirpdesk)
 ```
 
-### 5.1 Hidden-but-warm host
+### 5.1 Hidden-but-warm host, and the window you actually see
 
-The window is `Show()`n off-screen at startup so Chromium creates its composition target, then never activated. Each warm service is a `WebView2` in the same visual tree, sized 1×1 while parked. No reparenting, so no renderer restarts.
+There is **one** window, not two. It is created with `ShowInTaskbar=true` — WPF gives a window with `ShowInTaskbar=false` a hidden owner, and toggling that property later recreates the HWND, which would destroy every webview in the tree. Instead, `WS_EX_TOOLWINDOW` is applied in `SourceInitialized` and the window is `Show()`n off-screen at `(-32000, -32000)`, 2×2 px, with `ShowActivated=false`. That keeps Chromium's composition target alive while the window stays out of the taskbar and Alt+Tab.
+
+When the user asks for a service (tray click, Command Bar commit, toast click, global hotkey), the **same HWND** moves on-screen at its last bounds, the active webview fills it, and `SetWindowLongPtr` clears `WS_EX_TOOLWINDOW` and sets `WS_EX_APPWINDOW`, so it behaves like a normal app window (taskbar button, Alt+Tab entry). `Ctrl+W`, the close button and losing the last service returns it off-screen and re-applies `WS_EX_TOOLWINDOW`. `ShowInTaskbar` is never touched after creation. No reparenting, no window recreation, no renderer restart. Warm webviews that are not active stay parked at 1×1.
+
+This is why visibility is **not** a lifecycle workaround: showing the window is a user action, and hiding it never unloads a warm webview. Invariant 5 in `AGENTS.md` is written that way, not as "never show a window".
+
+**Summoning it while hidden.** A tray-only app cannot receive `Ctrl+Tab` when nothing has focus, so a single global hotkey — `Ctrl+Alt+Space` by default — opens the Command Bar in search mode via `RegisterHotKey`. Tray left-click opens the bar too. If registration fails (another app owns it), Settings says so and the tray remains the entry point; we never silently break the only summon path.
 
 Chromium treats off-screen/occluded content as backgrounded, which throttles JS timers and therefore kills WebSocket heartbeats. Countermeasures (both mandatory):
 
@@ -243,13 +258,15 @@ Chromium treats off-screen/occluded content as backgrounded, which throttles JS 
 --disable-backgrounding-occluded-windows
 ```
 
-plus a 30 s host tick that re-asserts `Controller.IsVisible` and calls `TrySuspend(false)`.
+plus a 30 s host tick that re-asserts `Controller.IsVisible` and calls `TrySuspendAsync(false)`.
 
-> **Phase 0 gate:** this must be proven. 3 hours tray-hidden with a real WhatsApp login, then an inbound message must toast. If it fails, the fallback is a 1×1 window parked at screen edge (behind everything) with `WS_EX_NOACTIVATE`, which is still invisible in practice.
+> **Phase 0 gate:** this must be proven. Log in once with the window shown (the deliberate sign-in exception; toast clicks are the only other user-requested show path in phase 0), hide it, then 3 hours tray-hidden with a real WhatsApp login, then an inbound message must toast. If it fails, the fallback is a 1×1 window parked at screen edge (behind everything) with `WS_EX_NOACTIVATE`, which is still invisible in practice.
 
 ### 5.2 Profiles
 
-One `CoreWebView2Environment` per service, each with `userDataFolder = %LOCALAPPDATA%\Chirpdesk\profiles\<serviceId>`. Cookies, storage and logins never mix. Messenger and Facebook **may** optionally share a profile so one sign-in serves both (setting, default off).
+One `CoreWebView2Environment` per **profile**, not per instance. A profile is one `userDataFolder = %LOCALAPPDATA%\Chirpdesk\profiles\<profileId>`, and an instance's `profileId` defaults to its `instanceId`. Cookies, storage and logins never mix across profiles. Two WhatsApp accounts are two instances with two profiles, therefore two environments. Messenger and Facebook **may** optionally share a profile so one sign-in serves both (setting, default off); those two instances then **share the owner's environment object** — two environments cannot open the same `userDataFolder` at once — and deleting the owner requires unsharing first.
+
+The per-profile environment is deliberate but not free: each one is its own browser process tree. Phase 1 records the RAM with 3 and 4 warm services; if 4 warm services exceed ~1.6 GB on this 12 GB machine, the documented fallback is one environment with multiple WebView2 profiles (cheaper, slightly weaker isolation). ADR 0005 carries that trigger.
 
 ### 5.3 Lifecycle
 
@@ -259,7 +276,7 @@ One `CoreWebView2Environment` per service, each with `userDataFolder = %LOCALAPP
 | Asleep | disposed | no | `asleep` | full reload (~3 s) |
 | Cold | never created | no | `cold` | full load (~3 s) |
 
-Warm-up order at boot: staggered 1.5 s apart, in user-defined priority. Selecting a cold service promotes it to warm **for the session only**; persisting is an explicit command.
+Warm-up order at boot: staggered 1.5 s apart, in user-defined priority. Selecting a cold service promotes it to warm **for the session only**; persisting is an explicit command. "Warm" never implies "visible": a warm service can be hidden, parked and toasting.
 
 **Two axes that must not be confused:**
 
@@ -270,7 +287,9 @@ Cold never means signed out — the profile stays on disk, so pairing/session su
 
 ### 5.4 Cache trimming
 
-On sleep and every 6 h, delete per profile: `Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `ShaderCache`. **Keep** `Cookies`, `Local Storage`, `IndexedDB`, `Service Worker` — that's the session and the push registration. See §8.
+On sleep and at boot, delete per profile: `Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `ShaderCache`. **Keep** `Cookies`, `Local Storage`, `IndexedDB`, `Service Worker` — that's the session and the push registration. See §8.
+
+Never trim a profile whose webview is still running: Chromium owns those files, and deleting under it risks corruption. Warm services are trimmed at the **next sleep or next boot**, not on a timer that would force a reload.
 
 ---
 
@@ -279,19 +298,37 @@ On sleep and every 6 h, delete per profile: `Cache`, `Code Cache`, `GPUCache`, `
 ```
 site calls new Notification(...)  ──►  CoreWebView2.NotificationReceived
                                         │
+                                        ├─ origin check: SenderOrigin must belong to this service
                                         ├─ Handled = true (suppress WebView2 default UI)
-                                        ├─ dedupe: tag + SHA1(body) for 3 s
+                                        ├─ boot cutoff: drop notifications older than process start
+                                        ├─ dedupe (one per service instance): tag + sender/title + SHA-256(body) for 3 s
                                         ├─ warm-up gate: drop until service ready + 5 s stable title
                                         ├─ per-service mute / global DND filter
                                         └─► ToastNotification via AUMID
-                                              click ──► open Chirpdesk's Command Bar on that service
+                                              shown ──► ReportShown
+                                              click ──► ReportClicked + show service
                                               dismiss ──► ReportClosed
 ```
 
-- **AUMID:** `Chirpdesk` + a Start-menu shortcut carrying `System.AppUserModel.ID`, created on first run (IShellLink). Without it Windows shows "(unknown app)".
+**What WebView2 actually intercepts.** `NotificationReceived` covers **non-persistent** notifications created with the `Notification()` constructor. Persistent notifications from `ServiceWorkerRegistration.showNotification()` are *not* exposed to the host — WebView2 renders its own UI and the host gets nothing (WebView2Feedback #5800). Do not assume this away.
+
+Per-service capability probe, done in phase 0 and recorded per definition:
+
+| Mode | How it works | When |
+|---|---|---|
+| `native` | `NotificationReceived` fires; full toast with title/body/icon | `new Notification()` services |
+| `shim` | page-context override of `Notification` and `ServiceWorkerRegistration.prototype.showNotification` posts `{title, body, tag}` over `window.chrome.webview.postMessage` | service calls `showNotification` from the page |
+| `title-only` | `DocumentTitleChanged` + unread count → generic toast ("New message in WhatsApp") | background service-worker push only; degraded but never silent |
+
+The mode is a property of the service definition, overridable per instance, and shown in Settings. The shim is built-in host code, not a plugin permission: `inject-js` remains unavailable to plugins. If a site needs background push with content and WebView2 cannot provide it, that is an ADR-0003 failure recorded at the gate, not something to paper over.
+
+- **Origin check:** a notification whose `SenderOrigin` is not the service origin or an allowed subdomain is dropped. Otherwise an ad iframe could toast.
+- **AUMID:** `Chirpdesk` + a Start-menu shortcut carrying `System.AppUserModel.ID`, created on first run (IShellLink). Without it Windows shows "(unknown app)". Uninstall removes it.
 - **Permissions:** auto-grant `Notifications` for configured chat origins on `PermissionRequested`; prompt once (custom dialog, remembered) for `Camera`/`Microphone`; deny `Geolocation` silently.
 - **Sound:** per-service mute respected; otherwise the Windows toast sound plays.
-- **DND:** toast suppressed, badge keeps counting; optional schedule.
+- **DND:** toast suppressed, badge keeps counting; optional schedule. Notifications that expire during DND are dropped, not replayed.
+- **OS-level block:** if Windows notifications are disabled for the app, `ToastNotifier.Setting` is detected and Settings says so instead of silently swallowing toasts.
+- **Click when the app is not running:** v1 is autostart-resident, so the normal path is click → show service. Deep-linking a cold app needs a COM notification activator and is **not** promised in v1; the toast still opens the app.
 - **Inline reply:** out of scope for v1 (COM activation + toast input). Click-to-open only.
 
 ---
@@ -305,7 +342,7 @@ WebView2 gives us `WebResourceRequested` / `AddWebResourceRequestedFilter`, i.e.
 | Tier | What it does | Default | Breakage risk |
 |---|---|---|---|
 | **1 — Curated** | Blocks known ad/telemetry/tracker hosts and `sponsored`/`ads` endpoints (~300–600 entries, shipped, per-service overrides) | **on** | very low; whitelisted endpoints can't be caught |
-| **2 — Cosmetic** | Injected CSS hides promoted/sponsored/upsell containers per service (`filters/cosmetic/<service>.json`), conservative selectors only | on, off per service | low; a bad selector hides the wrong element, never blocks a request |
+| **2 — Cosmetic** | Injected CSS hides promoted/sponsored/upsell containers, selectors shipped in the service definition's filter pack (mirrored locally), conservative selectors only | on, off per service | low; a bad selector hides the wrong element, never blocks a request |
 | **3 — List import** | Opt-in import of ABP-syntax lists (EasyList Lite, EasyPrivacy), parsed offline into a compact domain trie | off | medium — opt-in, per-service, easily disabled |
 
 Tier 3 syntax supported: `||host^`, host/path patterns, `@@` exceptions, `$domain=`, `$third-party`, `$script|image|xmlhttprequest`. Explicitly **unsupported and skipped**: `$csp`, `$redirect`, `$removeparam`, `##`/`#@#` cosmetic syntax (we use our own cosmetic format). Unsupported rules are counted and shown, never silently mangled.
@@ -322,7 +359,7 @@ Tier 3 syntax supported: `||host^`, host/path patterns, `@@` exceptions, `$domai
 Three hard rules, because a chat client that can't log in is worse than an ad:
 
 1. If the matcher throws, a filter file is invalid, or anything is ambiguous → **allow the request**.
-2. A permanent allowlist covers auth, WebSocket and update endpoints (`*/ws`, `*/ws/*`, `login`, `oauth`, `accounts`, service root domains). Nothing on the allowlist can be blocked by any tier.
+2. A permanent allowlist covers auth, WebSocket and update endpoints, and the service's own origin is auto-allowlisted before any pack loads (`*/ws`, `*/ws/*`, `login`, `oauth`, `accounts`, service root domains). Nothing on the allowlist can be blocked by any tier, and no plugin can remove an entry.
 3. `> blocking: off` for a single service, one command away, plus a tray hint on failure pointing at it.
 
 ### 7.4 Scripts
@@ -339,41 +376,43 @@ We do not strip site JavaScript — that's how WhatsApp's encryption init breaks
 
 The point is not only that Chirpdesk is small — it's that the chat apps **already on your machine** are hoarding space, and you should see and reclaim it from one place.
 
-### 8.1 Per-service storage view
+### 8.1 Per-profile storage view
 
-Settings → Storage, and the Command Bar command `> storage`:
+Settings → Storage, and the Command Bar command `> storage`. The unit is the **profile**, because a shared profile is one folder: instances that share it are listed together on one row.
 
 | Column | Meaning |
 |---|---|
-| Service | WhatsApp, Messenger, … |
-| Data | cookies, `Local Storage`, `IndexedDB` — **never touched by a trim** |
-| Cache | `Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `ShaderCache` |
-| Media | cached images/video blobs inside `IndexedDB` (WhatsApp is the big one) |
+| Service | WhatsApp, Messenger, … (shared-profile instances share one row) |
+| Data | cookies, `Local Storage`, `IndexedDB`, `Service Worker` — **never touched by a trim** |
+| Cache | `Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `ShaderCache` — the only reclaimable category |
 | Last trim | timestamp |
 | Blocked | requests blocked (from §7) |
 
-Actions per service: **Trim cache** (safe) · **Clear media cache** (downloads re-fetch) · **Sign out & reset** (clears everything, requires re-pairing) · **Remove service + delete data**. Every action shows the exact path and byte count in a confirmation dialog first.
+Actions per service: **Trim cache** (safe) · **Sign out & reset** (clears everything, requires re-pairing, explicit destructive confirmation) · **Remove service + delete data** (Recycle Bin). Every action shows the exact path and byte count in a confirmation dialog first. Removing a dependent instance never deletes a shared profile; removing a profile owner is blocked until its dependents are unshared or removed.
+
+There is no separate "clear media" action. WhatsApp keeps media blobs inside `IndexedDB`, so deleting "media" means deleting session storage — exactly what invariant 3 forbids as a trim. The UI reports the remaining profile size as **Data** and tells the user that reclaiming it means signing out; anything else would be a lie or a data-loss bug.
 
 ### 8.2 Automatic policy
 
-- Trim caches on sleep and every 6 h; keep sessions.
-- Per-service cache budget (default 60 MB) and global budget (default 500 MB); when exceeded, evict oldest-first and log what was evicted.
-- Never trims while a service is warm and mid-transaction; the webview is parked or disposed first.
+- Trim caches on sleep and at boot; keep sessions.
+- Per-profile cache budget (default 60 MB) and global budget (default 180 MB); when exceeded, trim the oldest **disposed** profiles first and log what was trimmed. Total profiles are expected to stay under 200 MB, per §2.1.
+- Never trim while a webview is running. A warm service is trimmed when it next sleeps or when the app next starts; if the budget is exceeded while warm, Settings says which services need a sleep instead of forcing a reload.
 
 ### 8.3 Orphan scan ("desk space")
 
 Finds chat-app data left behind by things installed before or no longer used:
 
-- Chirpdesk profiles belonging to removed services.
-- Official **WhatsApp desktop** WebView2 data (`%APPDATA%\WhatsApp`, `%LOCALAPPDATA%\WhatsApp`), **Telegram Desktop**, and Electron wrappers (Ferdium / Rambox / Station / MultiMessenger profile dirs) if present.
+- Chirpdesk profiles under `%LOCALAPPDATA%\Chirpdesk\profiles\` that no settings entry references.
+- Official **WhatsApp desktop** data (`%APPDATA%\WhatsApp`, `%LOCALAPPDATA%\WhatsApp`, and the Store package's `%LOCALAPPDATA%\Packages\5319275A.WhatsAppDesktop_*\LocalState` when present), **Telegram Desktop** (`%APPDATA%\Telegram Desktop`), and Electron wrappers (Ferdium / Rambox / Station / MultiMessenger) — each from an enumerated root, never a glob over the user profile.
 - Reports size, last-modified and owning app — per item, with a checkbox. Nothing pre-selected.
 
 Safety rules, non-negotiable:
 
-- Only paths from a **fixed allowlist of known roots**; resolved and re-verified as absolute, inside those roots, no wildcards, no parent traversal.
+- Only paths from a **fixed allowlist of known roots**, resolved and re-verified as absolute, inside those roots, no wildcards, no parent traversal, no reparse-point escape.
 - Deleting user data goes to the **Recycle Bin** (`FOF_ALLOWUNDO`); only cache subfolders are hard-deleted.
 - Never touches mail stores, `Documents`, or Edge/Chrome profiles (those are reported as a hint with manual instructions, since no supported API can safely edit a live Chromium profile).
 - Detects running processes of the owning app and refuses to delete a directory in use.
+- A profile shared by two instances is never reported as orphaned while either instance exists.
 
 ### 8.4 Reclaimed counter
 
@@ -383,9 +422,10 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, 
 
 ## 9. Unread + tray
 
-- Injected script per service: `MutationObserver` on `document.title`, posts `{count, title}` over `chrome.webview.postMessage`. No polling from the host.
-- Per-service `unreadRegex` (default `\((\d+)\)` then `(\d+)`), editable.
-- Tray icon draws a dot variant when total > 0 (rendered at runtime, no assets); tooltip lists `WhatsApp 3 · Telegram 1`.
+- `CoreWebView2.DocumentTitleChanged` → parse the title with the service's `unreadRegex`. No injected script, no polling from the host, no `MutationObserver` shim (the host already gets the event).
+- Per-instance `unreadRegex` (default `\((\d+)\)`, then a bare `(\d+)` fallback), editable; validated for exactly one capture group, with an invalid override falling back to the default and logging.
+- If a definition has no usable title count, the badge shows a dot rather than guessing a number.
+- Tray icon draws a dot variant when total > 0 (rendered at runtime, no assets); tooltip lists `WhatsApp 3 · Telegram 1`, truncated to the shell limit.
 - Optional taskbar overlay badge when the window is visible.
 
 ---
@@ -400,7 +440,7 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, 
 |---|---|---|
 | `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` cancels. Query line hidden. |
 | `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: warm services (unread shown) → cold services (`cold`) → commands. Fuzzy filter as you type. `Enter` runs, `Esc` dismisses. |
-| Cycle, then type | **Search** (retained highlight) | Auto-commit is abandoned the moment a character is entered; the selection stays highlighted and the bar becomes sticky. |
+| Cycle, then type | **Search** (latched) | A printable key while cycling is captured by the bar (it takes focus when it opens) and appended to the query; the bar latches into search, so releasing `Ctrl` no longer commits. `Ctrl+P` latches explicitly. There is no "second `Tab`" gesture: with `Ctrl` still down another `Tab` is indistinguishable from the first `Ctrl+Tab` and from key auto-repeat. |
 
 Rows are rendered by one template in both modes: icon · name · unread count · state badge (`warm` / `asleep` / `cold`) · current-highlight.
 
@@ -418,16 +458,23 @@ Ordering: unread first, then recency, then fuzzy score. `>` restricts to command
 
 | Key | Action |
 |---|---|
+| `Ctrl+Alt+Space` (global) | summon the Command Bar in search mode, even when Chirpdesk has no focus |
 | `Ctrl+Tab` (hold) | cycle warm services |
 | `Tab` / `Shift+Tab` while held | move highlight |
-| release `Ctrl` | commit |
+| any printable key while cycling | append to the query and latch into search |
+| `Ctrl+P` while cycling | latch into search with the highlight retained |
+| release `Ctrl` | commit (unless latched) |
 | `Ctrl+P` | search mode |
 | `Ctrl+Shift+P` | passed through to the page (site print shortcut) |
-| `Ctrl+1..9` | direct jump, fixed order (power path, no UI) |
-| `Ctrl+W` | hide to tray |
+| `Ctrl+1..9` | direct jump, settings order (power path, no UI) |
+| `Ctrl+W` | hide the window to tray |
 | `Esc` | dismiss / cancel |
 
-**Interception:** `Ctrl+Tab`, `Ctrl+P` and `Ctrl+1..9` are handled in `AcceleratorKeyPressed`, so sites cannot steal them. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The overlay is a `Canvas` over existing content — no resizing, no webview recreation.
+**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; `Ctrl+W`, the close button and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text.
+
+**Interception:** `Ctrl+Tab`, `Ctrl+P` and `Ctrl+1..9` are handled in `AcceleratorKeyPressed` while the page has focus; once the bar opens it takes focus and handles keys itself. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global hotkey is `RegisterHotKey`; if it fails, Settings reports the conflict.
+
+**Airspace:** WPF cannot paint over a WebView2 HWND. Opening the bar collapses the active webview (`Visibility=Collapsed`) and closing restores it; the control is not disposed, so scroll position and half-typed page text survive, and the renderer keeps its state. The scrim and bar then render on the host's own background. A second top-level overlay window was rejected: it adds focus, DPI and always-on-top failure modes for the same result.
 
 ### 10.4 Settings is a destination, not navigation
 
@@ -435,28 +482,47 @@ Settings stays a small window (URLs, icons, regexes, theme choice, storage, auto
 
 ---
 
-## 11. Service model
+## 11. Service model: definition + instance
+
+A **definition** is a `service` plugin: shared, versioned, replaceable. An **instance** is what the user actually runs: one entry in `settings.json`, one profile, one unread count. The settings store owns instances; the plugin loader owns definitions.
+
+`settings.json` (excerpt, schema v1):
 
 ```jsonc
 {
-  "id": "whatsapp",
-  "name": "WhatsApp",
-  "url": "https://web.whatsapp.com/",
-  "iconPath": null,            // cached favicon, or custom image
-  "accent": "#25D366",         // optional brand override for the theme accent
-  "warmAtBoot": true,
-  "unreadRegex": "\\((\\d+)\\)",
-  "mute": false,
-  "userAgent": null,
-  "injectCss": null,
-  "blocking": "default",       // default | off | +list
-  "shareProfileWith": null     // e.g. messenger -> facebook
+  "schemaVersion": 1,
+  "services": [
+    {
+      "instanceId": "whatsapp-work",       // ^[a-z0-9-]{1,32}$, unique
+      "definitionId": "whatsapp",          // plugin id, or null for a custom site
+      "name": "WhatsApp (work)",           // display name
+      "url": null,                         // override; null = definition url; required when definitionId is null
+      "iconUri": null,                     // captured favicon or custom image
+      "accent": null,                      // override of definition accent
+      "warmAtBoot": true,
+      "unreadRegex": null,                 // override; null = definition/default
+      "userAgent": null,                   // override; null = definition or stock Edge UA
+      "injectCss": null,                   // user tweak, separate from cosmetic packs
+      "mute": false,
+      "blocking": "default",               // default | off | +list
+      "notificationMode": null,            // null = definition; native | shim | title-only
+      "shareProfileWith": null,            // instanceId of profile owner
+      "profileId": "whatsapp-work",        // normally == instanceId
+      "order": 0
+    }
+  ]
 }
 ```
 
-Add flow: paste URL → loads once → favicon + title captured → saved **cold** → "warm at boot" offered. Sign-in popups (`window.open`) open as child windows in the same profile. Known embedded-browser walls (Google sign-in, some Cloudflare challenges) are detected and replaced with a "sign in via your browser, then come back" hint.
+Custom site (the built-in any-site flow) is the same shape with `"definitionId": null` and inline `url`, `name`, `unreadRegex` defaults. An instance of a known definition leaves `url` null so a definition update from a repo takes effect; overriding the URL pins it. No plugin folder is created. Known embedded-browser walls (Google sign-in, some Cloudflare challenges) are detected and replaced with an honest "this site blocks embedded sign-in — open it in your browser" hint plus an `open in browser` action. Cookies cannot be transferred between the browser and the webview, so we do not pretend that signing in elsewhere authenticates the instance.
 
-Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold. **Newly added services start cold**, with the `warm at boot` switch offered immediately after first sign-in.
+**Popups and sign-in.** `NewWindowRequested` is handled explicitly: a popup the page opens for OAuth or `window.open` becomes a visible, transient WebView2 window using the **same profile**, with normal chrome, because the user clicked a button that asked for it. It closes independently and never replaces the service webview. Popups are never silently handed to the system browser; if a site refuses embedded browsers, the honest "this site blocks embedded sign-in — open it in your browser" hint is shown instead of pretending a browser sign-in transfers into the instance.
+
+Add flow: paste URL → validate `https` and reject credentials/`javascript:`/`file:` → load once → capture `FaviconUri` and title → save **cold** → offer "warm at boot". Two accounts of the same site = add twice; the second instance gets a fresh `instanceId` and profile.
+
+**Profile ownership.** `profileId` defaults to `instanceId`. `shareProfileWith` is recorded on the **dependent** instance (`"shareProfileWith": "facebook"`), and the owner sees the pairing in Settings and can revoke it — that revocation is the second side of the opt-in. The target is the owner. Deleting the owner requires unsharing or deleting both — otherwise the remaining instance silently loses its session.
+
+Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold. **Newly added instances start cold**, with the `warm at boot` switch offered immediately after first sign-in.
 
 ---
 
@@ -480,7 +546,7 @@ Reference: Limusic's app. Near-black neutral base in the `#241c22` family, one r
 | `state.danger` / `.success` / `.warning` | `--cd-state-*` | mute, DND, blocking, errors |
 | `shadow.overlay` | `--cd-shadow-overlay` | overlay elevation |
 
-Token names are CSS-variable compatible so the same token JSON can drive a future non-WPF surface (web or mobile UI) without rewriting palettes — the one structural trick worth copying from Limusic.
+Token names are CSS-variable compatible so the same token JSON can drive a future non-WPF surface (web or mobile UI) without rewriting palettes — the one structural trick worth copying from Limusic. The WPF shell itself consumes each token as a `DynamicResource` key (`Cd.Bg.Window`, `Cd.Text.Primary`, …); the `--cd-*` names are generated for the optional injected-CSS path and for that future surface, not used to style the shell.
 
 ### 12.2 Theme plugins
 
@@ -516,7 +582,17 @@ Rules the loader enforces:
 - Selecting a family pins it; `> theme catppuccin mocha` pins a specific variant; `> theme catppuccin auto` returns to the family default for the current mode.
 - Applied with `DynamicResource` onto a WPF `ResourceDictionary` keyed `Cd.<token>`, so switching is instant — no restart, no flicker.
 
-Selected **family** is stored in settings; selected **variant per mode** is derived from `defaults`, so a family added later can opt into "follow system" without a migration.
+Selected **family** is stored in settings; selected **variant per mode** is derived from `defaults`, so a family added later can opt into "follow system" without a migration. The settings shape is explicit rather than implied:
+
+```jsonc
+"theme": {
+  "family": "theme-catppuccin",   // plugin id
+  "mode": "auto",                 // auto | dark | light
+  "pinnedVariant": null           // e.g. "mocha"; null = family default for the active mode
+}
+```
+
+`pinnedVariant` wins over `mode` only while that variant's mode matches; if it doesn't, the family default for the active mode applies and Settings flags the mismatch rather than pinning a light variant in dark mode.
 
 **Bundled families** (shipped as plugins, expanding via the official repo):
 
@@ -543,11 +619,11 @@ Every variant is validated at load: text/background pairs must clear **WCAG AA 4
 
 ### 12.4 Site appearance
 
-Sites own their CSS. On every theme change we set `CoreWebView2Profile.PreferredColorScheme`, so services honouring `prefers-color-scheme` follow your light/dark choice. Optional per-service `injectCss` goes further; a few examples ship, clearly best-effort.
+Sites own their CSS. On every theme change we set `CoreWebView2Profile.PreferredColorScheme`, so services honouring `prefers-color-scheme` follow your light/dark choice. Optional per-instance `injectCss` goes further; a few examples ship, clearly best-effort.
 
 ### 12.5 Typography + motion
 
-Segoe UI Variable for UI; `Cascadia Mono` for the Command Bar query line — the "hacker" flavour lives there, not in decoration. Overlay open/close 90 ms fade + 4 px rise. No other motion.
+Segoe UI Variable for UI; `Cascadia Mono` for the Command Bar query line, falling back to `Consolas` (Windows 10 does not always ship Cascadia) — the "hacker" flavour lives there, not in decoration. Overlay open/close 90 ms fade + 4 px rise. No other motion. When Windows high-contrast mode is on, the baseline high-contrast palette wins over any theme plugin.
 
 ---
 
@@ -555,23 +631,25 @@ Segoe UI Variable for UI; `Cascadia Mono` for the Command Bar query line — the
 
 | Path | Contents |
 |---|---|
-| `%APPDATA%\Chirpdesk\settings.json` | services, appearance, autostart, DND, blocking, update channel |
+| `%APPDATA%\Chirpdesk\settings.json` | schemaVersion + service instances, appearance, autostart, DND, blocking, update channel |
 | `%APPDATA%\Chirpdesk\plugins\<id>\` | user-installed plugins of any kind |
 | `%APPDATA%\Chirpdesk\filters\compiled\` | compiled matchers from imported lists |
 | `%APPDATA%\Chirpdesk\updates\` | downloaded installer + manifest, deleted after apply |
-| `%LOCALAPPDATA%\Chirpdesk\profiles\<id>\` | per-service WebView2 data |
+| `%LOCALAPPDATA%\Chirpdesk\profiles\<profileId>\` | per-profile WebView2 data |
 | `%LOCALAPPDATA%\Chirpdesk\icons\` | cached favicons |
 | `%LOCALAPPDATA%\Chirpdesk\logs\` | rolling log, 2 MB cap |
 
-Settings writes are atomic (temp + rename); a corrupt file falls back to defaults with a logged warning.
+Settings writes are atomic (temp + rename); a corrupt file falls back to defaults with a logged warning. Migrations are explicit and one-way: `schemaVersion` is bumped only when a loader exists for the old shape, and a newer file is never silently downgraded.
 
 ---
 
-## 14. Shipping and updates (phase 5)
+## 14. Shipping and updates (phase 6)
 
-- **Installer:** Inno Setup, per-user, no elevation, `setup.exe`; a plain `.zip` portable build for people who want no installer. No MSIX, no Store.
-- **Shortcut creation** at install time carries the `System.AppUserModel.ID` used by toasts and the updater.
-- **Self-update:** the app checks GitHub Releases (stable channel only), downloads `Chirpdesk-Setup.exe` + manifest, verifies an **Ed25519 signature** and SHA-256 of the payload, then runs the installer silently and relaunches. Unsigned, malformed or unparseable manifests are refused and logged; the app keeps running the current version.
+- **Installer:** Inno Setup, per-user, no elevation, `setup.exe`; a plain `.zip` portable build for people who want no installer. No MSIX, no Store. The installer checks for the .NET 8 Desktop Runtime and the WebView2 Evergreen Runtime. WebView2 installs per-user without elevation; the .NET Desktop Runtime is machine-wide, so if it is missing setup shows a blocking prerequisite page with the official download and an optional "install it for me" step that elevates through the signed Microsoft bootstrapper. Chirpdesk itself never requires admin. The portable zip documents both requirements.
+- **Uninstall** removes app files and the AUMID shortcut. Profiles are user data: the uninstaller offers a clearly-labelled "also delete my Chirpdesk data" checkbox (default off) and sends it to the Recycle Bin.
+- **Shortcut creation** at install time carries the `System.AppUserModel.ID` used by toasts and the updater; uninstall removes it.
+- **Self-update:** the app checks GitHub Releases (stable channel only), downloads `Chirpdesk-Setup.exe` + manifest, verifies an **ECDSA P-256 signature** and SHA-256 of the payload, then runs the installer silently and relaunches. Unsigned, malformed or unparseable manifests are refused and logged; the app keeps running the current version. A manifest whose version is not newer than the running build is also refused, so a valid old release cannot be replayed as a downgrade. Before applying, the app disposes every WebView2 environment and exits cleanly — the installer never runs over live profile locks.
+- **Why ECDSA, not Ed25519:** .NET 8/9/10 still ship no Ed25519 implementation; using it would mean BouncyCastle (a third runtime package) or NSec (native libsodium, a native dependency). `ECDsa` over NIST P-256 is in-box, FIPS-friendly and signs SHA-256. Keys are SPKI PEM; signatures are fixed 64-byte IEEE P1363, base64 in the `.sig` file. This is a deliberate downgrade in signature scheme, not in verification rigor.
 - **Opt-in:** update checks can be disabled; nothing is ever downloaded without a signature match. Portable builds never self-update.
 - **CI:** one GitHub Actions workflow on `windows-latest` that builds, runs tests, packs the installer + zip and attaches them to a Release with the signature. Release-only — never used for development.
 - **No landing page.** Repo README is the only public surface for now.
@@ -582,13 +660,13 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **0 — Spine** | SDK install, project skeleton, hidden host, one service (WhatsApp), toast pipeline + AUMID, single instance | 3 h tray-hidden, inbound message toasts with correct text and icon; click opens the bar on WhatsApp; never appears in Alt+Tab |
-| **1 — Command Bar** | plugin loader + manifest validation, services and themes as plugins, multi-service hosting, per-service profiles, Command Bar (cycle + search), cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type → filter → `Enter` works as one continuous interaction; cold services appear in search but never in cycle; half-typed text survives switching |
-| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, add-URL flow (any-site template), per-service regex, storage scan/trim/orphan primitives, cleaner `tool` plugin with `panel.json` | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 150 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
+| **0 — Spine** | SDK install, project skeleton, hidden host + one-shot visible login path, one service (WhatsApp), toast pipeline + AUMID, notification capability probe, single instance | Log in once, hide, 3 h tray-hidden, inbound message toasts with correct text and icon; toast click shows WhatsApp in the window; window never appears unprompted; Alt+Tab clean while hidden |
+| **1 — Command Bar** | plugin loader + manifest validation (service definitions and themes), definition/instance settings model, multi-service hosting, per-profile environments, Command Bar (cycle + search), global hotkey, show/hide window styles, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type `tel` → `Enter` works as one continuous interaction (typing latches search); cold services appear in search but never in cycle; half-typed text survives switching; two instances of one definition keep separate sessions |
+| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, built-in any-site add flow, per-instance regex, storage scan/trim/orphan primitives, cleaner `tool` panel | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 200 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
 | **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
-| **4 — Design** | token pipeline, theme plugin loader with variants, baseline theme, system light/dark, live preview from `> theme`, contrast validator, `PreferredColorScheme` sync | Theme switch is instant and previewable from the bar; every variant passes AA; a dropped-in theme plugin appears in `> theme`; deleting all theme plugins still renders the baseline |
-| **5 — Plugin ecosystem** | catalogue expansion: 10 theme families, cleaner + diagnostics tools, extra services and filter packs; plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
-| **6 — Ship** | Inno Setup installer, portable zip, self-updater with signature verification, first-run overlay teaching `Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine: run setup, add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered manifest |
+| **4 — Design** | token pipeline, theme plugin loader with variants, baseline theme, system light/dark, live preview from `> theme`, contrast validator, high-contrast fallback, `PreferredColorScheme` sync | Theme switch is instant and previewable from the bar; every variant passes AA; a dropped-in theme plugin appears in `> theme`; deleting all theme plugins still renders the baseline |
+| **5 — Plugin ecosystem** | catalogue expansion: 10 theme families, extra service definitions and filter packs; plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
+| **6 — Ship** | Inno Setup installer with .NET 8 Desktop + WebView2 runtime checks, portable zip, self-updater with ECDSA verification and downgrade refusal, first-run overlay teaching the global hotkey/`Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine with neither runtime: setup detects both, explains or installs them with consent, then the app runs; add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered or older manifest |
 | **7 — Optional** | ABP list import (tier 3), out-of-process integration plugin host (TDLib as first integration), live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
 
 Each phase ends with a build you can actually run.
@@ -600,21 +678,29 @@ Each phase ends with a build you can actually run.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Off-screen window throttled despite flags | R2 fails outright | Phase 0 gate; fallback 1×1 `WS_EX_NOACTIVATE` at screen edge |
+| Toggling `ShowInTaskbar` recreates the HWND | Every hosted webview is destroyed on show/hide | Never change it after creation; toggle `WS_EX_TOOLWINDOW`/`WS_EX_APPWINDOW` instead (ADR 0003) |
+| WPF cannot paint over a WebView2 HWND | Command Bar renders behind the page | Collapse the active webview while the bar is open; integration check in phase 1 |
+| `NewWindowRequested` left unhandled | OAuth/sign-in popups lost or silently sent to the system browser | Same-profile, user-initiated popup window; explicit handling, never silent external |
 | Blocking breaks a login or WebSocket | Service unusable, worse than ads | Fail-open, permanent auth/WS allowlist, one command to disable per service, counters for diagnosis |
 | Cosmetic selector hides the wrong thing | Confusing UI | Conservative selectors, per-service toggle, never touches requests |
 | Cache deletion logs the user out | Re-pairing WhatsApp | Cache and data are separate directories, separate buttons, separate confirmations |
 | Orphan scan deletes something it shouldn't | Data loss | Fixed root allowlist, path re-verification, Recycle Bin for user data, in-use detection, nothing pre-checked |
-| Tampered update package | Code execution | Ed25519 + SHA-256 verification, refuse and log on mismatch, updates opt-in |
+| Tampered update package | Code execution | ECDSA P-256 + SHA-256 verification, refuse and log on mismatch, updates opt-in |
+| Signed old release replayed as a downgrade | Runs a vulnerable build | Refuse a manifest whose version is not newer than the running build |
 | Malicious plugin | Session theft, keylogging | v1 plugins are data-only (no code path exists); code only out-of-process with explicit consent; no in-process assembly loading, ever |
 | Plugin schema drift | Community plugins break each release | `apiVersion` validation, unknown fields ignored, only additive changes within a major version, schema published |
-| Broken plugin hides a service | User thinks the app lost their account | Invalid plugins are skipped and flagged; disabling never deletes a profile |
-| Malicious filter pack | Blocks logins, or beacons out via CSS | Host rules cannot touch the global allowlist; CSS sanitised (no `@import`, no remote `url()`); permissions listed before install |
-| Compromised plugin repo | Serves a tampered plugin | Ed25519-signed index, pinned per-repo key, explicit re-trust prompt on key change, hash from the signed index, no silent installs |
+| Broken plugin hides a service | User thinks the app lost their account | Invalid plugins are skipped and flagged; disabling a definition never deletes an instance or profile |
+| Malicious filter pack | Blocks logins, or beacons out via CSS | Host rules cannot touch the global allowlist; service origin auto-allowlisted; CSS sanitised (no `@import`, no remote `url()`); permissions listed before install |
+| Compromised plugin repo | Serves a tampered plugin | ECDSA-signed index, pinned per-repo key, explicit re-trust prompt on key change, hash from the signed index, zip-slip rejection, no silent installs |
 | Repo outage or stale index | Filters age, manager errors | Cached index (24 h TTL), installed plugins keep working offline, failures logged not fatal |
 | `Ctrl+P` steals a site's print shortcut | Minor | `Ctrl+Shift+P` passthrough documented |
 | Meta changes the web client / sniffs the UA | Service breaks | Stock Edge UA like Meta's own Windows app; per-service UA override |
 | Google sign-in refuses embedded browsers | Some services unusable | Detect + explain; open-in-browser escape hatch |
-| Service-worker notifications differ from page notifications | Missed toasts | `NotificationReceived` covers both; per-service verification; injected `Notification` shim as fallback |
+| Service-worker notifications differ from page notifications | Missed toasts | Phase 0 capability probe per service; `native` → `shim` → `title-only` fallback; mode visible in Settings |
+| Global hotkey already taken | No way to summon the bar without the tray | `RegisterHotKey` failure reported in Settings; tray left-click always works; hotkey later configurable |
+| Toast clicked while the app is closed | Cold start without deep link | v1 is autostart-resident; click launches the app and shows the service, but deep-link activation is a later COM activator |
+| Windows 10 has no WebView2 Runtime | App cannot start | Installer installs the Evergreen bootstrapper; portable zip documents the requirement |
+| Trimming under a running webview | Cache/profile corruption | Trim only disposed profiles; warm services trim at next sleep or boot; never on a timer |
 | WebView2 memory per warm service | R10 partially fails | It's the site's cost; sleep, warm-count guidance, per-service RAM shown |
 | Toast identity shows "(unknown app)" | Looks broken | AUMID + shortcut on first run, verified in phase 0 |
 | `Ctrl+Tab` stolen by a site | R6 fails | `AcceleratorKeyPressed` precedence; passthrough documented |
@@ -629,30 +715,32 @@ Chirpdesk/
 ├─ README.md
 ├─ PLAN.md
 ├─ LICENSE                    # MIT
-├─ plugins/                   # every bundled extension, one folder each
-│  ├─ whatsapp/               # kind: service
+├─ plugins/                   # every bundled content pack, one folder each
+│  ├─ whatsapp/               # kind: service (definition)
 │  ├─ theme-dracula/          # kind: theme
 │  └─ filters-meta/           # kind: filter
 ├─ registry/                  # the official plugin repo: index.json + index.json.sig
-├─ schemas/                   # plugin.json / service / theme / filter JSON Schemas
-├─ installer/                 # Inno Setup script, signing keys (public only)
-├─ src/Chirpdesk/
+├─ schemas/                   # plugin.json / service / theme / filter / panel JSON Schemas
+├─ installer/                 # Inno Setup script, public signing keys only
+├─ src/Chirpdesk.Core/         # pure logic: parsing, policy, settings, planners, ILog
+├─ src/Chirpdesk/              # WPF + WebView2 shell
 │  ├─ App.xaml(.cs)           # startup, single instance, autostart
 │  ├─ Plugins/                # discovery, manifest validation, registry, hot rescan
-│  ├─ Hosting/                # hidden window, webview manager, profiles
-│  ├─ Services/               # definitions, store, add-URL flow
-│  ├─ Notifications/          # toast pipeline, AUMID, permission policy
+│  ├─ Hosting/                # window show/hide, webview manager, profiles
+│  ├─ Services/               # definitions vs instances, add-URL flow, store
+│  ├─ Notifications/          # toast pipeline, AUMID, capability probe, permissions
 │  ├─ Filtering/              # matcher, list parser, counters
 │  ├─ Storage/                # size scan, trim, orphan scan
-│  ├─ Updates/                # release check, signature verify, apply
+│  ├─ Updates/                # release check, ECDSA verify, apply
 │  ├─ Ui/CommandBar/          # cycle + search modes, one row renderer
 │  ├─ Ui/                     # title bar, settings window, first-run overlay
 │  └─ Theming/                # theme plugin loader, token mapping, contrast check
+├─ tests/Chirpdesk.Core.Tests/ # xUnit, FakeClock, fixtures
 ├─ docs/                      # decisions, screenshots, service notes
 └─ .github/workflows/release.yml
 ```
 
-Dev environment: local only, .NET 8 SDK, no Visual Studio, no Windows SDK, no MSIX. Peak dev disk ~2 GB; app footprint ~5 MB.
+Dev environment: local only, .NET 8 SDK, no Visual Studio, no full Windows SDK, no MSIX. Peak dev disk ~2 GB; app footprint ~5 MB. Windows 10 additionally needs the WebView2 Evergreen Runtime at runtime, not at build time.
 
 ---
 
@@ -663,9 +751,12 @@ Decided:
 - License **MIT**; repo stays **private** until v1 works.
 - Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
 - One Command Bar for navigation, commands and theme switching.
-- **Plugin-shaped architecture**: services, templates, themes (with dark+light variants), tools and filter packs are plugins with one manifest; data-only in v1; code only out-of-process, phase 7.
-- **Shell first**: v1 ships the loader, Command Bar, host, notifications and storage primitives with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
+- **Plugin-shaped architecture**: shipped service **definitions**, themes (with dark+light variants), filter packs and bundled tool panels are plugins with one manifest; data-only in v1; code only out-of-process, phase 7. **User-added sites are instances in `settings.json`, not plugins.**
+- **Shell first**: v1 ships the loader, Command Bar, host, notifications, storage primitives and the built-in any-site flow, with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
+- **Visibility is user-requested**: one window, hidden at boot, shown on tray/hotkey/Command Bar/toast, never shown to fix a lifecycle problem.
+- **Global summon hotkey** `Ctrl+Alt+Space`; tray left-click is the fallback when registration fails.
 - Adblock packs ship as `filter` plugins, maintained in the repo's `plugins/` + `registry/`, installable from the official repo or any user-added repo.
+- **Updates and repo indexes sign with ECDSA P-256 + SHA-256** because .NET has no Ed25519 implementation; no extra crypto package.
 - `Ctrl+Tab` cycles, `Ctrl+P` searches; `Ctrl+K` removed.
 - No sidebar, tab strip, menu bar or landing page.
 - Self-updating signed installer, opt-in, stable channel only.
@@ -676,6 +767,7 @@ Open:
 - Title bar: minimal custom bar showing `service · unread`, or none at all.
 - `Ctrl+1..9` direct jump: keep or drop for a pure two-key model.
 - Blocking default: tier 1 + cosmetic on, list import off (assumed).
+- Deep-link toast activation when the app is closed (COM activator, later).
 
 ---
 
@@ -686,13 +778,17 @@ Every entry is a cost we are knowingly paying. If the revisit trigger fires, the
 | Decision | Cost we accept | Revisit if |
 |---|---|---|
 | WebView2 hosting instead of native protocol clients | 150–400 MB RAM per warm service; we inherit whatever Meta ships | TDLib-class clients appear for WhatsApp/Messenger, or a service publishes an official API |
-| Single hidden host window for all webviews | one window's HWND is the liveness anchor; a stuck renderer can stall it | two consecutive reports of the window refusing to show, or renderer crashes surviving a reload |
-| Per-service `CoreWebView2Environment` | more processes, more RAM, slower first boot | total RAM with 4 warm services exceeds ~1.6 GB on a 12 GB machine |
+| One window that hides off-screen and is shown on demand | show/hide has to toggle taskbar/Alt+Tab styles correctly; the hidden HWND is the liveness anchor | two consecutive reports of the window refusing to show or losing its taskbar button |
+| Per-profile `CoreWebView2Environment` | more processes, more RAM, slower first boot | total RAM with 4 warm services exceeds ~1.6 GB on a 12 GB machine → evaluate multi-profile single environment |
+| `NotificationReceived` only covers non-persistent notifications | service-worker `showNotification` needs a shim or degrades to title-only | a core service uses background SW push with content and neither shim nor title fallback satisfies R4 |
+| ECDSA P-256 instead of Ed25519 | slightly larger signatures/keys; not the modern default | .NET ships Ed25519, or a crypto dependency is approved by ADR |
+| User sites are settings instances, not plugins | community cannot ship a "site recipe" as a first-class installable object, only as a service definition plugin | users ask to share a full preconfigured service (regex + CSS + icon) as one installable item |
+| Tool plugins are bundled-only and cannot add capability | the cleaner is data but not user-extensible in v1 | a real third-party tool need appears that the host primitive set can express safely |
 | Fail-open filtering | some ads slip through when a filter file is broken | a service breaks *because* of a filter and fail-open did not prevent it |
 | Cosmetic filtering with CSS selectors | selectors rot when sites redesign | more than one breakage per month per service |
 | No auto-update in v1 → signed self-update after | users on old builds for longer | v1 sees daily use, or a security fix needs shipping fast |
 | Custom WPF chrome instead of native title bar | DPI and window-chrome edge cases are ours to handle | visible chrome glitches on multi-monitor or fractional scaling |
-| Command Bar as sole navigation | discoverability depends on the first-run overlay | a user cannot find settings after the overlay is dismissed |
+| Command Bar as sole navigation | discoverability depends on the first-run overlay and the global hotkey | a user cannot find settings after the overlay is dismissed |
 | One shared cookie jar *within* a service instance | two logins for the same site need two entries | users routinely need more than two accounts per site |
 | MIT, private repo, solo maintenance | no external contributors during v1 | v1 ships and is public — then CONTRIBUTING and issue templates get added |
 | Plugin manifest is a published schema | compatibility burden on every field | a second consumer of the schema appears (mobile, web) or community plugins break on a minor bump |

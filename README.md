@@ -17,25 +17,25 @@ No bundled Chromium. No Electron. No sidebar. No subscription.
 - Native Windows toasts with your service's icon, dedupe, and no boot-time backlog storm
 - `Ctrl+Tab` (hold) cycles open services, VSCode-style MRU switching
 - `Ctrl+P` opens the same command bar in search mode — switch services, run commands, change theme
-- Add any chat site by URL — an "any site" template plugin creates a normal service
-- Isolated session per service, so multiple accounts coexist
+- Add any chat site by URL — a built-in flow creates a normal service instance, no plugin required
+- Isolated session per service instance, so multiple accounts coexist
 - Built-in ad, tracker and junk-script blocking — request-level, fail-open, one-click off per service
 - Storage panel: per-service cache breakdown, safe trimming, and a scan for chat-app leftovers from apps you no longer use
 - Theme families (Dracula, Nord, Catppuccin, Tokyo Night, Gruvbox, Rosé Pine, Solarized, GitHub) each shipping dark **and** light variants
-- **Everything is a plugin**: services, the any-site template, themes, adblock packs and the disk cleaner share one manifest — add your own or a third-party plugin repo later
+- **Plugin-shaped content**: shipped service definitions, themes, adblock packs and bundled tool panels share one manifest — add your own or a third-party plugin repo later. The sites you add are settings, not plugins.
 
 ## Target footprint
 
 | | |
 |---|---|
 | App | ~5 MB |
-| Runtimes | 0 (uses the WebView2 and .NET 8 already on Windows) |
-| Disk incl. 3 warm profiles, cache-trimmed | ~60–140 MB |
+| Runtimes | .NET 8 Desktop Runtime + WebView2 Evergreen (WebView2 is on Windows 11 and a one-time install on Windows 10; .NET 8 is installed by setup on any clean machine) |
+| Disk incl. 3 warm profiles, cache-trimmed | under 200 MB after a week |
 | RAM | ~50 MB shell + 150–400 MB per warm service |
 
 ## Stack
 
-C# / .NET 8 / WPF + WebView2, published framework-dependent. No Visual Studio, no Windows SDK, no MSIX.
+C# / .NET 8 / WPF + WebView2, published framework-dependent. No Visual Studio, no full Windows SDK, no MSIX.
 
 ## Docs
 
@@ -43,6 +43,7 @@ C# / .NET 8 / WPF + WebView2, published framework-dependent. No Visual Studio, n
 - [docs/plans/](docs/plans/) — task-by-task implementation plans (phase 0 ready)
 - [docs/plugins.md](docs/plugins.md) — plugin manifest, kinds, trust tiers, repo format
 - [docs/testing-strategy.md](docs/testing-strategy.md) — test pyramid, seams, manual E2E matrix
+- [docs/measurements.md](docs/measurements.md) — recorded RAM, disk, latency and soak results
 - [docs/adr/](docs/adr/) — architecture decision records
 - [docs/engineering.md](docs/engineering.md) — conventions, commits, definition of done
 - [AGENTS.md](AGENTS.md) — invariants for coding agents working in this repo

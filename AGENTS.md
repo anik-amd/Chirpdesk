@@ -29,10 +29,10 @@ dotnet run --project src/Chirpdesk -- --test-toast   # toast identity check
 2. **Never delete outside the allowlisted roots.** No wildcards, no `..`, no absolute paths from settings. User data goes to the Recycle Bin.
 3. **Never delete `Cookies`, `Local Storage`, `IndexedDB` or `Service Worker` as part of a "trim".** Those are the session; trimming is caches only.
 4. **Never log message bodies, contact names, or full URLs with query strings.** Logs are capped at 2 MB and are user-shareable.
-5. **Never make a webview visible to solve a lifecycle problem.** Hidden-warm is the product; fixing a bug by showing a window is not allowed.
+5. **Never show the window except because the user asked.** Tray, `Ctrl+Alt+Space`, Command Bar commit and toast click are user requests; boot, a crashed socket or a lifecycle bug is not. Hidden-warm is the product, and "make it visible so it works" is a bug report, not a fix.
 6. **Never add a dependency** without an ADR. Budget is ≤ 2 NuGet packages.
 7. **Never run the app's own update path in tests.** Signature verification is unit-tested with fixtures.
-8. **Fail open.** If a filter, theme, template or setting is invalid, allow/ignore and log — never block the user out of a messenger.
+8. **Fail open.** If a filter, theme, service definition or setting is invalid, allow/ignore and log — never block the user out of a messenger.
 9. **Never load plugin code in-process.** v1 plugins are data only; `integration` plugins run as separate processes, phase 7 at the earliest.
 10. **Never install an unverified plugin or accept a changed repo key silently.** Signed index → hash from that index → schema validation. Key change blocks the repo until the user re-trusts it by fingerprint.
 11. **Never let a plugin alter the global auth/WebSocket allowlist.** A filter plugin may add to it, never remove from it.

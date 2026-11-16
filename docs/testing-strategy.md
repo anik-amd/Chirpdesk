@@ -29,7 +29,7 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | Area | Cases that matter |
 |---|---|
 | `UnreadParser` | no title, no match, first-match-wins, non-numeric capture, `99+` forms |
-| `NotificationDedupe` | duplicate inside window, allowed after window, differing body, tag collision |
+| `NotificationDedupe` | duplicate inside window, allowed after window, differing body, same body from a different sender not collapsed, tag collision |
 | `WarmUpGate` | suppressed before ready, suppressed while title changing, released after 5 s stable, no re-suppression later |
 | `SettingsStore` | round-trip, defaults on missing, corrupt file quarantined, interrupted write keeps old file, id validation |
 | `MruList` | promote to front, dedupe, wrap both directions, empty |
@@ -37,12 +37,15 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | `ContrastCheck` | AA pass/fail boundaries at 4.5:1 and 3:1, auto-nudge terminates, never exceeds 20 iterations |
 | `FilterMatcher` | `\|\|host^` exact/trailing-dot/subdomain, `@@` exception wins, allowlist beats every tier, fail-open on malformed rule, O(1) cache hit path |
 | `PathGuard` | traversal (`..`), symlink/junction escape, path outside allowlisted roots, drive-relative paths, long paths |
-| `TrimPlanner` | never selects `Cookies`/`Local Storage`/`IndexedDB`/`Service Worker`, respects budgets, oldest-first order, refuses while service warm |
+| `TrimPlanner` | never selects `Cookies`/`Local Storage`/`IndexedDB`/`Service Worker`, respects budgets, oldest-first order, refuses while the profile is warm, only trims disposed profiles |
+| `OrphanPolicy` | never reports a shared profile, never escapes an enumerated root, refuses a directory owned by a running app, user data goes to the Recycle Bin while caches are hard-deleted |
+| `NotificationPolicy` | per-service mode (`native`/`shim`/`title-only`) selects the right path, origin not belonging to the service is dropped, boot cutoff drops pre-start notifications |
 | `PluginManifest` | missing required field, bad id pattern, unknown `apiVersion`, unimplemented permission rejected, asset path traversal rejected |
 | `ThemeVariants` | duplicate variant id rejected, `defaults` must reference an existing variant of matching mode, missing token in one variant disables the family, family with no light variant keeps dark under follow-system, all-themes-missing falls back to baseline |
-| `TemplateInstantiation` | `{host}` substitution rejects paths/queries/credentials, non-https result refused, derived id is unique and validated, template itself is not hostable as an instance |
+| `ServiceInstance` | instance id validated and unique, `definitionId: null` yields a custom site with defaults, disabling a definition keeps the instance and profile, `shareProfileWith` refuses a missing owner, two instances sharing a profile resolve to one environment, deleting an owner requires unsharing first, two instances of one definition get distinct profiles |
 | `ToolPanel` | unknown primitive disables only that action, `revealFolder` rejects a path argument, `deleteOrphan` rejects an id from another session, missing permission greys the action, panel still renders when all actions fail |
-| `PluginRegistry` | user plugin overrides bundled with same id, duplicate ids across repos require a choice, rescan picks up a new folder, broken plugin disabled not fatal |
+| `UpdateManifest` | ECDSA P-256 signature verified against the pinned SPKI key, tampered payload hash rejected, wrong key rejected, malformed manifest rejected, version not newer than running build rejected, no network path taken on failure |
+| `PluginRegistry` | user plugin overrides bundled with same id, duplicate ids across repos require a choice, rescan picks up a new folder, broken plugin disabled not fatal, a user-installed `tool` is refused |
 | `RepoIndex` | bad signature rejected, hash mismatch rejected, size mismatch rejected, `minAppVersion` gating, key change blocks until re-trust, index cache TTL |
 
 Coverage target: **≥ 85 % line coverage in `Chirpdesk.Core`**, with 100 % of the "must never happen" cases above. No coverage target for `src/Chirpdesk` (UI + interop); it is kept deliberately thin.
@@ -50,6 +53,7 @@ Coverage target: **≥ 85 % line coverage in `Chirpdesk.Core`**, with 100 % of t
 ## 4. Integration tests (Windows only, `dotnet test` with category `Integration`)
 
 - Host boot: hidden window created, `WS_EX_TOOLWINDOW` present, not in taskbar.
+- Show/hide: showing a service moves the same HWND on-screen and restores the taskbar button; hiding re-applies `WS_EX_TOOLWINDOW` without recreating the webview.
 - Profile creation: two services get distinct `userDataFolder` roots; cookies written by one are absent in the other.
 - AUMID: shortcut exists, `AppUserModelID` string matches `Chirpdesk`, toast notifier constructs without throwing.
 - Filter hookup: a synthetic in-page `fetch("https://doubleclick.net/x")` is cancelled, while `fetch` to the service origin succeeds (fail-open check).
@@ -65,7 +69,7 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 2 | No boot storm | ≤ 2 toasts at login for real backlog, none after the gate opens |
 | 3 | Long idle | 8 h tray-hidden, test message still toasts |
 | 4 | Switch | `Ctrl+Tab` → 3 services → commit; half-typed text and scroll position survive |
-| 5 | Cycle→type | `Ctrl+Tab`, `Tab`, type `tel`, `Enter` → Telegram focused |
+| 5 | Cycle→type | `Ctrl+Tab`, type `tel`, `Enter` → Telegram focused |
 | 6 | Cold service | selecting a cold service loads it, then it appears in cycle order |
 | 7 | Blocking sanity | login, send, receive on WhatsApp/Messenger/Telegram with tier 1 + cosmetic on |
 | 8 | Blocking fail-open | corrupt the filter file → all services still log in |
@@ -73,8 +77,10 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 10 | Orphan scan | finds a seeded fake leftover, Recycle Bin restore works |
 | 11 | Change | settings dialogs apply without restart |
 | 12 | Theme variants | `> theme catppuccin` follows dark/light as Windows flips; every variant readable; deleting all theme plugins renders the baseline and says so |
-| 13 | Any-site template | `> add any site` with a real chat URL adds a working service, appears in search, keeps a separate profile from an existing service |
-| 14 | Tool plugin | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
+| 13 | Add any site | `> add` with a real chat URL creates an instance with its own profile, appears in search, and stays cold; two adds of the same site keep separate sessions |
+| 14 | Notification capability | each bundled service reports its mode (`native`/`shim`/`title-only`); a background message produces a toast in that mode and the mode is shown in Settings |
+| 15 | Global summon | `Ctrl+Alt+Space` opens the bar in search mode while another app has focus; a deliberately conflicting hotkey shows a Settings warning and the tray still works |
+| 16 | Tool panel | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
 
 Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbers.
 
@@ -82,7 +88,7 @@ Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbe
 
 - `windows-latest`: `dotnet build -warnaserror`, `dotnet test --filter Category!=Integration`, plugin/filter JSON-schema validation, artifact zip on tags.
 - No webview, no toast, no network to chat services in CI — by design.
-- A release tag additionally runs the installer build and signature step (phase 5).
+- A release tag additionally runs the installer build and signature step (phase 6).
 
 ## 7. Known gaps (accepted)
 

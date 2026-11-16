@@ -20,7 +20,8 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
-  <!-- Core must stay free of UI, WebView2 and OS APIs. Fail the build if it drifts. -->
+  <!-- Core is pure by structure: no UseWPF/UseWindowsForms, no WebView2 package, no P/Invoke.
+       Keep it that way; see AGENTS.md invariant 1 and docs/engineering.md. -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Chirpdesk.Core'">
     <IsAotCompatible>false</IsAotCompatible>
   </PropertyGroup>

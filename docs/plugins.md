@@ -1,21 +1,20 @@
 # Plugin format
 
-Everything extensible in Chirpdesk is a plugin: a folder containing `plugin.json` plus its payload. There is no second mechanism.
-
-See `PLAN.md` §4.1 for the reasoning and `docs/adr/0007-plugin-architecture.md` for the decision record.
+Every **distributable content pack** is a plugin: a folder containing `plugin.json` plus its payload. Service **instances** — the sites you add — are settings, not plugins. See `PLAN.md` §4.1 and `docs/adr/0007-plugin-architecture.md`.
 
 ## 1. Kinds
 
 | `kind` | Payload file | Contains code | Trust tier |
 |---|---|---|---|
-| `service` | `service.json` (+ `icon.*`, optional `skin.css`) | no | bundled / user data |
-| `service` with `"template": true` | same as `service`, plus `urlTemplate` + `suggestedName` | no | bundled |
-| `theme` | `theme.json` with `variants[]` (+ `preview.png`) | no | bundled / user data |
-| `filter` | `filters.json` | no | bundled / user data |
-| `tool` | `panel.json` (declarative, host-rendered) | no | bundled / user data |
+| `service` | `service.json` (definition: url, icon, regex, CSS, filter ref) | no | bundled / repo |
+| `theme` | `theme.json` with `variants[]` (+ `preview.png`) | no | bundled / repo |
+| `filter` | `filters.json` | no | bundled / repo |
+| `tool` | `panel.json` (declarative, host-rendered) | no | **bundled only in v1** |
 | `integration` | executable + `integration.json` | **yes** | user only, explicit consent, out-of-process |
 
-v1 ships `service`, `template` (a `service` flag), `theme`, `filter` and `tool`. `integration` exists in the schema from day one so the manifest does not have to change later, but nothing loads it until phase 7.
+v1 ships `service`, `theme`, `filter` and `tool`. `integration` exists in the schema from day one so the manifest does not have to change later, but nothing loads it until phase 7.
+
+**Instances are not plugins.** A service you add by URL lives in `settings.json` as `{instanceId, definitionId|null, url, name, …}` with a `profileId` that defaults to the instance id. `definitionId: null` means a custom site; no folder is written, and the plugin loader is not involved. This is why "add any site" is a built-in flow rather than a template plugin.
 
 ## 2. Folder layout
 
@@ -25,11 +24,6 @@ plugins/whatsapp/
 ├─ service.json
 ├─ icon.svg
 └─ skin.css            # optional
-
-plugins/service-any-site/
-├─ plugin.json         # "template": true lives in service.json
-├─ service.json
-└─ icon.svg
 
 plugins/theme-catppuccin/     # ONE folder per family, all variants inside
 ├─ plugin.json
@@ -79,7 +73,7 @@ Bundled: `<install>\plugins\`. User: `%APPDATA%\Chirpdesk\plugins\`. Both scanne
 
 ## 4. Payloads
 
-### `service.json`
+### `service.json` (definition)
 
 ```json
 {
@@ -87,33 +81,16 @@ Bundled: `<install>\plugins\`. User: `%APPDATA%\Chirpdesk\plugins\`. Both scanne
   "icon": "icon.svg",
   "accent": "#25D366",
   "unreadRegex": "\\((\\d+)\\)",
-  "userAgent": null,
+  "notificationMode": "native",
   "skin": "skin.css",
   "filter": "filters-meta",
-  "shareProfileWith": null,
-  "warmAtBoot": true
+  "defaultWarmAtBoot": true
 }
 ```
 
-`url` must be `https`. `unreadRegex` must have exactly one capture group; validated by running it against the service's own name as a smoke test. `filter` refers to a `filter` plugin id, not a path.
+`url` must be `https`. `unreadRegex` must have exactly one capture group; validated by running it against the service's own name as a smoke test. `filter` refers to a `filter` plugin id, not a path. `notificationMode` is `native` \| `shim` \| `title-only` (see `PLAN.md` §6); a definition may omit it and the host probes at first load.
 
-**Templates** — the "add any site" flow. A template is a normal `service` plugin with two extra fields and no fixed URL:
-
-```json
-{
-  "template": true,
-  "urlTemplate": "https://{host}/",
-  "suggestedName": "Any site",
-  "icon": "icon.svg",
-  "accent": "#8ab4f8",
-  "unreadRegex": "\\((\\d+)\\)",
-  "warmAtBoot": false
-}
-```
-
-At add time the host substitutes `{host}` (hostname only — no path, no query, no credentials), asks for a display name, then writes a **derived instance plugin** into `%APPDATA%\Chirpdesk\plugins\service-<slug>-<n>\` with a fresh id and the full URL. Instances are ordinary service plugins from then on: same loader, same profile, same warm/cold rules, and the user can delete one without touching the template.
-
-Instance ids are validated (`^[a-z0-9-]{1,32}$`) and deduplicated; the profile directory is created only after the derived plugin validates.
+A definition is shared; an instance overrides `url`, `name`, `iconUri`, `accent`, `unreadRegex`, `userAgent`, `injectCss`, `warmAtBoot`, `mute`, `blocking`, `notificationMode` and `shareProfileWith`. A custom site has `definitionId: null` and no plugin at all.
 
 ### `theme.json`
 
@@ -168,17 +145,18 @@ Validation rules:
 
 ```json
 {
-  "blockHosts": ["graph.facebook.com", "*.fbcdn.net/tr"],
+  "blockHosts": ["graph.facebook.com", "*.fbcdn.net"],
+  "blockPaths": ["*/tr/", "*/ads/*"],
   "allowHosts": ["web.whatsapp.com", "*.whatsapp.net"],
   "cosmetic": ["div[aria-label='Sponsored']", "[data-testid='ad-banner']"]
 }
 ```
 
-`allowHosts` in a plugin can only ever add to the global auth allowlist, never remove from it.
+`blockHosts` and `allowHosts` are host patterns only; paths belong in `blockPaths`. `allowHosts` in a plugin can only ever add to the global auth allowlist, never remove an entry, and the service's own origin is allowlisted by the host regardless of any pack.
 
 ### `panel.json` — the `tool` kind
 
-Tools are how the desk cleaner, the plugin manager and diagnostics ship as plugins without shipping code. A tool declares a panel; the **host** renders it from a fixed primitive vocabulary and executes a fixed action vocabulary. There is no XAML, no script, no file paths, and no arbitrary command.
+Tools are how a bundled panel such as the desk cleaner is data instead of XAML. They are **bundled only in v1**; a user-installed tool cannot add capability, so it is not offered. A tool declares a panel; the **host** renders it from a fixed primitive vocabulary and executes a fixed action vocabulary. There is no XAML, no script, no file paths, and no arbitrary command.
 
 ```json
 {
@@ -192,8 +170,7 @@ Tools are how the desk cleaner, the plugin manager and diagnostics ship as plugi
       "columns": [
         { "key": "service", "label": "Service", "width": "star" },
         { "key": "data",    "label": "Data",    "width": "auto" },
-        { "key": "cache",   "label": "Cache",   "width": "auto" },
-        { "key": "media",   "label": "Media",   "width": "auto" }
+        { "key": "cache",   "label": "Cache",   "width": "auto" }
       ],
       "source": { "action": "storageReport" },
       "emptyText": "No services yet."
@@ -236,14 +213,14 @@ Tools are how the desk cleaner, the plugin manager and diagnostics ship as plugi
 
 | Primitive | Effect | Argument validation |
 |---|---|---|
-| `storageReport` | returns per-service data/cache/media sizes | none |
-| `trimCache` | trims cache only, never session data | `budgetMb` 1–2000, `targets` = `selected` \| `all` \| one service id |
+| `storageReport` | returns per-service data/cache sizes (no separate "media" total — that lives inside IndexedDB) | none |
+| `trimCache` | trims cache only, never session data, only for disposed profiles | `budgetMb` 1–2000, `targets` = `selected` \| `all` \| one instance id |
 | `scanOrphans` | scans allowlisted roots for leftover profiles | none |
 | `deleteOrphan` | moves a scanned orphan to the Recycle Bin | `orphanId` must come from the latest scan result |
 | `revealFolder` | opens Explorer at a known root | `root` ∈ {`profiles`, `plugins`, `logs`, `data`} — never a path |
 | `openSettings` | navigates to a settings section | `section` from a fixed enum |
-| `enablePlugin` / `disablePlugin` | toggles a plugin with confirmation | `id` must exist |
-| `syncRepo` | refreshes a configured repo | `id` must exist |
+
+Plugin management (`enablePlugin`, `syncRepo`) is **not** a tool action: the plugin manager is built-in shell UI and a plugin cannot manage the system that loaded it.
 
 Rules:
 
@@ -258,10 +235,9 @@ Rules:
 2. `apiVersion` higher than supported → disabled with "requires a newer Chirpdesk".
 3. Unknown fields → ignored (forward compatibility).
 4. Missing required token, bad colour, bad regex, `..` in an asset path, duplicate variant id, `defaults` pointing at a missing variant → plugin disabled.
-5. `tool`: unknown primitive or an unvalidatable argument disables that action only, not the panel (§4).
-6. `template`: a `urlTemplate` without `{host}`, or one resolving to a non-https URL at add time → template refuses the add with a clear message.
-7. A disabled plugin never deletes data, never blocks startup, and never takes other plugins with it.
-8. `FileSystemWatcher` on the plugin folders triggers a debounced rescan (500 ms); enabling/disabling is instant.
+5. `tool`: unknown primitive or an unvalidatable argument disables that action only, not the panel (§4). A user-installed `tool` is refused in v1 with "bundled tools only".
+6. A disabled plugin never deletes data, never blocks startup, and never takes other plugins with it.
+7. `FileSystemWatcher` on the plugin folders triggers a debounced rescan (500 ms); enabling/disabling is instant.
 
 ## 6. Permissions
 
@@ -270,14 +246,14 @@ Rules:
 | `css` | inject a stylesheet into the plugin's own service | yes |
 | `notifications` | receive the service's notification events | yes |
 | `filters` | contribute host rules | yes |
-| `tools` | declare a `panel.json` and its primitives | yes |
-| `read-storage` | read per-service size reports | yes |
-| `trim-cache` | request cache trims through `trimCache` | yes |
+| `tools` | declare a `panel.json` and its primitives | bundle-only |
+| `read-storage` | read per-service size reports | bundle-only |
+| `trim-cache` | request cache trims through `trimCache` | bundle-only |
 | `storage` | own a profile directory | bundle-only |
 | `inject-js` | run JavaScript in the page origin | **declared only, not offered** — see below |
 | `process` | start a helper executable | integration only, phase 7 |
 
-**`inject-js` is not available in v1.** Page-context JavaScript has access to the authenticated session of that service, so a "plugin" with it is a credential-stealer by construction. It stays in the schema for planning, unimplemented, and the loader refuses to load any plugin that requires an unimplemented permission.
+**`inject-js` is not available in v1.** Page-context JavaScript has access to the authenticated session of that service, so a "plugin" with it is a credential-stealer by construction. It stays in the schema for planning, unimplemented, and the loader refuses to load any plugin that requires an unimplemented permission. The built-in notification shim and title capture are host code, not a plugin permission.
 
 ## 7. Security rules
 
@@ -299,7 +275,7 @@ A repo is a static HTTPS directory. Ours is `registry/` in this repository; a co
 ```
 registry/
 ├─ index.json          # schema:1, name, generated, keyFingerprint, plugins[]
-└─ index.json.sig      # Ed25519 signature over the exact bytes of index.json
+└─ index.json.sig      # ECDSA P-256 signature over the exact bytes of index.json
 ```
 
 Each `plugins[]` entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`. The archive at `url` is a zip of one plugin folder.
@@ -310,7 +286,7 @@ Each `plugins[]` entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVer
 2. Verify signature against the repo's pinned key.
 3. Skip entries whose `apiVersion` or `minAppVersion` do not fit the running build.
 4. Download archive → verify `sha256` from the **signed** index → verify `size`.
-5. Unpack to temp, validate `plugin.json` + payload against schema, then move into `%APPDATA%\Chirpdesk\plugins\<id>\`.
+5. Unpack to temp: reject absolute paths, `..`, reparse points and zip-slip entries; validate `plugin.json` + payload against schema; then move into `%APPDATA%\Chirpdesk\plugins\<id>\`.
 6. Enable only if the user asked; otherwise installed-but-disabled.
 
 **Pinning.** First fetch pins the key fingerprint (TOFU). If the fingerprint changes later, the repo is blocked and shown in the manager with both fingerprints; only an explicit re-trust unblocks it. This is deliberate friction: it is the only defence against a repo being taken over.
