@@ -1,0 +1,97 @@
+#requires -Version 7.0
+<#
+.SYNOPSIS
+    Runs the automated half of the Chirpdesk phase-0 gate and prints one PASS/FAIL line per check.
+
+.DESCRIPTION
+    Two invocations, because one process cannot observe its own teardown:
+
+      1. Chirpdesk.exe --selftest   eleven headless checks, exit code is the verdict
+      2. Chirpdesk.exe --open=whatsapp --hidden --quit-after=25
+                                    a real service is created, parked and disposed through the
+                                    normal quit path, so the orphan check afterwards means something
+
+    Exit code 0 means every check passed. The human half (QR, a real message, visible flash,
+    3 h soak) is in docs/plans/2026-11-16-phase-0-spine.md §11.2 and cannot be automated.
+
+.EXAMPLE
+    pwsh scripts/gate.ps1
+    pwsh scripts/gate.ps1 -SoakSeconds 600
+#>
+[CmdletBinding()]
+param(
+    [ValidateRange(10, 3600)]
+    [int] $SoakSeconds = 120,
+
+    [switch] $SkipBuild
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repo = Split-Path -Parent $PSScriptRoot
+$failures = 0
+
+function Write-Check {
+    param([string] $Name, [bool] $Ok, [string] $Detail)
+
+    $status = if ($Ok) { 'PASS' } else { 'FAIL' }
+    if (-not $Ok) { $script:failures++ }
+    Write-Host ("[{0}] {1} - {2}" -f $status, $Name, $Detail)
+}
+
+function Resolve-Dotnet {
+    $onPath = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+
+    $local = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet\dotnet.exe'
+    if (Test-Path $local) { return $local }
+
+    throw 'dotnet not found. Install the .NET 8 SDK or put it on PATH.'
+}
+
+Push-Location $repo
+try {
+    if (-not $SkipBuild) {
+        $dotnet = Resolve-Dotnet
+        & $dotnet build --nologo | Out-Null
+        Write-Check 'build' ($LASTEXITCODE -eq 0) "dotnet build exited $LASTEXITCODE"
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+    }
+
+    $exe = Join-Path $repo 'artifacts\bin\Chirpdesk\debug\Chirpdesk.exe'
+    if (-not (Test-Path $exe)) {
+        Write-Check 'binary' $false "not found at $exe (build first)"
+        exit 1
+    }
+
+    # 1. The headless gate. Its own PASS/FAIL lines go to logs/selftest.log and the console.
+    $selfTest = Start-Process -FilePath $exe -ArgumentList '--selftest', "--soak-seconds=$SoakSeconds" -PassThru -Wait
+    Write-Check 'selftest' ($selfTest.ExitCode -eq 0) "eleven checks in $(Join-Path $env:LOCALAPPDATA 'Chirpdesk\logs\selftest.log'); exit $($selfTest.ExitCode)"
+
+    # 2. Real service, parked, normal quit. No window is ever shown.
+    $before = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
+        Where-Object { $_.CommandLine -like '*Chirpdesk*' }).Count
+
+    $soak = Start-Process -FilePath $exe -ArgumentList '--open=whatsapp', '--hidden', '--quit-after=25' -PassThru -Wait
+    Write-Check 'warm-service-quit' ($soak.ExitCode -eq 0) "exit $($soak.ExitCode)"
+
+    Start-Sleep -Seconds 3
+    $after = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
+        Where-Object { $_.CommandLine -like '*Chirpdesk*' }).Count
+    $app = @(Get-Process Chirpdesk -ErrorAction SilentlyContinue).Count
+
+    Write-Check 'no-orphan-webviews' ($after -le $before) "webview processes using Chirpdesk profiles: $before before, $after after"
+    Write-Check 'no-orphan-app' ($app -eq 0) "Chirpdesk processes left: $app"
+}
+finally {
+    Pop-Location
+}
+
+if ($failures -gt 0) {
+    Write-Host "$failures check(s) failed."
+    exit 1
+}
+
+Write-Host 'All automated checks passed. Human rows: docs/plans/2026-11-16-phase-0-spine.md section 11.2'
+exit 0

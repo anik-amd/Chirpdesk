@@ -40,3 +40,13 @@ Numbers are only meaningful on the machine they were taken on. Record the build 
 ```
 
 `hidden-warm` is the R2 evidence: a page ticking once a second, parked in an off-screen 1×1 webview, ticked 60 times in 60 seconds. Chromium's default throttling would have cut that to roughly one tick per minute.
+
+`pwsh scripts/gate.ps1` runs that plus the teardown checks, which need a second process to observe:
+
+```
+[PASS] build - dotnet build exited 0
+[PASS] selftest - eleven checks in %LOCALAPPDATA%\Chirpdesk\logs\selftest.log; exit 0
+[PASS] warm-service-quit - exit 0
+[PASS] no-orphan-webviews - webview processes using Chirpdesk profiles: 0 before, 0 after
+[PASS] no-orphan-app - Chirpdesk processes left: 0
+```

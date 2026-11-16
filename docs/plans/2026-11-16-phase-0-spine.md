@@ -326,6 +326,14 @@ Every check prints one `PASS`/`FAIL` line to `%LOCALAPPDATA%\Chirpdesk\logs\self
 
 Known limits of the harness, stated rather than papered over: it uses the probe origin, not WhatsApp; it cannot see whether anything *visibly* flashed; and it does not exercise the site's socket. Those are exactly the rows in 11.2.
 
+One command runs the whole automated half, including the two checks that need a second process to observe:
+
+```powershell
+pwsh scripts/gate.ps1 -SoakSeconds 600
+```
+
+It builds, runs `--selftest`, then starts a real service parked with `--open=whatsapp --hidden --quit-after=25` so the normal quit path is exercised, and asserts that no `Chirpdesk.exe` or `msedgewebview2.exe` process survives the quit. No window is shown at any point.
+
 **Run on 2026-11-16:** exit 0, eleven checks, all `PASS`. The raw output and the RAM/disk numbers are in `docs/measurements.md`. R2's mechanism is therefore proven for a parked webview; what remains is WhatsApp's own socket, which is the soak below.
 
 The hidden-warm probe is the important one: it proves R2's mechanism (timer keeps running while off-screen) in a minute instead of a three-hour wait, and it needs no WhatsApp account. WhatsApp-specific socket behaviour is the only thing left to the real soak.
