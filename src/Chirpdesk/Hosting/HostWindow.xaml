@@ -1,0 +1,21 @@
+<Window x:Class="Chirpdesk.Hosting.HostWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Chirpdesk"
+        WindowStyle="None"
+        WindowStartupLocation="Manual"
+        ShowInTaskbar="True"
+        ShowActivated="False"
+        ResizeMode="CanResize"
+        Width="2"
+        Height="2"
+        Left="-32000"
+        Top="-32000"
+        Background="#241C22">
+    <Grid>
+        <!-- The active service webview. Empty while everything is parked. -->
+        <Grid x:Name="ServiceLayer" />
+        <!-- Non-visual framework elements (the tray icon) need a parent to get Loaded. -->
+        <Grid x:Name="ContentRoot" IsHitTestVisible="False" />
+    </Grid>
+</Window>
