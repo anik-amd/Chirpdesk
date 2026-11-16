@@ -89,6 +89,12 @@ internal sealed class WebNotificationBridge
         e.Handled = true;
         Received++;
 
+        if (Received == 1)
+        {
+            // The phase-0 capability record, without any message content.
+            _log.Info($"notification capability: native for '{_serviceName}'");
+        }
+
         // Boot cutoff: a reconnect replays days of notifications; none of that is new.
         if (notification.Timestamp < _startedAt)
         {
@@ -109,6 +115,7 @@ internal sealed class WebNotificationBridge
         }
 
         Shown++;
+        _log.Info($"toast shown for '{_serviceName}' (#{Shown}), title length {title.Length}");
         _toast.Show(new ToastMessage(title, body, LocalIcon(notification.IconUri), _serviceName));
     }
 
