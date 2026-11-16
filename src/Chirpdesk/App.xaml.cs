@@ -37,13 +37,20 @@ public partial class App : Application
 
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
+        _log.Info($"starting with {e.Args.Length} argument(s)");
 
         if (!SingleInstance.TryAcquire(out _singleInstance))
         {
-            _log.Info("another instance is already running; exiting");
-            Shutdown(0);
+            // Reached by a toast click and by a second shortcut launch: ask the resident
+            // instance to surface, then leave. Logging the outcome is the difference between
+            // "the click did nothing" and "the click was delivered".
+            var signalled = SingleInstance.SignalShow();
+            _log.Info($"another instance is already running; show requested={signalled}");
+            Shutdown(signalled ? 0 : 1);
             return;
         }
+
+        _singleInstance!.ShowRequested += OnShowRequested;
 
         RegisterAppIdentity();
 
@@ -190,6 +197,9 @@ public partial class App : Application
         store.Save(settings);
         return WhatsAppSeed;
     }
+
+    /// <summary>Raised by a second launch (a toast click or the shortcut) on the listener thread.</summary>
+    private void OnShowRequested(object? sender, EventArgs e) => Dispatcher.Invoke(ShowHost);
 
     private void OnHostKeyDown(object sender, KeyEventArgs e)
     {

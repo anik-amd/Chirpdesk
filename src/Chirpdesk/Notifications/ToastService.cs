@@ -51,7 +51,12 @@ internal sealed class ToastService : IToastSink
             document.LoadXml(xml);
 
             var toast = new ToastNotification(document);
-            toast.Activated += (_, _) => _onActivated?.Invoke(message.ServiceId);
+            toast.Activated += (_, _) =>
+            {
+                _log.Info($"toast activated by the user for '{message.ServiceId}'");
+                _onActivated?.Invoke(message.ServiceId);
+            };
+            toast.Dismissed += (_, args) => _log.Info($"toast dismissed ({args.Reason}) for '{message.ServiceId}'");
             toast.Failed += (_, args) => _log.Warn($"toast failed: {args.ErrorCode}");
 
             Notifier.Show(toast);

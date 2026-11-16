@@ -295,7 +295,7 @@ dotnet add src/Chirpdesk package Microsoft.Web.WebView2 --version 1.0.4314.35
 **Steps:**
 
 1. `Aumid.EnsureShortcut()` creates `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Chirpdesk.lnk` with `System.AppUserModel.ID = Chirpdesk`; call `SetCurrentProcessExplicitAppUserModelID("Chirpdesk")` at startup.
-2. `ToastService.Show(service, title, body, iconPath)` via `ToastNotificationManager.CreateToastNotifier("Chirpdesk")`; click handler shows the window on the owning service using the minimal show path from Task 9 (`OnActivated`).
+2. `ToastService.Show(service, title, body, iconPath)` via `ToastNotificationManager.CreateToastNotifier("Chirpdesk")`; click handler shows the window on the owning service using the minimal show path from Task 9 (`OnActivated`). That handler only covers a toast the live process still owns, so the click is also made to work the other way round: Windows may start the app through its shortcut instead, and a second launch now signals the resident instance through the named `Local\Chirpdesk.Show` event rather than exiting silently (Task 7's single instance).
 3. `NotificationBridge` subscribes `CoreWebView2.NotificationReceived`: verify `SenderOrigin` belongs to the service; set `Handled = true`; drop anything older than process start (boot cutoff); run `WarmUpGate` + `NotificationDedupe`; then `Show`, then `ReportShown`/`ReportClicked`/`ReportClosed`.
 4. Record the service's notification mode (`native` when the event fires, `title-only` when only `DocumentTitleChanged` is available) in `docs/measurements.md`; phase 0 does not build the shim yet.
 5. Verify: `Chirpdesk.exe --test-toast` produces a toast titled with the app name, not "(unknown app)".
@@ -355,7 +355,7 @@ The show path for these steps is `Chirpdesk.exe --open=whatsapp`: it seeds the W
 - [x] Message from a second phone toasts, titled "Chirpdesk", after the two gate defects were fixed (see `docs/measurements.md`, live gate findings).
 - [ ] 3 hours tray-hidden: a second message still toasts (socket alive), and there is no toast backlog on resume.
 - [ ] Clicking the toast shows the app on WhatsApp (no deep link required while resident).
-- [ ] The window was never visible except for the deliberate sign-in and toast clicks.
+- [x] The window was never visible except for the deliberate sign-in and toast clicks. Alt+Tab shows nothing while it is hidden (reported by the human, and asserted as `WS_EX_TOOLWINDOW` set / `WS_EX_APPWINDOW` clear by `--selftest`).
 - [x] Task Manager: no runaway CPU; RAM recorded — 547 MB private for the warm WhatsApp instance, and 158 MB of profile.
 - [x] Quit from tray leaves no orphan `msedgewebview2.exe` process tree — `scripts/gate.ps1` asserts it.
 
