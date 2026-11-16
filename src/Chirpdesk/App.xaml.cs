@@ -29,6 +29,7 @@ public partial class App : Application
     private HostWindow? _host;
     private TaskbarIcon? _tray;
     private ServiceRuntime? _service;
+    private bool _quitting;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -51,6 +52,7 @@ public partial class App : Application
         _host = new HostWindow();
         _host.Show();
         _host.KeyDown += OnHostKeyDown;
+        _host.Closing += OnHostClosing;
 
         if (options.SelfTest)
         {
@@ -71,7 +73,12 @@ public partial class App : Application
 
         if (options.OpenService is not null)
         {
-            _ = OpenServiceAsync(options.OpenService);
+            _ = OpenServiceAsync(options.OpenService, show: !options.Hidden);
+        }
+
+        if (options.QuitAfter is { } delay)
+        {
+            _ = QuitAfterAsync(delay);
         }
     }
 
@@ -125,7 +132,7 @@ public partial class App : Application
     /// Phase 0's one show path for a service: create it, put it on screen and let the user sign
     /// in. Everything else about it (warm, parked, notifying) is the normal runtime.
     /// </summary>
-    private async Task OpenServiceAsync(string requestedId)
+    private async Task OpenServiceAsync(string requestedId, bool show)
     {
         try
         {
@@ -147,8 +154,12 @@ public partial class App : Application
                 new ToastService(_log!, _ => OpenHost()),
                 DateTimeOffset.UtcNow);
 
-            ShowHost();
-            _log?.Info($"opened '{instance.InstanceId}' for the user");
+            if (show)
+            {
+                ShowHost();
+            }
+
+            _log?.Info($"opened '{instance.InstanceId}'{(show ? " for the user" : " parked")}");
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException)
         {
@@ -182,6 +193,27 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Alt+F4 and any other close request hides instead of destroying the window: closing it
+    /// would take the webviews with it, and the product is a tray app.
+    /// </summary>
+    private void OnHostClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_quitting)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        HideHost();
+    }
+
+    private async Task QuitAfterAsync(TimeSpan delay)
+    {
+        await Task.Delay(delay);
+        Dispatcher.Invoke(Quit);
+    }
+
     private void ShowHost()
     {
         _service?.Activate();
@@ -212,6 +244,8 @@ public partial class App : Application
 
     private void Terminate(int exitCode)
     {
+        _quitting = true;
+
         _tray?.Dispose();
         _tray = null;
 
