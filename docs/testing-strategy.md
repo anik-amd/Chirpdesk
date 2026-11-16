@@ -33,12 +33,15 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | `WarmUpGate` | suppressed before ready, suppressed while title changing, released after 5 s stable, no re-suppression later |
 | `SettingsStore` | round-trip, defaults on missing, corrupt file quarantined, interrupted write keeps old file, id validation |
 | `MruList` | promote to front, dedupe, wrap both directions, empty |
-| `SchemeLoader` | token completeness, unknown token rejected, dark/light pairing, sparse overrides merge, invalid JSON quarantined |
+| `ThemeTokenMap` | token completeness, unknown token rejected, variant mode pairing, live swap leaves no stale resource key |
 | `ContrastCheck` | AA pass/fail boundaries at 4.5:1 and 3:1, auto-nudge terminates, never exceeds 20 iterations |
 | `FilterMatcher` | `\|\|host^` exact/trailing-dot/subdomain, `@@` exception wins, allowlist beats every tier, fail-open on malformed rule, O(1) cache hit path |
 | `PathGuard` | traversal (`..`), symlink/junction escape, path outside allowlisted roots, drive-relative paths, long paths |
 | `TrimPlanner` | never selects `Cookies`/`Local Storage`/`IndexedDB`/`Service Worker`, respects budgets, oldest-first order, refuses while service warm |
 | `PluginManifest` | missing required field, bad id pattern, unknown `apiVersion`, unimplemented permission rejected, asset path traversal rejected |
+| `ThemeVariants` | duplicate variant id rejected, `defaults` must reference an existing variant of matching mode, missing token in one variant disables the family, family with no light variant keeps dark under follow-system, all-themes-missing falls back to baseline |
+| `TemplateInstantiation` | `{host}` substitution rejects paths/queries/credentials, non-https result refused, derived id is unique and validated, template itself is not hostable as an instance |
+| `ToolPanel` | unknown primitive disables only that action, `revealFolder` rejects a path argument, `deleteOrphan` rejects an id from another session, missing permission greys the action, panel still renders when all actions fail |
 | `PluginRegistry` | user plugin overrides bundled with same id, duplicate ids across repos require a choice, rescan picks up a new folder, broken plugin disabled not fatal |
 | `RepoIndex` | bad signature rejected, hash mismatch rejected, size mismatch rejected, `minAppVersion` gating, key change blocks until re-trust, index cache TTL |
 
@@ -69,12 +72,15 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 9 | Storage | trim reclaims > 0 bytes, session still valid afterwards |
 | 10 | Orphan scan | finds a seeded fake leftover, Recycle Bin restore works |
 | 11 | Change | settings dialogs apply without restart |
+| 12 | Theme variants | `> theme catppuccin` follows dark/light as Windows flips; every variant readable; deleting all theme plugins renders the baseline and says so |
+| 13 | Any-site template | `> add any site` with a real chat URL adds a working service, appears in search, keeps a separate profile from an existing service |
+| 14 | Tool plugin | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
 
 Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbers.
 
 ## 6. CI
 
-- `windows-latest`: `dotnet build -warnaserror`, `dotnet test --filter Category!=Integration`, scheme/filter JSON validation, artifact zip on tags.
+- `windows-latest`: `dotnet build -warnaserror`, `dotnet test --filter Category!=Integration`, plugin/filter JSON-schema validation, artifact zip on tags.
 - No webview, no toast, no network to chat services in CI — by design.
 - A release tag additionally runs the installer build and signature step (phase 5).
 

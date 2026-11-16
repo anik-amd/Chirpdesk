@@ -17,11 +17,12 @@ No bundled Chromium. No Electron. No sidebar. No subscription.
 - Native Windows toasts with your service's icon, dedupe, and no boot-time backlog storm
 - `Ctrl+Tab` (hold) cycles open services, VSCode-style MRU switching
 - `Ctrl+P` opens the same command bar in search mode — switch services, run commands, change theme
-- Add any chat site by URL — no catalogue to maintain
+- Add any chat site by URL — an "any site" template plugin creates a normal service
 - Isolated session per service, so multiple accounts coexist
 - Built-in ad, tracker and junk-script blocking — request-level, fail-open, one-click off per service
 - Storage panel: per-service cache breakdown, safe trimming, and a scan for chat-app leftovers from apps you no longer use
-- Theme system: Dracula, Nord, Catppuccin, Tokyo Night, Gruvbox, Rosé Pine, Solarized, GitHub, plus light/dark variants and your own scheme files
+- Theme families (Dracula, Nord, Catppuccin, Tokyo Night, Gruvbox, Rosé Pine, Solarized, GitHub) each shipping dark **and** light variants
+- **Everything is a plugin**: services, the any-site template, themes, adblock packs and the disk cleaner share one manifest — add your own or a third-party plugin repo later
 
 ## Target footprint
 

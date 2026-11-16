@@ -40,12 +40,13 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search/commands | Single overlay component, two entry modes |
 | R7 | Add **any** chat site by URL | Generic service definition, favicon fetch, no recipe catalogue |
 | R8 | Isolated session per service (multiple accounts) | Per-service `WebView2` user-data folder |
-| R9 | Theme system: many popular schemes, dark **and** light, live switch | Token-based scheme pipeline, JSON scheme files |
+| R9 | Theme system: popular families, each with dark **and** light variants built in, live switch | Theme plugins with `variants[]`, token pipeline, instant `DynamicResource` swap |
 | R10 | Small on disk and RAM | WPF + WebView2, framework-dependent, cache trimming |
 | R11 | **Block ads, trackers and junk scripts** in the web clients | Request-level filter engine + cosmetic CSS, fail-open |
 | R12 | **See and reclaim disk** used by these chat apps | Per-service size breakdown, safe cleanup, orphan scan |
-| R13 | Services, themes and filter packs are **plugins** with one manifest format | Data-only plugin kind in v1; code plugins out-of-process, later |
+| R13 | Services, themes, templates, tools and filter packs are **plugins** with one manifest format | Data-only in v1; code plugins out-of-process, later |
 | R14 | Ship a **plugin directory** in the repo; users may add **their own plugin repos** | Signed indexes, per-repo trust consent, data-only installs |
+| R15 | Shell first, catalogue later | Core ships with: loader, Command Bar, webview host, notification pipeline, storage primitives. Themes/services/tools arrive as plugins |
 
 ## 2.1 Non-functional targets and constraints
 
@@ -98,12 +99,16 @@ Third-party dependencies, deliberately few: `Hardcodet.NotifyIcon.Wpf` (MIT, tra
 
 Everything the app can be extended with is a **plugin**: a folder with a `plugin.json` manifest. This costs little because the payloads were already data.
 
-| Kind | Payload | Code? | Trust tier | Ships |
+| Kind | Payload | Code? | Trust tier | Ships in v1 |
 |---|---|---|---|---|
 | `service` | url, icon, unread regex, optional CSS, filter refs, accent | no | bundled | WhatsApp, Messenger, Telegram, Facebook |
-| `theme` | tokens (`bg.*`, `text.*`, …), `kind: dark\|light`, preview | no | bundled | Dracula, Catppuccin, Nord, … |
+| `template` | a `service` plugin flagged `"template": true` plus `urlTemplate`, `suggestedName` — the "add any site" flow | no | bundled | Any-site, Any-site (mobile) |
+| `theme` | `variants[]` with `mode: dark\|light`, `tokens{}`, optional `preview` | no | bundled | Dracula, Catppuccin, Nord, … |
 | `filter` | curated host list, cosmetic CSS | no | bundled | tier 1 + cosmetic packs |
-| `integration` | optional helper executable + JSON-RPC contract (e.g. TDLib for Telegram) | **yes** | user-installed, explicit consent | phase 6 only |
+| `tool` | declarative `panel.json` (list/table + actions from host primitives) | no | bundled | Disk cleaner, plugin manager, diagnostics |
+| `integration` | optional helper executable + JSON-RPC contract (e.g. TDLib for Telegram) | **yes** | user-installed, explicit consent | phase 7 only |
+
+A `template` is not a separate kind in the schema — it is a `service` plugin with `"template": true`, so the add-service flow, the profile machinery and the repo format are shared. Selecting a template instantiates a normal service plugin in the user's plugin folder with a fresh instance id.
 
 **Layout**
 
@@ -111,9 +116,10 @@ Everything the app can be extended with is a **plugin**: a folder with a `plugin
 plugins/<id>/
 ├─ plugin.json          # id, kind, name, version, apiVersion, author, permissions[]
 ├─ icon.png|svg
-├─ service.json         # kind: service  (url, unreadRegex, css ref, blocking ref)
-├─ theme.json           # kind: theme    (tokens, kind, preview)
+├─ service.json         # kind: service / template
+├─ theme.json           # kind: theme    (variants[], each with mode + tokens)
 ├─ filters.json         # kind: filter   (hosts, cosmetic selectors)
+├─ panel.json           # kind: tool     (list/table + host action primitives)
 └─ README.md            # optional, shown in the plugin manager
 ```
 
@@ -123,7 +129,7 @@ Bundled plugins live in the app's install directory; user plugins in `%APPDATA%\
 
 - Scan on startup and on `FileSystemWatcher` change; parse and validate each manifest; a broken plugin is skipped, logged, and marked in the manager — it never prevents the app from starting.
 - `apiVersion` mismatch → plugin disabled with a clear message, not a crash.
-- Enable/disable per plugin, persisted in settings; disabling a theme falls back to the scheme default, disabling a service leaves its profile on disk intact.
+- Enable/disable per plugin, persisted in settings; disabling a theme falls back to the compiled baseline, disabling a service leaves its profile on disk intact.
 - Commands: `> plugins`, `> plugin: disable <id>`, `> theme <id>` (themes are addressable as plugins without exposing the word "plugin" in normal use).
 
 **Why no in-process code plugins**
@@ -132,7 +138,11 @@ The app holds every logged-in session. A .NET assembly loaded in-process is full
 
 **What "plugin" does not buy**
 
-It does not create new UI. Plugins cannot add panels or windows in v1 — an integration can contribute commands to the Command Bar and nothing else. UI extension points are deliberately out of scope; they are the fastest route to the sidebar we explicitly rejected.
+Plugins do not invent UI. A `tool` plugin declares a panel in `panel.json` using **host primitives only** — `list`, `table`, `progress`, `text`, `button` — and may invoke a fixed set of **host actions** (`scanOrphans`, `trim`, `revealFolder`, `openSettings`, `enablePlugin`, `syncRepo`). There is no XAML, no code-behind, no arbitrary command execution; the host renders the panel and validates every action and every argument against its allowlist. A `tool` cannot open a window, draw chrome, or place anything outside the settings surface. That keeps "everything is a plugin" from eroding the zero-chrome design: the desk cleaner is a plugin, and it still looks and behaves like the rest of the app.
+
+**Shell first, catalogue later**
+
+The v1 shell ships the loader, Command Bar, webview host, notification pipeline and storage primitives, with a minimal bundled catalogue (4 services, 1 any-site template, 2-3 themes, 1 cleaner tool). Everything else — the other 10 theme families, more services, more filter packs — arrives through the plugin repo, not through a rebuild. That ordering is what makes the extensibility pay off: adding Catppuccin Frappé is a data change, not a release.
 
 **Cost accepted**
 
@@ -398,11 +408,11 @@ Ordering: unread first, then recency, then fuzzy score. `>` restricts to command
 
 ### 10.2 Commands
 
-`> theme dark` · `> theme light` · `> theme system` · `> theme <name>` · `> settings` · `> add service` · `> edit service` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> warm at boot <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
+`> theme dark` · `> theme light` · `> theme system` · `> theme <family> [variant|auto]` · `> settings` · `> add service` · `> add any site <url>` · `> plugins` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> warm at boot <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
 
 `> warm at boot <service>` toggles the persisted pin and the Settings switch reads/writes the same field; a dot on the service row marks "pinned warm" while the badge keeps showing live runtime state (`warm` / `asleep` / `cold`).
 
-**Theme preview:** `> theme` lists schemes; arrowing applies live, `Enter` commits, `Esc` restores the previous scheme. This is where the colour system shows off.
+**Theme preview:** `> theme` lists **families**, with their variants revealed on `Tab`; arrowing applies the active variant live, `Enter` commits, `Esc` restores the previous family and variant. Switching to a family keeps your current mode (dark stays dark) and uses that family's default for it.
 
 ### 10.3 Keys
 
@@ -421,7 +431,7 @@ Ordering: unread first, then recency, then fuzzy score. `>` restricts to command
 
 ### 10.4 Settings is a destination, not navigation
 
-Settings stays a small window (URLs, icons, regexes, scheme files, storage, autostart, blocking) reached only by `> settings`. No tabs, no rail, no command strip anywhere in the app.
+Settings stays a small window (URLs, icons, regexes, theme choice, storage, autostart, blocking) reached only by `> settings`. No tabs, no rail, no command strip anywhere in the app.
 
 ---
 
@@ -433,7 +443,7 @@ Settings stays a small window (URLs, icons, regexes, scheme files, storage, auto
   "name": "WhatsApp",
   "url": "https://web.whatsapp.com/",
   "iconPath": null,            // cached favicon, or custom image
-  "accent": "#25D366",         // optional brand override for scheme accent
+  "accent": "#25D366",         // optional brand override for the theme accent
   "warmAtBoot": true,
   "unreadRegex": "\\((\\d+)\\)",
   "mute": false,
@@ -452,7 +462,7 @@ Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold. **Newly added servi
 
 ## 12. Design system
 
-Zero permanent chrome means the design budget goes into the **Command Bar, tray menu, settings and title bar** — plus making colour schemes first-class.
+Zero permanent chrome means the design budget goes into the **Command Bar, tray menu, settings and title bar** — plus making themes first-class plugins.
 
 Reference: Limusic's app. Near-black neutral base in the `#241c22` family, one restrained accent, no gradients, no glow, generous spacing, UI type at 12–13 px with wide tracking on labels.
 
@@ -470,18 +480,50 @@ Reference: Limusic's app. Near-black neutral base in the `#241c22` family, one r
 | `state.danger` / `.success` / `.warning` | `--cd-state-*` | mute, DND, blocking, errors |
 | `shadow.overlay` | `--cd-shadow-overlay` | overlay elevation |
 
-Token names are CSS-variable compatible so the same scheme JSON can drive a future non-WPF surface (web or mobile UI) without rewriting palettes — the one structural trick worth copying from Limusic.
+Token names are CSS-variable compatible so the same token JSON can drive a future non-WPF surface (web or mobile UI) without rewriting palettes — the one structural trick worth copying from Limusic.
 
-### 12.2 Scheme files
+### 12.2 Theme plugins
 
-Schemes are **data**, not code: `schemes/<id>.json` with `id`, `name`, `author`, `kind` (`dark`/`light`), `tokens{}`, optional sparse `overrides{}`. The loader validates, computes contrast, and maps tokens onto a WPF `ResourceDictionary` keyed `Cd.<token>`, applied with `DynamicResource` so switching is instant — no restart, no flicker.
+A theme is a plugin with `kind: "theme"` and **one folder per family**, containing every variant the family defines — dark and light are variants of the same plugin, never separate plugins. That is what lets `> theme catppuccin` keep working when the OS flips to light mode.
 
-Built-in families (dark + light where defined):
+`theme.json`:
+
+```json
+{
+  "family": "Catppuccin",
+  "defaults": { "dark": "mocha", "light": "latte" },
+  "variants": [
+    {
+      "id": "mocha",
+      "name": "Mocha",
+      "mode": "dark",
+      "tokens": { "bg.window": "#1e1e2e", "text.primary": "#cdd6f4", "...": "..." }
+    },
+    {
+      "id": "latte",
+      "name": "Latte",
+      "mode": "light",
+      "tokens": { "bg.window": "#eff1f5", "text.primary": "#4c4f69", "...": "..." }
+    }
+  ]
+}
+```
+
+Rules the loader enforces:
+
+- At least one variant; every variant needs `id` (`^[a-z0-9-]{1,24}$`), `name`, `mode`, and the full token set from §12.1.
+- `defaults.dark` / `defaults.light` must name an existing variant of that mode. A family with no light variant simply has no light default, and "follow system" keeps the dark variant while flagging it in Settings.
+- Selecting a family pins it; `> theme catppuccin mocha` pins a specific variant; `> theme catppuccin auto` returns to the family default for the current mode.
+- Applied with `DynamicResource` onto a WPF `ResourceDictionary` keyed `Cd.<token>`, so switching is instant — no restart, no flicker.
+
+Selected **family** is stored in settings; selected **variant per mode** is derived from `defaults`, so a family added later can opt into "follow system" without a migration.
+
+**Bundled families** (shipped as plugins, expanding via the official repo):
 
 | Family | Variants |
 |---|---|
 | Chirpdesk | Default Dark, Default Light |
-| System | follows Windows app theme |
+| System | follows Windows app theme, maps to the active family's dark/light default |
 | Dracula | Dracula, Dracula Soft |
 | Catppuccin | Mocha, Macchiato, Frappé, Latte |
 | Nord | Nord, Nord Light |
@@ -491,11 +533,13 @@ Built-in families (dark + light where defined):
 | Solarized | Dark, Light |
 | GitHub | Dark, Light |
 
-Selection: `> theme`, or Settings → Appearance. "Follow system" flips light/dark on `WM_SETTINGCHANGE`.
+The shell keeps a **hardcoded baseline theme** compiled in. If every theme plugin is missing, invalid or disabled, the app still renders — it falls back to baseline and says so in Settings. No plugin can make the UI unreadable.
+
+Selection: `> theme`, or Settings → Appearance. "Follow system" flips light/dark on `WM_SETTINGCHANGE`, picking each family's default for the new mode.
 
 ### 12.3 Contrast + accessibility
 
-Every scheme is validated at load: text/background pairs must clear **WCAG AA 4.5:1** (3:1 for large/UI). Failures are nudged in lightness by the minimum passing amount and reported in Settings, so custom schemes are flagged rather than silently unreadable. Focus rings are never colour-only; selection changes fill **and** weight.
+Every variant is validated at load: text/background pairs must clear **WCAG AA 4.5:1** (3:1 for large/UI). Failures are nudged in lightness by the minimum passing amount and reported in Settings, so custom themes are flagged rather than silently unreadable — the nudge loop is capped at 20 iterations, after which it gives up and logs. Focus rings are never colour-only; selection changes fill **and** weight.
 
 ### 12.4 Site appearance
 
@@ -540,10 +584,10 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 |---|---|---|
 | **0 — Spine** | SDK install, project skeleton, hidden host, one service (WhatsApp), toast pipeline + AUMID, single instance | 3 h tray-hidden, inbound message toasts with correct text and icon; click opens the bar on WhatsApp; never appears in Alt+Tab |
 | **1 — Command Bar** | plugin loader + manifest validation, services and themes as plugins, multi-service hosting, per-service profiles, Command Bar (cycle + search), cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type → filter → `Enter` works as one continuous interaction; cold services appear in search but never in cycle; half-typed text survives switching |
-| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, add-URL flow, per-service regex, storage panel, trim policy, orphan scan | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 150 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
+| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, add-URL flow (any-site template), per-service regex, storage scan/trim/orphan primitives, cleaner `tool` plugin with `panel.json` | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 150 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
 | **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
-| **4 — Design** | token pipeline, scheme loader, 10 families, system light/dark, live preview from `> theme`, contrast validator, `PreferredColorScheme` sync | Theme switch is instant and previewable from the bar; shipped schemes pass AA; a dropped-in scheme file appears in `> theme` |
-| **5 — Plugin ecosystem** | plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
+| **4 — Design** | token pipeline, theme plugin loader with variants, baseline theme, system light/dark, live preview from `> theme`, contrast validator, `PreferredColorScheme` sync | Theme switch is instant and previewable from the bar; every variant passes AA; a dropped-in theme plugin appears in `> theme`; deleting all theme plugins still renders the baseline |
+| **5 — Plugin ecosystem** | catalogue expansion: 10 theme families, cleaner + diagnostics tools, extra services and filter packs; plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
 | **6 — Ship** | Inno Setup installer, portable zip, self-updater with signature verification, first-run overlay teaching `Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine: run setup, add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered manifest |
 | **7 — Optional** | ABP list import (tier 3), out-of-process integration plugin host (TDLib as first integration), live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
 
@@ -603,7 +647,7 @@ Chirpdesk/
 │  ├─ Updates/                # release check, signature verify, apply
 │  ├─ Ui/CommandBar/          # cycle + search modes, one row renderer
 │  ├─ Ui/                     # title bar, settings window, first-run overlay
-│  └─ Theming/                # scheme loader, tokens, contrast check
+│  └─ Theming/                # theme plugin loader, token mapping, contrast check
 ├─ docs/                      # decisions, screenshots, service notes
 └─ .github/workflows/release.yml
 ```
@@ -619,7 +663,8 @@ Decided:
 - License **MIT**; repo stays **private** until v1 works.
 - Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
 - One Command Bar for navigation, commands and theme switching.
-- **Plugin-shaped architecture**: services, themes and filter packs are plugins with one manifest; data-only in v1; code only out-of-process, phase 6.
+- **Plugin-shaped architecture**: services, templates, themes (with dark+light variants), tools and filter packs are plugins with one manifest; data-only in v1; code only out-of-process, phase 7.
+- **Shell first**: v1 ships the loader, Command Bar, host, notifications and storage primitives with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
 - Adblock packs ship as `filter` plugins, maintained in the repo's `plugins/` + `registry/`, installable from the official repo or any user-added repo.
 - `Ctrl+Tab` cycles, `Ctrl+P` searches; `Ctrl+K` removed.
 - No sidebar, tab strip, menu bar or landing page.
