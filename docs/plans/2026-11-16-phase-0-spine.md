@@ -306,7 +306,33 @@ dotnet add src/Chirpdesk package Microsoft.Web.WebView2 --version 1.0.4314.35
 
 ## Task 11: Phase 0 soak gate
 
-**Checklist — all must pass, in one sitting:**
+### 11.1 Automated — `Chirpdesk.exe --selftest` (headless, exit code is the verdict)
+
+Every check prints one `PASS`/`FAIL` line; a single `FAIL` exits 1. No human, no login, no phone.
+
+| Check | Asserts |
+|---|---|
+| settings | round-trip in a temp dir, atomic replace, `.corrupt` quarantine |
+| AUMID | shortcut exists, `ProcessExplicitAppUserModelID` returns `Chirpdesk` |
+| window styles | `WS_EX_TOOLWINDOW` set, `WS_EX_APPWINDOW` clear, rect off-screen, `IsWindowVisible` true, `ShowInTaskbar` untouched |
+| single instance | second process exits ≤ 500 ms, first HWND unchanged |
+| tray | icon created, `TaskbarCreated` re-add path registered |
+| environment | `CoreWebView2Environment` creates with the three anti-throttle flags, profile folder under `%LOCALAPPDATA%\Chirpdesk\profiles\` |
+| **hidden-warm probe** | loads a bundled local page that ticks a counter with `setInterval`; parked hidden for `--soak-minutes` (default 10); counter rate ≥ 0.9/s and `readyState === complete` afterwards |
+| **notification capability** | permission auto-granted, synthetic `new Notification("probe")` fires `NotificationReceived` → records `native`, else `title-only` |
+| toast pipeline | synthetic event through `WarmUpGate` + `Dedupe` reaches `ToastService.Show`; toast appears in `ToastNotificationManager.History` (skipped with a warning when OS notifications are off) |
+| orphan processes | after `Quit`, no `msedgewebview2.exe` child of the app remains |
+
+The hidden-warm probe is the important one: it proves R2's mechanism (timer keeps running while off-screen) in ten minutes instead of a three-hour wait, and it needs no WhatsApp account. WhatsApp-specific socket behaviour is the only thing left to the real soak.
+
+### 11.2 Human — the parts a machine cannot judge
+
+- Scan the QR once with the window shown.
+- Send a real message from a second phone and see the toast (sender, text, icon).
+- Whether anything *visibly* flashed on screen — automation can prove the rect and styles, not your eyes.
+- The 3 h tray-hidden soak with a real login.
+
+### 11.3 Checklist — all must pass, in one sitting:
 
 - [ ] Register Chirpdesk in `HKCU\...\Run` with a 20 s delay (temporary), reboot, no window appears.
 - [ ] **Sign in once** with the window shown (the documented phase-0 exception), then hide it. WhatsApp logged in, tray icon present, zero taskbar/Alt+Tab artifacts afterwards.

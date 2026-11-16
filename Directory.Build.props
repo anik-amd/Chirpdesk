@@ -20,6 +20,15 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <!-- One output tree instead of a bin/obj pair per project: the dev disk is small.
+       Keeps every build artifact under artifacts/ (already gitignored) and makes
+       "delete artifacts/" a complete clean. -->
+  <PropertyGroup>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
   <!-- Core is pure by structure: no UseWPF/UseWindowsForms, no WebView2 package, no P/Invoke.
        Keep it that way; see AGENTS.md invariant 1 and docs/engineering.md. -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Chirpdesk.Core'">

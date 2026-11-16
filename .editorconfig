@@ -43,3 +43,7 @@ csharp_style_var_for_built_in_types = true:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 dotnet_style_readonly_field = true:warning
 dotnet_diagnostic.CA2007.severity = none
+
+# Tests: method names read as sentences; the underscores are the point.
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none

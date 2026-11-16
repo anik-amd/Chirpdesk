@@ -532,6 +532,10 @@ Zero permanent chrome means the design budget goes into the **Command Bar, tray 
 
 Reference: Limusic's app. Near-black neutral base in the `#241c22` family, one restrained accent, no gradients, no glow, generous spacing, UI type at 12–13 px with wide tracking on labels.
 
+**Space budget (a real constraint, not a taste):** the app is used at a small desk. The Command Bar is capped at **560 × 420 px**, anchored 12 % from the top, horizontally centred — never full-screen, never resizable. The conversation window opens at **980 × 720**, centred on the monitor holding the cursor, and remembers its last bounds per instance; it is never auto-maximised. Settings is **720 × 600** and resizable. Nothing may require a wide monitor or a second screen. These are asserted in the phase-1 UI test, not left to the designer's eye.
+
+**Disk budget for development:** build output all lands in `artifacts/` (`UseArtifactsOutput`), so a clean is one folder and there are no per-project `bin`/`obj` duplicates. No Visual Studio, no Windows SDK, no MSIX tooling, no fixed-version WebView2 runtime — the SDK plus two NuGet packages are the whole toolchain.
+
 ### 12.1 Tokens (semantic, not raw colours)
 
 | Token | CSS variable | Used for |
