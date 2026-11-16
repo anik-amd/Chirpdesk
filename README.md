@@ -15,8 +15,8 @@ No bundled Chromium. No Electron. No sidebar. No subscription.
 - Tray-only start at boot — no window, no taskbar entry, notifications only
 - Per-service **warm** (loaded and toasting) or **cold** (loads when you ask)
 - Native Windows toasts with your service's icon, dedupe, and no boot-time backlog storm
-- `Ctrl+Tab` (hold) shows open services, VSCode-style MRU switching
-- `Ctrl+K` command palette for switching, warming, muting, sleep, DND
+- `Ctrl+Tab` (hold) cycles open services, VSCode-style MRU switching
+- `Ctrl+P` opens the same command bar in search mode — switch services, run commands, change theme
 - Add any chat site by URL — no catalogue to maintain
 - Isolated session per service, so multiple accounts coexist
 - Built-in ad, tracker and junk-script blocking — request-level, fail-open, one-click off per service
@@ -38,4 +38,4 @@ C# / .NET 8 / WPF + WebView2, published framework-dependent. No Visual Studio, n
 
 ## License
 
-TBD (MIT recommended).
+MIT — see [LICENSE](LICENSE).

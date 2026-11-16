@@ -2,7 +2,8 @@
 
 **All your conversations.**
 
-Status: **awaiting approval. No implementation yet.**
+Status: **planning complete, implementation not started.**
+License: MIT. Repo: private until v1 works.
 Target: Windows 10 1809+ / Windows 11, x64 and arm64.
 
 ---
@@ -12,6 +13,8 @@ Target: Windows 10 1809+ / Windows 11, x64 and arm64.
 A tray application that hosts the web versions of chat services in a single window with no permanent chrome, keeps chosen services loaded (and therefore notifying) in the background, turns their web notifications into real Windows toasts, blocks the ads and trackers those sites drag in, and gives you a place to see and reclaim the disk they consume.
 
 It exists because every alternative is an Electron app that ships its own Chromium copy (MultiMessenger: 325 MB, Nexus/Ferdium: ~250–300 MB), and because the rest of the "lightweight" options can't do notifications without a page open.
+
+Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop client with a near-black neutral base, restrained single-accent palette, no gradients, generous spacing, and themes shared across platforms. We adopt its *design language, theme schema, installer model and CI model*; we do **not** adopt its stack (see §4).
 
 ---
 
@@ -23,8 +26,8 @@ It exists because every alternative is an Electron app that ships its own Chromi
 | R2 | Selected services are **warm** at boot and notify even if never opened | Real loaded webviews, background throttling disabled |
 | R3 | Services not selected stay **cold** until invoked | Webview created on demand, spinner while loading |
 | R4 | Notifications = native Windows toasts, no backlog storm at login | `NotificationReceived` → toast, dedupe, warm-up suppression |
-| R5 | Switching is `Ctrl+Tab` only; **no sidebar/tab strip anywhere** | Zero-chrome window, MRU overlay while held |
-| R6 | `Ctrl+K` command palette (search services + run actions) | Fuzzy palette with `>` / `@` scopes |
+| R5 | **One** command surface for everything; no sidebar, tab strip or menu | Unified Command Bar, zero permanent chrome |
+| R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search/commands | Single overlay component, two entry modes |
 | R7 | Add **any** chat site by URL | Generic service definition, favicon fetch, no recipe catalogue |
 | R8 | Isolated session per service (multiple accounts) | Per-service `WebView2` user-data folder |
 | R9 | Theme system: many popular schemes, dark **and** light, live switch | Token-based scheme pipeline, JSON scheme files |
@@ -37,9 +40,10 @@ It exists because every alternative is an Electron app that ships its own Chromi
 - No message sync, no server, no account of any kind. Nothing leaves the machine.
 - No native protocol clients in v1 (Telegram on TDLib is a later optional swap).
 - No chat-level search inside a service (fragile DOM scraping).
-- No general-purpose adblocker for your browser — this blocks inside Chirpdesk's webviews only.
+- No general-purpose adblocker for your browser — blocking applies inside Chirpdesk's webviews only.
+- No marketing site / landing page.
 - No inbound call guarantee (WebRTC works only if the embedded permission flow allows it — see risks).
-- No auto-update in v1 (portable build; updater is a later phase).
+- No MSIX / Store distribution.
 
 ---
 
@@ -47,15 +51,15 @@ It exists because every alternative is an Electron app that ships its own Chromi
 
 | Candidate | Verdict | Reason |
 |---|---|---|
-| **WPF + WebView2 (chosen)** | ✅ | Both runtimes already on Windows; ~5 MB app; `CoreWebView2.NotificationReceived` gives page **and** service-worker notifications; full control of profiles, permissions, background flags **and** request filtering |
-| WinUI 3 | ✗ | Adds Windows App SDK dependency (~50–80 MB) for no feature we need |
-| Tauri (Rust) | ✗ | Smaller binary, but `wry` exposes no notification interception and no `WebResourceRequested`; needs 1.5–2.5 GB toolchain |
+| **WPF + WebView2 (chosen)** | ✅ | Both runtimes already on Windows; ~5 MB app; `CoreWebView2.NotificationReceived` gives page **and** service-worker notifications; direct control of profiles, permissions, background flags and request filtering. One language. ~1.5–2 GB dev disk. |
+| Tauri v2 (Limusic's stack) | ✗ | Same WebView2 engine underneath, so no runtime advantage. Its two weakest points are exactly our two critical ones: notification interception and `WebResourceRequested` require raw `webview2-com` COM interop in Rust, and multi-webview-in-one-window sits behind an unstable flag. Costs 3–5 GB dev disk and three languages. |
+| WinUI 3 | ✗ | Windows App SDK dependency (~50–80 MB) for no feature we need |
 | Electron | ✗ | Defeats the premise (bundles Chromium, 200 MB+) |
 | Thunderbird add-on | ✗ | `tabhide` unsupported, one shared cookie jar, no media permissions, no request filtering, Meta "browser unsupported" |
 
 Target framework: `net8.0-windows10.0.19041.0` (WinRT toast projections without extra packages), `UseWPF=true`, published **framework-dependent**.
 
-Third-party dependencies, deliberately few: `Hardcodet.NotifyIcon.Wpf` (MIT, tray). Filter lists are parsed by our own code.
+Third-party dependencies, deliberately few: `Hardcodet.NotifyIcon.Wpf` (MIT, tray) and `Inno Setup` (build-time installer only, not shipped in the app). Filter lists are parsed by our own code.
 
 ---
 
@@ -69,12 +73,13 @@ Chirpdesk.exe (single instance, mutex-guarded)
 │   ├─ starts off-screen at (-32000, -32000), 2×2 px
 │   ├─ Service X webview  (warm: visible when active, 1×1 when parked)
 │   ├─ Service Y webview
-│   └─ Overlays: Ctrl+Tab list, palette, dim scrim
+│   └─ Command Bar overlay (cycle + search modes) and its backdrop
 │
 ├─ Tray icon (unread state, menu, DND)
 ├─ Toast pipeline (WinRT, AUMID, click → activate service)
 ├─ Request filter engine (shared matcher, per-webview hooks)
 ├─ Storage service (size scan, trim, orphan scan)
+├─ Updater (GitHub Releases, signature-verified, opt-in)
 ├─ Scheduler (warm-up, sleep, trim, keepalive tick)
 └─ Settings store (%APPDATA%\Chirpdesk)
 ```
@@ -107,7 +112,7 @@ One `CoreWebView2Environment` per service, each with `userDataFolder = %LOCALAPP
 | Asleep | disposed | no | `asleep` | full reload (~3 s) |
 | Cold | never created | no | `cold` | full load (~3 s) |
 
-Warm-up order at boot: staggered 1.5 s apart, in user-defined priority. Selecting a cold service promotes it to warm **for the session only**; persisting is an explicit palette command.
+Warm-up order at boot: staggered 1.5 s apart, in user-defined priority. Selecting a cold service promotes it to warm **for the session only**; persisting is an explicit command.
 
 ### 5.4 Cache trimming
 
@@ -125,7 +130,7 @@ site calls new Notification(...)  ──►  CoreWebView2.NotificationReceived
                                         ├─ warm-up gate: drop until service ready + 5 s stable title
                                         ├─ per-service mute / global DND filter
                                         └─► ToastNotification via AUMID
-                                              click ──► activate Chirpdesk, focus that service
+                                              click ──► open Chirpdesk's Command Bar on that service
                                               dismiss ──► ReportClosed
 ```
 
@@ -145,44 +150,44 @@ WebView2 gives us `WebResourceRequested` / `AddWebResourceRequestedFilter`, i.e.
 
 | Tier | What it does | Default | Breakage risk |
 |---|---|---|---|
-| **1 — Curated** | Blocks known ad/telemetry/tracker hosts and `sponsored`/`ads` endpoints (~300–600 entries, shipped with the app, per-service overrides) | **on** | very low, and whitelisted endpoints can't be caught |
-| **2 — Cosmetic** | Injected CSS hides promoted/sponsored/upsell containers per service (`filters/cosmetic/<service>.json`), conservative selectors only | on, off per service | low; a broken selector only hides the wrong element, never blocks a request |
-| **3 — List import** | Opt-in import of ABP-syntax lists (EasyList Lite, EasyPrivacy). Parsed offline into a compact domain trie. | off | medium — hence opt-in, per-service, and easy to disable |
+| **1 — Curated** | Blocks known ad/telemetry/tracker hosts and `sponsored`/`ads` endpoints (~300–600 entries, shipped, per-service overrides) | **on** | very low; whitelisted endpoints can't be caught |
+| **2 — Cosmetic** | Injected CSS hides promoted/sponsored/upsell containers per service (`filters/cosmetic/<service>.json`), conservative selectors only | on, off per service | low; a bad selector hides the wrong element, never blocks a request |
+| **3 — List import** | Opt-in import of ABP-syntax lists (EasyList Lite, EasyPrivacy), parsed offline into a compact domain trie | off | medium — opt-in, per-service, easily disabled |
 
-Tier 3 syntax supported: `||host^`, host/path patterns, `@@` exceptions, `$domain=`, `$third-party`, `$script|image|xmlhttprequest`. Explicitly **unsupported and skipped**: `$csp`, `$redirect`, `$removeparam`, `##`/`#@#` cosmetic syntax from lists (we use our own cosmetic file format). Unsupported rules are counted and shown, never silently mangled.
+Tier 3 syntax supported: `||host^`, host/path patterns, `@@` exceptions, `$domain=`, `$third-party`, `$script|image|xmlhttprequest`. Explicitly **unsupported and skipped**: `$csp`, `$redirect`, `$removeparam`, `##`/`#@#` cosmetic syntax (we use our own cosmetic format). Unsupported rules are counted and shown, never silently mangled.
 
 ### 7.2 Engine
 
 - One compiled matcher in the host process: hostname trie for `||host^` rules + a small ordered regex list for path rules.
-- Every decision cached per host in a dictionary, so steady-state cost is a hash lookup: **O(1) per request**, no measurable load impact.
-- Registered per webview with `AddWebResourceRequestedFilter("*", All)`; the filter consults resource context too, so "block trackers' images and XHR but not their fonts on the app's own domain" is expressible.
-- Counters per service (blocked requests, blocked bytes estimate) surfaced in Settings — transparency and the first debugging tool when a service misbehaves.
+- Every decision cached per host in a dictionary, so steady-state cost is a hash lookup: **O(1) per request**.
+- Registered per webview with `AddWebResourceRequestedFilter("*", All)`; resource context is consulted, so "block trackers' images and XHR but not their fonts on the app's own domain" is expressible.
+- Counters per service (blocked requests, estimated bytes) shown in Settings and the Command Bar's `> storage`/`> filters` rows — transparency and the first debugging tool.
 
 ### 7.3 Fail-open, always
 
 Three hard rules, because a chat client that can't log in is worse than an ad:
 
-1. If the matcher throws, the filter file is invalid, or anything is ambiguous → **allow the request**.
+1. If the matcher throws, a filter file is invalid, or anything is ambiguous → **allow the request**.
 2. A permanent allowlist covers auth, WebSocket and update endpoints (`*/ws`, `*/ws/*`, `login`, `oauth`, `accounts`, service root domains). Nothing on the allowlist can be blocked by any tier.
-3. Settings has **"disable blocking for this service"** which is one click away, and every toast-level failure shows a tray hint pointing at it.
+3. `> blocking: off` for a single service, one command away, plus a tray hint on failure pointing at it.
 
 ### 7.4 Scripts
 
-We do not strip site JavaScript — that's how you break WhatsApp's encryption init. What we do instead:
+We do not strip site JavaScript — that's how WhatsApp's encryption init breaks. Instead:
 
 - Block the **third-party script requests** that carry analytics and ad SDKs (tier 1/3).
 - Optionally stub `fbq`, `gtag`, `dataLayer`, `_fbq` as no-ops (off by default; dead stubs can throw, and network blocking is cleaner).
-- Optional per-service `injectCss` for clutter, separate from cosmetic filters, so a user tweak can never be wiped by a filter-pack update.
+- Optional per-service `injectCss` for clutter, separate from cosmetic filters, so a user tweak is never wiped by a filter-pack update.
 
 ---
 
 ## 8. Disk cleaning (R12)
 
-The point is not only that Chirpdesk is small — it's that the chat apps **already on your machine** are hoarding space, and you should be able to see and reclaim it from one place.
+The point is not only that Chirpdesk is small — it's that the chat apps **already on your machine** are hoarding space, and you should see and reclaim it from one place.
 
 ### 8.1 Per-service storage view
 
-Settings → Storage, and the palette command `> storage`:
+Settings → Storage, and the Command Bar command `> storage`:
 
 | Column | Meaning |
 |---|---|
@@ -201,24 +206,24 @@ Actions per service: **Trim cache** (safe) · **Clear media cache** (downloads r
 - Per-service cache budget (default 60 MB) and global budget (default 500 MB); when exceeded, evict oldest-first and log what was evicted.
 - Never trims while a service is warm and mid-transaction; the webview is parked or disposed first.
 
-### 8.3 Orphan scan (the "desk space" part)
+### 8.3 Orphan scan ("desk space")
 
-Finds chat-app data left behind by things you installed before or no longer use:
+Finds chat-app data left behind by things installed before or no longer used:
 
 - Chirpdesk profiles belonging to removed services.
 - Official **WhatsApp desktop** WebView2 data (`%APPDATA%\WhatsApp`, `%LOCALAPPDATA%\WhatsApp`), **Telegram Desktop**, and Electron wrappers (Ferdium / Rambox / Station / MultiMessenger profile dirs) if present.
-- Reports size, last-modified, and which app owns it — per item, with a checkbox. Nothing is pre-selected.
+- Reports size, last-modified and owning app — per item, with a checkbox. Nothing pre-selected.
 
 Safety rules, non-negotiable:
 
 - Only paths from a **fixed allowlist of known roots**; resolved and re-verified as absolute, inside those roots, no wildcards, no parent traversal.
-- Deleting user data goes to the **Recycle Bin** (`FOF_ALLOWUNDO`) so a mistake is recoverable; only cache subfolders are hard-deleted.
-- Never touches mail stores, `Documents`, browser profiles of Edge/Chrome (those are reported as a hint with a "how to clear site data yourself" note, since no supported API can safely edit a live Chromium profile).
-- Running these app's own processes are detected and the scan refuses to delete a directory in use.
+- Deleting user data goes to the **Recycle Bin** (`FOF_ALLOWUNDO`); only cache subfolders are hard-deleted.
+- Never touches mail stores, `Documents`, or Edge/Chrome profiles (those are reported as a hint with manual instructions, since no supported API can safely edit a live Chromium profile).
+- Detects running processes of the owning app and refuses to delete a directory in use.
 
 ### 8.4 Reclaimed counter
 
-A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap to implement, makes trim habits visible, and proves the feature works.
+A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, makes trim habits visible, proves the feature works.
 
 ---
 
@@ -231,22 +236,46 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap t
 
 ---
 
-## 10. Keyboard model
+## 10. Command Bar (R5, R6)
+
+**One overlay. One component. No sidebar, no tab strip, no menu bar.** Everything navigational happens here.
+
+### 10.1 Two entry modes
+
+| Entry | Mode | Behaviour |
+|---|---|---|
+| `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` cancels. Query line hidden. |
+| `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: warm services (unread shown) → cold services (`cold`) → commands. Fuzzy filter as you type. `Enter` runs, `Esc` dismisses. |
+| Cycle, then type | **Search** (retained highlight) | Auto-commit is abandoned the moment a character is entered; the selection stays highlighted and the bar becomes sticky. |
+
+Rows are rendered by one template in both modes: icon · name · unread count · state badge (`warm` / `asleep` / `cold`) · current-highlight.
+
+Ordering: unread first, then recency, then fuzzy score. `>` restricts to commands; bare text searches services and commands together.
+
+### 10.2 Commands
+
+`> theme dark` · `> theme light` · `> theme system` · `> theme <name>` · `> settings` · `> add service` · `> edit service` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
+
+**Theme preview:** `> theme` lists schemes; arrowing applies live, `Enter` commits, `Esc` restores the previous scheme. This is where the colour system shows off.
+
+### 10.3 Keys
 
 | Key | Action |
 |---|---|
-| `Ctrl+Tab` (hold) | MRU overlay: icon · name · unread, warm services only |
+| `Ctrl+Tab` (hold) | cycle warm services |
 | `Tab` / `Shift+Tab` while held | move highlight |
 | release `Ctrl` | commit |
-| `Esc` while held | cancel |
-| `Ctrl+K` | palette |
-| `Ctrl+1..9` | direct jump (fixed order) |
+| `Ctrl+P` | search mode |
+| `Ctrl+Shift+P` | passed through to the page (site print shortcut) |
+| `Ctrl+1..9` | direct jump, fixed order (power path, no UI) |
 | `Ctrl+W` | hide to tray |
-| `Ctrl+Shift+K` | palette key passed through to the page (sites that bind `Ctrl+K`) |
+| `Esc` | dismiss / cancel |
 
-**Ctrl+Tab mechanics:** intercepted in `AcceleratorKeyPressed` so sites can't steal it; overlay appears after a 120 ms hold (fast taps don't flash); commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. Overlay is a `Canvas` over existing content — no resizing, no webview recreation.
+**Interception:** `Ctrl+Tab`, `Ctrl+P` and `Ctrl+1..9` are handled in `AcceleratorKeyPressed`, so sites cannot steal them. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The overlay is a `Canvas` over existing content — no resizing, no webview recreation.
 
-**Palette:** `TextBox` + virtualized `ListBox`, subsequence fuzzy scoring, ordering = unread ▸ recency ▸ score. `>` commands only, `@` services only, bare text = both. Commands: warm/sleep, mute, DND 30 m / 1 h / until tomorrow, reload, add service, edit service, storage, filters, theme, copy URL, open in browser, settings, quit.
+### 10.4 Settings is a destination, not navigation
+
+Settings stays a small window (URLs, icons, regexes, scheme files, storage, autostart, blocking) reached only by `> settings`. No tabs, no rail, no command strip anywhere in the app.
 
 ---
 
@@ -277,21 +306,25 @@ Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold.
 
 ## 12. Design system
 
-Zero permanent chrome means the design budget goes into the **overlays, tray menu, settings and title bar** — plus making colour schemes first-class.
+Zero permanent chrome means the design budget goes into the **Command Bar, tray menu, settings and title bar** — plus making colour schemes first-class.
+
+Reference: Limusic's app. Near-black neutral base in the `#241c22` family, one restrained accent, no gradients, no glow, generous spacing, UI type at 12–13 px with wide tracking on labels.
 
 ### 12.1 Tokens (semantic, not raw colours)
 
-| Token | Used for |
-|---|---|
-| `bg.window` | window backdrop |
-| `bg.surface` | overlay panels, palette, list rows |
-| `bg.elevated` | hovered/selected rows, dialogs |
-| `bg.scrim` | Ctrl+Tab dim layer (alpha included) |
-| `border.default`, `border.focus` | hairlines, keyboard focus ring |
-| `text.primary`, `text.secondary`, `text.muted` | hierarchy |
-| `accent.default`, `accent.fg` | selection, active row, badges |
-| `state.danger`, `state.success`, `state.warning` | mute, DND, blocking, errors |
-| `shadow.overlay` | overlay elevation |
+| Token | CSS variable | Used for |
+|---|---|---|
+| `bg.window` | `--cd-bg-window` | window backdrop |
+| `bg.surface` | `--cd-bg-surface` | overlay panels, bar, list rows |
+| `bg.elevated` | `--cd-bg-elevated` | hovered/selected rows, dialogs |
+| `bg.scrim` | `--cd-bg-scrim` | Command Bar backdrop (alpha) |
+| `border.default` / `border.focus` | `--cd-border-*` | hairlines, keyboard focus ring |
+| `text.primary` / `.secondary` / `.muted` | `--cd-text-*` | hierarchy |
+| `accent.default` / `accent.fg` | `--cd-accent-*` | selection, active row, badges |
+| `state.danger` / `.success` / `.warning` | `--cd-state-*` | mute, DND, blocking, errors |
+| `shadow.overlay` | `--cd-shadow-overlay` | overlay elevation |
+
+Token names are CSS-variable compatible so the same scheme JSON can drive a future non-WPF surface (web or mobile UI) without rewriting palettes — the one structural trick worth copying from Limusic.
 
 ### 12.2 Scheme files
 
@@ -312,19 +345,19 @@ Built-in families (dark + light where defined):
 | Solarized | Dark, Light |
 | GitHub | Dark, Light |
 
-Selection: Settings → Appearance, or palette `> theme`. "Follow system" flips light/dark on `WM_SETTINGCHANGE`.
+Selection: `> theme`, or Settings → Appearance. "Follow system" flips light/dark on `WM_SETTINGCHANGE`.
 
 ### 12.3 Contrast + accessibility
 
-Every scheme is validated at load: text/background pairs must clear **WCAG AA 4.5:1** (3:1 for large/UI). Failures are nudged in lightness by the minimum amount and reported in Settings, so custom schemes are flagged rather than silently unreadable. Focus rings are never colour-only; selection changes fill **and** weight.
+Every scheme is validated at load: text/background pairs must clear **WCAG AA 4.5:1** (3:1 for large/UI). Failures are nudged in lightness by the minimum passing amount and reported in Settings, so custom schemes are flagged rather than silently unreadable. Focus rings are never colour-only; selection changes fill **and** weight.
 
 ### 12.4 Site appearance
 
-Sites own their CSS. On every theme change we set `CoreWebView2Profile.PreferredColorScheme`, so services that honour `prefers-color-scheme` follow your light/dark choice. Optional per-service `injectCss` goes further; a few example snippets ship, clearly best-effort.
+Sites own their CSS. On every theme change we set `CoreWebView2Profile.PreferredColorScheme`, so services honouring `prefers-color-scheme` follow your light/dark choice. Optional per-service `injectCss` goes further; a few examples ship, clearly best-effort.
 
 ### 12.5 Typography + motion
 
-Segoe UI Variable for UI; `Cascadia Mono` for the palette query line — the "hacker" flavour lives there, not in decoration. Overlay open/close 90 ms fade + 4 px rise. No other motion.
+Segoe UI Variable for UI; `Cascadia Mono` for the Command Bar query line — the "hacker" flavour lives there, not in decoration. Overlay open/close 90 ms fade + 4 px rise. No other motion.
 
 ---
 
@@ -332,9 +365,10 @@ Segoe UI Variable for UI; `Cascadia Mono` for the palette query line — the "ha
 
 | Path | Contents |
 |---|---|
-| `%APPDATA%\Chirpdesk\settings.json` | services, appearance, autostart, DND, blocking |
+| `%APPDATA%\Chirpdesk\settings.json` | services, appearance, autostart, DND, blocking, update channel |
 | `%APPDATA%\Chirpdesk\schemes\*.json` | user scheme overrides |
 | `%APPDATA%\Chirpdesk\filters\` | cosmetic packs, imported lists, compiled matchers |
+| `%APPDATA%\Chirpdesk\updates\` | downloaded installer + manifest, deleted after apply |
 | `%LOCALAPPDATA%\Chirpdesk\profiles\<id>\` | per-service WebView2 data |
 | `%LOCALAPPDATA%\Chirpdesk\icons\` | cached favicons |
 | `%LOCALAPPDATA%\Chirpdesk\logs\` | rolling log, 2 MB cap |
@@ -343,73 +377,99 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 
 ---
 
-## 14. Phases and acceptance criteria
+## 14. Shipping and updates (phase 5)
+
+- **Installer:** Inno Setup, per-user, no elevation, `setup.exe`; a plain `.zip` portable build for people who want no installer. No MSIX, no Store.
+- **Shortcut creation** at install time carries the `System.AppUserModel.ID` used by toasts and the updater.
+- **Self-update:** the app checks GitHub Releases (stable channel only), downloads `Chirpdesk-Setup.exe` + manifest, verifies an **Ed25519 signature** and SHA-256 of the payload, then runs the installer silently and relaunches. Unsigned, malformed or unparseable manifests are refused and logged; the app keeps running the current version.
+- **Opt-in:** update checks can be disabled; nothing is ever downloaded without a signature match. Portable builds never self-update.
+- **CI:** one GitHub Actions workflow on `windows-latest` that builds, runs tests, packs the installer + zip and attaches them to a Release with the signature. Release-only — never used for development.
+- **No landing page.** Repo README is the only public surface for now.
+
+---
+
+## 15. Phases and acceptance criteria
 
 | Phase | Scope | Done when |
 |---|---|---|
-| **0 — Spine** | SDK install, project skeleton, hidden host, one service (WhatsApp), toast pipeline + AUMID, single instance | 3 h tray-hidden, inbound message toasts with correct text and icon; click focuses WhatsApp; never appears in Alt+Tab |
-| **1 — Core UX** | multi-service hosting, per-service profiles, Ctrl+Tab overlay, palette, unread via title, Ctrl+1..9, Ctrl+W | 3 warm services switch instantly, half-typed text preserved; overlay keyboard-only usable; fuzzy palette finds services |
-| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings dialog, add-URL flow, per-service regex, **storage panel, trim policy, orphan scan** | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 150 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
-| **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable UI | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; disabling blocking for one service restores every request |
-| **4 — Design** | token pipeline, scheme loader, 10 families, system light/dark, live switch, contrast validator, `PreferredColorScheme` sync | Switching scheme changes app + site preference instantly; shipped schemes pass AA; a dropped-in scheme file appears in the list |
-| **5 — Ship** | portable publish + zip, shortcut creation, first-run overlay (teaching `Ctrl+Tab`/`Ctrl+K`), CI build workflow, docs | Fresh machine: unzip, run, add service, sign in, reboot, receive toast, run a cleanup — no dev tools |
-| **6 — Optional** | ABP list import (tier 3), Telegram via TDLib, live preview in Ctrl+Tab, inline toast reply, auto-update | only if v1 proves itself in daily use |
+| **0 — Spine** | SDK install, project skeleton, hidden host, one service (WhatsApp), toast pipeline + AUMID, single instance | 3 h tray-hidden, inbound message toasts with correct text and icon; click opens the bar on WhatsApp; never appears in Alt+Tab |
+| **1 — Command Bar** | multi-service hosting, per-service profiles, Command Bar with cycle + search modes, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type → filter → `Enter` works as one continuous interaction; cold services appear in search but never in cycle; half-typed text survives switching |
+| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, add-URL flow, per-service regex, storage panel, trim policy, orphan scan | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 150 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
+| **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
+| **4 — Design** | token pipeline, scheme loader, 10 families, system light/dark, live preview from `> theme`, contrast validator, `PreferredColorScheme` sync | Theme switch is instant and previewable from the bar; shipped schemes pass AA; a dropped-in scheme file appears in `> theme` |
+| **5 — Ship** | Inno Setup installer, portable zip, self-updater with signature verification, first-run overlay teaching `Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine: run setup, add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered manifest |
+| **6 — Optional** | ABP list import (tier 3), Telegram via TDLib, live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
 
 Each phase ends with a build you can actually run.
 
 ---
 
-## 15. Risks
+## 16. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Off-screen window throttled despite flags | R2 fails outright | Phase 0 gate; fallback 1×1 `WS_EX_NOACTIVATE` at screen edge |
-| Blocking breaks a login or a WebSocket | Service unusable, worse than ads | Fail-open, permanent auth/WS allowlist, one-click per-service disable, counters for diagnosis |
+| Blocking breaks a login or WebSocket | Service unusable, worse than ads | Fail-open, permanent auth/WS allowlist, one command to disable per service, counters for diagnosis |
 | Cosmetic selector hides the wrong thing | Confusing UI | Conservative selectors, per-service toggle, never touches requests |
 | Cache deletion logs the user out | Re-pairing WhatsApp | Cache and data are separate directories, separate buttons, separate confirmations |
 | Orphan scan deletes something it shouldn't | Data loss | Fixed root allowlist, path re-verification, Recycle Bin for user data, in-use detection, nothing pre-checked |
+| Tampered update package | Code execution | Ed25519 + SHA-256 verification, refuse and log on mismatch, updates opt-in |
+| `Ctrl+P` steals a site's print shortcut | Minor | `Ctrl+Shift+P` passthrough documented |
 | Meta changes the web client / sniffs the UA | Service breaks | Stock Edge UA like Meta's own Windows app; per-service UA override |
 | Google sign-in refuses embedded browsers | Some services unusable | Detect + explain; open-in-browser escape hatch |
-| Service-worker notifications differ from page notifications | Missed toasts | `NotificationReceived` covers both; per-service verification in phase 1; injected `Notification` shim as fallback |
+| Service-worker notifications differ from page notifications | Missed toasts | `NotificationReceived` covers both; per-service verification; injected `Notification` shim as fallback |
 | WebView2 memory per warm service | R10 partially fails | It's the site's cost; sleep, warm-count guidance, per-service RAM shown |
 | Toast identity shows "(unknown app)" | Looks broken | AUMID + shortcut on first run, verified in phase 0 |
-| `Ctrl+Tab` stolen by a site | R5 fails | `AcceleratorKeyPressed` precedence; `Ctrl+Shift+K` passthrough |
+| `Ctrl+Tab` stolen by a site | R6 fails | `AcceleratorKeyPressed` precedence; passthrough documented |
 | Windows DND swallows toasts | User thinks it's broken | Read `SHQueryUserNotificationState`; tray hint when suppressed |
 
 ---
 
-## 16. Repo layout (target)
+## 17. Repo layout (target)
 
 ```
 Chirpdesk/
 ├─ README.md
 ├─ PLAN.md
-├─ schemes/                  # shipped colour schemes (JSON)
+├─ LICENSE                    # MIT
+├─ schemes/                   # shipped colour schemes (JSON)
 ├─ filters/
-│  ├─ curated/               # tier-1 host lists per service
-│  └─ cosmetic/              # per-service CSS packs
+│  ├─ curated/                # tier-1 host lists per service
+│  └─ cosmetic/               # per-service CSS packs
+├─ installer/                 # Inno Setup script, signing keys (public only)
 ├─ src/Chirpdesk/
-│  ├─ App.xaml(.cs)          # startup, single instance, autostart
-│  ├─ Hosting/               # hidden window, webview manager, profiles
-│  ├─ Services/              # definitions, store, add-URL flow
-│  ├─ Notifications/         # toast pipeline, AUMID, permission policy
-│  ├─ Filtering/             # matcher, list parser, counters
-│  ├─ Storage/               # size scan, trim, orphan scan
-│  ├─ Ui/                    # Ctrl+Tab overlay, palette, title bar, settings
-│  └─ Theming/               # scheme loader, tokens, contrast check
-├─ docs/                     # decisions, screenshots, service notes
-└─ .github/workflows/build.yml
+│  ├─ App.xaml(.cs)           # startup, single instance, autostart
+│  ├─ Hosting/                # hidden window, webview manager, profiles
+│  ├─ Services/               # definitions, store, add-URL flow
+│  ├─ Notifications/          # toast pipeline, AUMID, permission policy
+│  ├─ Filtering/              # matcher, list parser, counters
+│  ├─ Storage/                # size scan, trim, orphan scan
+│  ├─ Updates/                # release check, signature verify, apply
+│  ├─ Ui/CommandBar/          # cycle + search modes, one row renderer
+│  ├─ Ui/                     # title bar, settings window, first-run overlay
+│  └─ Theming/                # scheme loader, tokens, contrast check
+├─ docs/                      # decisions, screenshots, service notes
+└─ .github/workflows/release.yml
 ```
 
 Dev environment: local only, .NET 8 SDK, no Visual Studio, no Windows SDK, no MSIX. Peak dev disk ~2 GB; app footprint ~5 MB.
 
 ---
 
-## 17. Open decisions
+## 18. Decided / open
 
-1. **License** — MIT recommended, unset until you choose.
-2. **Repo visibility** — currently private; flip to public whenever.
-3. **Default warm set** — assumed WhatsApp + Messenger + Telegram warm, Facebook cold.
-4. **Ctrl+Tab order** — assumed MRU; fixed order via `Ctrl+1..9`.
-5. **Title bar** — assumed minimal custom bar showing `service · unread`.
-6. **Blocking default** — assumed tier 1 + cosmetic on, list import off.
+Decided:
+
+- License **MIT**; repo stays **private** until v1 works.
+- Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
+- One Command Bar for navigation, commands and theme switching.
+- `Ctrl+Tab` cycles, `Ctrl+P` searches; `Ctrl+K` removed.
+- No sidebar, tab strip, menu bar or landing page.
+- Self-updating signed installer, opt-in, stable channel only.
+- Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold.
+
+Open:
+
+- Title bar: minimal custom bar showing `service · unread`, or none at all.
+- `Ctrl+1..9` direct jump: keep or drop for a pure two-key model.
+- Blocking default: tier 1 + cosmetic on, list import off (assumed).
