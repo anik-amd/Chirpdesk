@@ -25,6 +25,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     private WebNotificationBridge? _bridge;
     private WarmUpGate? _gate;
+    private int _lastUnread;
     private bool _disposed;
 
     private ServiceRuntime(
@@ -129,6 +130,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             if (args.IsSuccess)
             {
                 _gate.MarkReady();
+                _ = LogPageCapabilitiesAsync(core);
             }
             else
             {
@@ -142,14 +144,118 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
         if (!string.IsNullOrWhiteSpace(_instance.Url))
         {
+            // Ask once, before the page loads: a site that checks Notification.permission
+            // without calling requestPermission would otherwise never notify.
+            await GrantNotificationsAsync(core);
             core.Navigate(_instance.Url);
         }
     }
 
+    private async Task GrantNotificationsAsync(Microsoft.Web.WebView2.Core.CoreWebView2 core)
+    {
+        if (!Uri.TryCreate(_instance.Url, UriKind.Absolute, out var uri))
+        {
+            return;
+        }
+
+        var origin = uri.GetLeftPart(UriPartial.Authority);
+        try
+        {
+            await core.Profile.SetPermissionStateAsync(
+                Microsoft.Web.WebView2.Core.CoreWebView2PermissionKind.Notifications,
+                origin,
+                Microsoft.Web.WebView2.Core.CoreWebView2PermissionState.Allow);
+
+            _log.Info($"notifications pre-granted for '{_instance.InstanceId}'");
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or ArgumentException)
+        {
+            // Fail open: the PermissionRequested handler still answers prompts.
+            _log.Warn($"could not pre-grant notifications for '{_instance.InstanceId}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Writes the two facts that decide the notification mode: whether the page may notify at
+    /// all, and whether a service worker controls it. WebView2's NotificationReceived covers
+    /// non-persistent (page) notifications only, so a page notified through its worker is the
+    /// title-only case, and phase 0 needs to know which one WhatsApp is.
+    /// </summary>
+    private async Task LogPageCapabilitiesAsync(Microsoft.Web.WebView2.Core.CoreWebView2 core)
+    {
+        try
+        {
+            var permission = await core.ExecuteScriptAsync("Notification.permission");
+            var controlled = await core.ExecuteScriptAsync("!!navigator.serviceWorker.controller");
+            _log.Info(
+                $"page capability for '{_instance.InstanceId}': permission={permission.Trim('"')} serviceWorker={controlled.Trim('"')}");
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            _log.Warn($"could not read page capability for '{_instance.InstanceId}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Raises a notification from inside the real service page. That tests the whole pipeline
+    /// (origin check, gate, dedupe, toast) without depending on whether the service itself has
+    /// its own notifications switched on.
+    /// </summary>
+    public async Task<bool> RaiseProbeNotificationAsync(TimeSpan timeout)
+    {
+        var core = _view.CoreWebView2;
+        var deadline = DateTimeOffset.UtcNow + timeout;
+
+        try
+        {
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                var state = await core.ExecuteScriptAsync("document.readyState");
+                if (state.Contains("complete", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                await Task.Delay(500);
+            }
+
+            // The warm-up gate refuses anything in the first five seconds of a session on
+            // purpose (R4: no toast storm after login), so a probe has to wait it out.
+            await Task.Delay(TimeSpan.FromSeconds(6));
+
+            // A unique tag every time so the dedupe cannot swallow a second probe.
+            const string Script = """
+                (function () {
+                  try {
+                    new Notification('Chirpdesk probe', { body: 'pipeline test', tag: 'probe-' + Date.now() });
+                    return 'ok';
+                  } catch (e) {
+                    return 'error:' + e;
+                  }
+                })()
+                """;
+
+            var result = await core.ExecuteScriptAsync(Script);
+            return result.Contains("ok", StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            _log.Warn($"probe notification failed for '{_instance.InstanceId}': {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Counts only: a title is user content and never goes to the log.</summary>
     private void OnDocumentTitleChanged(object? sender, object e)
     {
         var count = Core.Unread.UnreadParser.Parse(_view.CoreWebView2.DocumentTitle, _instance.UnreadRegex ?? @"\((\d+)\)");
         _gate?.ObserveTitle(count);
+
+        if (count != _lastUnread)
+        {
+            _lastUnread = count;
+            _log.Info($"unread {count} for '{_instance.InstanceId}'");
+        }
     }
 
     private static string? HostOf(string? url) =>

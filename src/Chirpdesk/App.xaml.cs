@@ -73,7 +73,7 @@ public partial class App : Application
 
         if (options.OpenService is not null)
         {
-            _ = OpenServiceAsync(options.OpenService, show: !options.Hidden);
+            _ = OpenServiceAsync(options.OpenService, show: !options.Hidden, probe: options.NotifyTest);
         }
 
         if (options.QuitAfter is { } delay)
@@ -132,7 +132,7 @@ public partial class App : Application
     /// Phase 0's one show path for a service: create it, put it on screen and let the user sign
     /// in. Everything else about it (warm, parked, notifying) is the normal runtime.
     /// </summary>
-    private async Task OpenServiceAsync(string requestedId, bool show)
+    private async Task OpenServiceAsync(string requestedId, bool show, bool probe)
     {
         try
         {
@@ -146,17 +146,24 @@ public partial class App : Application
                 return;
             }
 
-            _service = await ServiceRuntime.CreateAsync(
+            var service = await ServiceRuntime.CreateAsync(
                 _host!,
                 instance,
                 _log!,
                 SystemClock.Instance,
                 new ToastService(_log!, _ => OpenHost()),
                 DateTimeOffset.UtcNow);
+            _service = service;
 
             if (show)
             {
                 ShowHost();
+            }
+
+            if (probe)
+            {
+                var raised = await service.RaiseProbeNotificationAsync(TimeSpan.FromSeconds(30));
+                _log?.Info($"probe notification issued for '{instance.InstanceId}': {raised}");
             }
 
             _log?.Info($"opened '{instance.InstanceId}'{(show ? " for the user" : " parked")}");

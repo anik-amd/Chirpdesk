@@ -96,13 +96,18 @@ internal sealed class WebNotificationBridge
         }
 
         // Boot cutoff: a reconnect replays days of notifications; none of that is new.
-        if (notification.Timestamp < _startedAt)
+        // A site is free to leave `timestamp` at its default (epoch) — that is "unknown",
+        // not "old", and dropping on it would swallow every WhatsApp message.
+        var created = NotificationTime.Normalize(notification.Timestamp);
+        if (created > DateTimeOffset.UnixEpoch && created < _startedAt)
         {
+            _log.Info($"notification from before start dropped for '{_serviceName}' ({created:o} < {_startedAt:o})");
             return;
         }
 
         if (_gate.ShouldSuppress())
         {
+            _log.Info($"notification suppressed during warm-up for '{_serviceName}'");
             return;
         }
 
@@ -111,6 +116,7 @@ internal sealed class WebNotificationBridge
 
         if (!_dedupe.ShouldShow(notification.Tag ?? string.Empty, title, body))
         {
+            _log.Info($"duplicate notification dropped for '{_serviceName}'");
             return;
         }
 

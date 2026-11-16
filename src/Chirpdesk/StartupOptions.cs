@@ -11,7 +11,8 @@ internal sealed record StartupOptions(
     TimeSpan Soak,
     string? OpenService,
     TimeSpan? QuitAfter,
-    bool Hidden)
+    bool Hidden,
+    bool NotifyTest)
 {
     private const string SoakPrefix = "--soak-seconds=";
     private const string QuitPrefix = "--quit-after=";
@@ -22,6 +23,7 @@ internal sealed record StartupOptions(
         var selfTest = Array.Exists(args, a => a.Equals("--selftest", StringComparison.OrdinalIgnoreCase));
         var testToast = Array.Exists(args, a => a.Equals("--test-toast", StringComparison.OrdinalIgnoreCase));
         var hidden = Array.Exists(args, a => a.Equals("--hidden", StringComparison.OrdinalIgnoreCase));
+        var notifyTest = Array.Exists(args, a => a.Equals("--notify-test", StringComparison.OrdinalIgnoreCase));
 
         var soak = TimeSpan.FromSeconds(60);
         TimeSpan? quitAfter = null;
@@ -52,7 +54,7 @@ internal sealed record StartupOptions(
             }
         }
 
-        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden);
+        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest);
     }
 
     /// <summary>Any timeout is clamped to something a human would accept (10 s to 1 h).</summary>
