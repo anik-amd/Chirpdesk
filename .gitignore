@@ -1,0 +1,41 @@
+# Build output
+bin/
+obj/
+publish/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider / VS / VS Code
+.vs/
+.idea/
+.vscode/
+*.DotSettings.user
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test / coverage
+TestResults/
+coverage*/
+*.trx
+*.coverage
+
+# Local runtime data that must never be committed
+*.log
+logs/
+schemes-local/
+profiles/
+crashdumps/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
