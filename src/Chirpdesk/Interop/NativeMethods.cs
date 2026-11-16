@@ -27,6 +27,10 @@ internal static class NativeMethods
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     internal static extern int GetCurrentProcessExplicitAppUserModelID(out nint appUserModelId);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetForegroundWindow(nint hWnd);
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetWindowRect(nint hWnd, out WindowRect rect);

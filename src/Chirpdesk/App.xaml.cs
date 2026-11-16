@@ -158,7 +158,7 @@ public partial class App : Application
                 instance,
                 _log!,
                 SystemClock.Instance,
-                new ToastService(_log!, _ => OpenHost()),
+                new ToastService(_log!, _ => Dispatcher.Invoke(ShowHost)),
                 DateTimeOffset.UtcNow);
             _service = service;
 
@@ -233,6 +233,7 @@ public partial class App : Application
 
     private void ShowHost()
     {
+        _log?.Info("showing the window on request");
         _service?.Activate();
         _host?.ShowForUser();
     }

@@ -54,7 +54,15 @@ internal sealed class ToastService : IToastSink
             toast.Activated += (_, _) =>
             {
                 _log.Info($"toast activated by the user for '{message.ServiceId}'");
-                _onActivated?.Invoke(message.ServiceId);
+
+                try
+                {
+                    _onActivated?.Invoke(message.ServiceId);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException)
+                {
+                    _log.Error("toast activation handler failed", ex);
+                }
             };
             toast.Dismissed += (_, args) => _log.Info($"toast dismissed ({args.Reason}) for '{message.ServiceId}'");
             toast.Failed += (_, args) => _log.Warn($"toast failed: {args.ErrorCode}");

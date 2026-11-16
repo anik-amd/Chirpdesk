@@ -46,6 +46,10 @@ public partial class HostWindow : Window
 
         Show();
         Activate();
+
+        // Activate() alone loses to Windows' foreground lock when the request came from a
+        // toast; asking directly is the only lever a desktop app has.
+        _ = Interop.NativeMethods.SetForegroundWindow(Handle);
     }
 
     /// <summary>Hide without tearing anything down: the webviews keep running.</summary>
