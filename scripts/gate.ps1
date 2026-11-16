@@ -65,6 +65,12 @@ try {
         exit 1
     }
 
+    # The gate needs the mutex: a resident instance would make --selftest exit 3 without
+    # testing anything, and a green gate must never be produced by a run that did not happen.
+    $running = @(Get-Process Chirpdesk -ErrorAction SilentlyContinue)
+    Write-Check 'no-running-instance' ($running.Count -eq 0) "Chirpdesk processes: $($running.Count) (quit from the tray first)"
+    if ($running.Count -gt 0) { exit 1 }
+
     # 1. The headless gate. Its own PASS/FAIL lines go to logs/selftest.log and the console.
     $selfTest = Start-Process -FilePath $exe -ArgumentList '--selftest', "--soak-seconds=$SoakSeconds" -PassThru -Wait
     Write-Check 'selftest' ($selfTest.ExitCode -eq 0) "eleven checks in $(Join-Path $env:LOCALAPPDATA 'Chirpdesk\logs\selftest.log'); exit $($selfTest.ExitCode)"

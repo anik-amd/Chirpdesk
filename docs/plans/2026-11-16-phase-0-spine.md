@@ -1,5 +1,7 @@
 # Phase 0 — Spine Implementation Plan
 
+**Status:** complete, 2026-11-17. Automated gate green (`scripts/gate.ps1`), every human row ticked in §11.3, results in `docs/measurements.md`.
+
 **Goal:** prove the two risky things (hidden warm webview that still notifies, and a real Windows toast) with the smallest amount of code, behind a headless-tested core.
 
 **Architecture:** three projects — `Chirpdesk.Core` (pure logic, no WPF, fully unit-testable), `Chirpdesk` (WPF + WebView2 shell, thin), `Chirpdesk.Core.Tests` (xUnit). Phase 0 builds only the seams that later phases depend on, plus one real service (WhatsApp).
@@ -349,7 +351,7 @@ The show path for these steps is `Chirpdesk.exe --open=whatsapp`: it seeds the W
 
 ### 11.3 Checklist — all must pass, in one sitting:
 
-- [ ] Register Chirpdesk in `HKCU\...\Run` with a 20 s delay (temporary), reboot, no window appears.
+- [x] Register Chirpdesk in `HKCU\...\Run` with a 20 s delay (temporary), reboot, no window appears. Boot 01:49:09, process start 01:52:15 (20 s after login), `toolwindow=True appwindow=False visible=True rect=-32768,-32768`; the Run value was removed afterwards.
 - [x] **Sign in once** with the window shown (the documented phase-0 exception), then hide it. WhatsApp logged in via `--open=whatsapp`, window hidden with Esc afterwards.
 - [x] Notification capability for WhatsApp recorded as `native` — the real message fired `NotificationReceived` at 22:07:21, and a notification raised inside the WhatsApp page reached a toast.
 - [x] Message from a second phone toasts, titled "Chirpdesk", after the two gate defects were fixed (see `docs/measurements.md`, live gate findings).

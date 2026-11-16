@@ -44,7 +44,9 @@ switch ($Action) {
         Write-Host 'disabled'
     }
     'status' {
-        $current = (Get-ItemProperty -Path $runKey -Name $name -ErrorAction SilentlyContinue).$name
+        $item = Get-ItemProperty -Path $runKey -ErrorAction SilentlyContinue
+        $current = if ($item -and $item.PSObject.Properties.Name -contains $name) { $item.$name } else { $null }
+
         if ($current) { Write-Host "enabled: $current" } else { Write-Host 'not registered' }
     }
 }

@@ -51,6 +51,15 @@ public partial class App : Application
 
         if (!SingleInstance.TryAcquire(out _singleInstance))
         {
+            // A diagnostic run must never be mistaken for a successful one: it cannot take
+            // the mutex, so it has nothing to test. Exit with a distinct code instead of 0.
+            if (options.SelfTest || options.TestToast)
+            {
+                _log.Warn("cannot run diagnostics while another instance is running");
+                Shutdown(3);
+                return;
+            }
+
             // Reached by a toast click and by a second shortcut launch: ask the resident
             // instance to surface, then leave. Logging the outcome is the difference between
             // "the click did nothing" and "the click was delivered".

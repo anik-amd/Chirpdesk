@@ -59,10 +59,15 @@ One process, `pid 10568`, started 22:33 and hidden until 01:04 (2.53 h). Message
 
 The soak proves the socket survived 2.5 h of occlusion and that the anti-throttle flags hold past the first minute. It does not prove delivery if the machine sleeps — there is no sleep policy until phase 2 — and the machine was on AC with standby disabled.
 
+## Boot row, 2026-11-17
+
+Temporary `HKCU\…\Run` entry wrapping the exe in `timeout 20`. Boot at 01:49:09, login just before 01:52, process start 01:52:15 with exactly the hidden window (toolwindow set, appwindow clear, visible, rect `-32768,-32768`). The Run entry was removed afterwards; real autostart belongs to phase 2.
+
 `pwsh scripts/gate.ps1` runs that plus the teardown checks, which need a second process to observe:
 
 ```
 [PASS] build - dotnet build exited 0
+[PASS] no-running-instance - Chirpdesk processes: 0 (quit from the tray first)
 [PASS] selftest - eleven checks in %LOCALAPPDATA%\Chirpdesk\logs\selftest.log; exit 0
 [PASS] warm-service-quit - exit 0
 [PASS] no-orphan-webviews - webview processes using Chirpdesk profiles: 0 before, 0 after
