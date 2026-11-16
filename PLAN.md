@@ -114,6 +114,13 @@ One `CoreWebView2Environment` per service, each with `userDataFolder = %LOCALAPP
 
 Warm-up order at boot: staggered 1.5 s apart, in user-defined priority. Selecting a cold service promotes it to warm **for the session only**; persisting is an explicit command.
 
+**Two axes that must not be confused:**
+
+- **Profile** is not optional. Every service instance always owns its own isolated profile directory. Two accounts = two service entries = two profiles. There is no "shared profile" toggle except the deliberate Messenger↔Facebook pairing option.
+- **Warm at boot** is one persisted boolean per service (`warmAtBoot`). Runtime state can differ from it: a service pinned warm can be manually slept until the next launch, and a cold service cannot be asleep (it has no webview to dispose).
+
+Cold never means signed out — the profile stays on disk, so pairing/session survive indefinitely.
+
 ### 5.4 Cache trimming
 
 On sleep and every 6 h, delete per profile: `Cache`, `Code Cache`, `GPUCache`, `DawnCache`, `ShaderCache`. **Keep** `Cookies`, `Local Storage`, `IndexedDB`, `Service Worker` — that's the session and the push registration. See §8.
@@ -254,7 +261,9 @@ Ordering: unread first, then recency, then fuzzy score. `>` restricts to command
 
 ### 10.2 Commands
 
-`> theme dark` · `> theme light` · `> theme system` · `> theme <name>` · `> settings` · `> add service` · `> edit service` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
+`> theme dark` · `> theme light` · `> theme system` · `> theme <name>` · `> settings` · `> add service` · `> edit service` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> warm at boot <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
+
+`> warm at boot <service>` toggles the persisted pin and the Settings switch reads/writes the same field; a dot on the service row marks "pinned warm" while the badge keeps showing live runtime state (`warm` / `asleep` / `cold`).
 
 **Theme preview:** `> theme` lists schemes; arrowing applies live, `Enter` commits, `Esc` restores the previous scheme. This is where the colour system shows off.
 
@@ -300,7 +309,7 @@ Settings stays a small window (URLs, icons, regexes, scheme files, storage, auto
 
 Add flow: paste URL → loads once → favicon + title captured → saved **cold** → "warm at boot" offered. Sign-in popups (`window.open`) open as child windows in the same profile. Known embedded-browser walls (Google sign-in, some Cloudflare challenges) are detected and replaced with a "sign in via your browser, then come back" hint.
 
-Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold.
+Defaults: WhatsApp, Messenger, Telegram warm; Facebook cold. **Newly added services start cold**, with the `warm at boot` switch offered immediately after first sign-in.
 
 ---
 
