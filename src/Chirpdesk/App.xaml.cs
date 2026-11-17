@@ -32,7 +32,7 @@ public partial class App : Application
     private SingleInstance? _singleInstance;
     private HostWindow? _host;
     private TaskbarIcon? _tray;
-    private ServiceRuntime? _service;
+    private ServiceRegistry? _registry;
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
 
@@ -42,6 +42,7 @@ public partial class App : Application
 
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
+        _registry = new ServiceRegistry(_log);
         ShippedDefinitions.Load(_log);
 
         // Windows starts this process to answer a toast click that has left the screen.
@@ -127,7 +128,7 @@ public partial class App : Application
 
         try
         {
-            _service?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _registry?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
         catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
         {
@@ -206,9 +207,9 @@ public partial class App : Application
             new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
             DateTimeOffset.UtcNow,
             dark);
-        _service = service;
-
         await service.ApplyThemeAsync(dark);
+        await _registry!.AddAsync(service);
+        _registry.Activate(service.InstanceId);
 
         if (show)
         {
@@ -408,9 +409,9 @@ public partial class App : Application
         var resolved = dark ? "dark" : "light";
         _log?.Info($"theme: {mode} -> {resolved}");
 
-        if (_service is not null)
+        if (_registry?.Active is { } active)
         {
-            _ = _service.ApplyThemeAsync(dark);
+            _ = active.ApplyThemeAsync(dark);
         }
     }
 
@@ -422,16 +423,16 @@ public partial class App : Application
         }
 
         var wasVisible = _host.IsVisible;
-        _service?.Activate();
+        _registry?.Active?.Activate();
         var foreground = _host.ShowForUser();
 
         _log?.Info($"window shown: wasVisible={wasVisible} foreground={foreground} visible={_host.IsVisible}");
     }
 
     /// <summary>
-    /// Shows the window for the service a toast came from. Phase 0 has one warm service; the
-    /// id is still read and logged, so an activation for a service that is not warm is never
-    /// silently attributed to the wrong one, and phase 1's registry has a seam to fill.
+    /// Shows the window for the service a toast came from. The registry switches to it when it
+    /// is warm; a cold one is logged rather than silently replaced by whatever happens to be
+    /// active, and the Command Bar will start it rather than show the wrong page.
     /// </summary>
     private void ShowHostFor(string? serviceId)
     {
@@ -443,13 +444,13 @@ public partial class App : Application
             return;
         }
 
-        if (_service is not null && !string.Equals(id, _service.InstanceId, StringComparison.OrdinalIgnoreCase))
+        if (_registry?.Activate(id) == true)
         {
-            _log?.Info($"activation for '{id}', which is not warm; showing '{_service.InstanceId}'");
+            _log?.Info($"activation for '{id}'");
         }
         else
         {
-            _log?.Info($"activation for '{id}'");
+            _log?.Info($"activation for '{id}', which is not warm; showing the active service");
         }
 
         ShowHost();
@@ -457,7 +458,7 @@ public partial class App : Application
 
     private void HideHost()
     {
-        _service?.Park();
+        _registry?.ParkActive();
         _host?.HideToBackground();
     }
 
