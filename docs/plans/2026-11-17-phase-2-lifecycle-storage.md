@@ -63,6 +63,8 @@ Normal startup warms every instance with `warmAtBoot`, staggered 1.5 s apart in 
 
 ## Task 4: Storage scan and cache trimming (TDD)
 
+**Status:** complete (2026-11-17). `PathGuard` pins deletes inside the profiles root; `TrimPlanner` selects cache bytes only, skips warm profiles, applies per-profile excess then the oldest disposed profiles for the global budget. App `ProfileScanner` reports session Data vs Cache separately; `CacheTrimmer` deletes only the five cache folder names. UI/scheduling hooks land with the settings window and cleaner panel.
+
 **Files:**
 - Create: `src/Chirpdesk.Core/Storage/ProfileUsage.cs`, `TrimPlanner.cs`, `PathGuard.cs`
 - Create: `src/Chirpdesk/Storage/ProfileScanner.cs`, `CacheTrimmer.cs`
