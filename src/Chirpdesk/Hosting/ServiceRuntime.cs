@@ -439,6 +439,39 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     }
 
     /// <summary>
+    /// Re-applies the host size after a hidden window is shown. The controller otherwise keeps
+    /// the 320×240 parked bounds until some unrelated resize arrives, which shows the page as a
+    /// small card in the top-left while the rest of the window is blank.
+    /// </summary>
+    public void SyncToHost()
+    {
+        if (_view.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        _host.UpdateLayout();
+
+        var width = _view.ActualWidth;
+        var height = _view.ActualHeight;
+        if (width < 1 || height < 1)
+        {
+            return;
+        }
+
+        // Nudging the explicit size is what makes the WebView2 controller recompute its bounds.
+        _view.Width = width;
+        _view.Height = height;
+        _host.UpdateLayout();
+
+        _view.Width = double.NaN;
+        _view.Height = double.NaN;
+        _host.UpdateLayout();
+
+        _log.Info($"webview '{_instance.InstanceId}' synced to {width:0}x{height:0}");
+    }
+
+    /// <summary>
     /// Warm but not on screen: 320×240 keeps the renderer's composition target alive until
     /// the next <see cref="Activate"/> puts this view back in the window.
     /// </summary>

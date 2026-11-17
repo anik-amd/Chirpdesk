@@ -9,7 +9,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,18">
+        <Grid Grid.Row="0" Margin="0,0,0,30">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -33,15 +33,15 @@
             <StackPanel>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Installed" Style="{StaticResource Heading}" />
+                        <TextBlock Text="Installed" Style="{StaticResource Heading}" Margin="0,0,0,12" />
                         <WrapPanel x:Name="PluginsPanel" Orientation="Horizontal" />
                     </StackPanel>
                 </Border>
 
                 <Border Style="{StaticResource Card}" Margin="0,20,0,0">
                     <StackPanel>
-                        <TextBlock Text="Browse" Style="{StaticResource Heading}" />
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Browse" Style="{StaticResource Heading}" Margin="0,0,0,12" />
+                        <StackPanel Orientation="Horizontal">
                             <Button Content="Open plugins folder" Style="{StaticResource GhostButton}" Click="OnOpenPluginsFolder" />
                         </StackPanel>
                     </StackPanel>

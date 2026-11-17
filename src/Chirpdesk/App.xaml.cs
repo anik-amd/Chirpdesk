@@ -1438,6 +1438,14 @@ public partial class App : Application
         UpdateBusyFor(_registry?.Active);
         _registry?.Active?.FocusPage();
 
+        if (_registry?.Active is { } activeService)
+        {
+            activeService.SyncToHost();
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.Loaded,
+                new Action(activeService.SyncToHost));
+        }
+
         _log?.Info($"window shown: wasVisible={wasVisible} foreground={foreground} visible={_host.IsVisible}");
     }
 

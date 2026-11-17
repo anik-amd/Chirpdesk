@@ -63,6 +63,15 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Segment" Property="Background" Value="{DynamicResource CdControlHover}" />
                             </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsChecked" Value="True" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource CdAccent}" />
+                                <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource CdAccent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource CdOnAccent}" />
+                            </MultiTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -112,6 +121,7 @@
 
         <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource Heading}">
             <Setter Property="FontSize" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,12" />
         </Style>
 
         <Style x:Key="FieldLabel" TargetType="TextBlock">
@@ -128,7 +138,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,22">
+        <Grid Grid.Row="0" Margin="0,0,0,30">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -159,7 +169,7 @@
 
                 <TextBlock Text="Appearance" Style="{StaticResource SectionTitle}" />
 
-                <Border Style="{StaticResource CdPanel}" Margin="0,10,0,0">
+                <Border Style="{StaticResource CdPanel}">
                     <StackPanel>
                         <TextBlock Text="Mode" Style="{StaticResource FieldLabel}" />
                         <WrapPanel Margin="0,8,0,0">
