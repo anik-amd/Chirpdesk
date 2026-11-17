@@ -46,3 +46,15 @@ whether its site wants darkening (`pageDarkMode: off | auto`), and an instance m
 with `on` or `off`. Page darkening always follows the app theme: when Chirpdesk is light, no page
 is inverted, whatever the per-service policy says.
 
+## Amendment 2026-11-18 - Catppuccin palettes return as a theme plugin
+
+The product owner asked for colour families back, starting with Catppuccin. The bundled
+`catppuccin` theme plugin carries four flavours in `themes.json`: Latte (light), and Frappé,
+Macchiato and Mocha (dark). Light and dark are chosen separately in Settings, so a user can run
+Latte by day and Mocha at night without switching mode by hand; `system` still follows Windows.
+
+The mechanics stay data-only: a theme pack can supply flavour names, modes and swatches, and the
+host maps the known Catppuccin ids to token dictionaries. No plugin code runs in-process. If the
+plugin is deactivated, the compiled `TokensLight`/`TokensDark` baseline is used, so the app never
+loses its chrome. The `page-dark` capability plugin is unchanged and independent of the palette.
+

@@ -238,8 +238,12 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// <summary>The persisted page-dark policy: <c>on</c>, <c>auto</c>, <c>off</c> or unset.</summary>
     public string? PageDarkMode => _instance.PageDarkMode;
 
-    /// <summary>Hides the page while the Command Bar is open. Not disposed; state survives.</summary>
-    public void CollapseForCommandBar() => _view.Visibility = Visibility.Collapsed;
+    /// <summary>
+    /// Hides the page while the Command Bar is open without changing its layout bounds.
+    /// Collapsing would resize the WebView2 to zero and force the site to reflow; Hidden keeps
+    /// the page still, so the captured backdrop and the restored page are the same frame.
+    /// </summary>
+    public void CollapseForCommandBar() => _view.Visibility = Visibility.Hidden;
 
     public void RestoreFromCommandBar()
     {

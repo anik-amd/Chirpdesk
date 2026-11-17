@@ -48,6 +48,7 @@ public partial class App : Application
     private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
     private IReadOnlyList<InstalledPlugin> _installedPlugins = Array.Empty<InstalledPlugin>();
     private IReadOnlyList<FilterPack> _filterPacks = Array.Empty<FilterPack>();
+    private IReadOnlyList<ThemePack> _themePacks = Array.Empty<ThemePack>();
     private SettingsPage? _settingsPage;
     private PluginsPage? _pluginsPage;
     private OnboardingPage? _onboarding;
@@ -78,7 +79,8 @@ public partial class App : Application
         _panels = PluginCatalog.LoadPanels(_log);
         _installedPlugins = PluginCatalog.LoadInstalled(_log);
         _filterPacks = PluginCatalog.LoadFilters(_log);
-        _log.Info($"tool panels: {_panels.Count} loaded; plugins: {_installedPlugins.Count} installed; filter packs: {_filterPacks.Count}");
+        _themePacks = PluginCatalog.LoadThemes(_log);
+        _log.Info($"tool panels: {_panels.Count} loaded; plugins: {_installedPlugins.Count} installed; filter packs: {_filterPacks.Count}; theme packs: {_themePacks.Count}");
         LinkLegacyInstances();
 
         // Windows starts this process to answer a toast click that has left the screen.
@@ -122,6 +124,16 @@ public partial class App : Application
         _host.Show();
         _host.KeyDown += OnHostKeyDown;
         _host.Closing += OnHostClosing;
+        _host.HideToTrayRequested += (_, _) => HideHost();
+        _host.RailServiceSelected += (_, instanceId) =>
+        {
+            ClosePage();
+            _ = ActivateServiceAsync(instanceId);
+        };
+        _host.RailSearchRequested += (_, _) => _ = OpenSearchBarAsync();
+        _host.RailAddRequested += (_, _) => _ = OpenSearchBarAsync();
+        _host.RailPluginsRequested += (_, _) => OpenPlugins();
+        _host.RailSettingsRequested += (_, _) => OpenSettings();
 
         if (options.SelfTest)
         {
@@ -144,13 +156,37 @@ public partial class App : Application
         _barWatcher = new ModifierWatcher(Dispatcher);
         _barWatcher.ControlReleased += OnControlReleased;
         _host.PreviewKeyDown += OnHostPreviewKeyDown;
-        _registry.ActiveChanged += (_, _) => UpdateBusyFor(_registry.Active);
+        _registry.ActiveChanged += (_, _) =>
+        {
+            UpdateBusyFor(_registry.Active);
+            RefreshServiceRail();
+        };
+        RefreshServiceRail();
 
         InitializeTheme();
         SyncAutostartMirror();
         UpdateTrayStatus();
 
         _log.Info("started");
+
+        if (!string.IsNullOrEmpty(options.Page))
+        {
+            if (options.Page.Equals("plugins", StringComparison.OrdinalIgnoreCase))
+            {
+                OpenPlugins();
+            }
+            else
+            {
+                OpenSettings();
+            }
+
+            if (options.QuitAfter is { } pageDelay)
+            {
+                _ = QuitAfterAsync(pageDelay);
+            }
+
+            return;
+        }
 
         if (options.WarmAll)
         {
@@ -296,6 +332,7 @@ public partial class App : Application
         await service.ApplyThemeAsync(dark);
         await _registry!.AddAsync(service);
         _registry.Activate(service.InstanceId);
+        RefreshServiceRail();
 
         if (show)
         {
@@ -536,7 +573,6 @@ public partial class App : Application
                 && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
             {
                 e.Handled = true;
-                ClosePage();
                 _ = OpenSearchBarAsync();
                 return;
             }
@@ -775,8 +811,13 @@ public partial class App : Application
             RenderCommandBar();
 
             // The webview is an HWND and would paint over the bar until it is collapsed; the
-            // captured frame keeps the site visible behind the scrim.
-            _registry.Active?.CollapseForCommandBar();
+            // captured frame keeps the site visible behind the scrim. A page is WPF and stays
+            // exactly where it is, so the palette opens over it.
+            if (_host.IsPageOpen != true)
+            {
+                _registry.Active?.CollapseForCommandBar();
+            }
+
             _host.ShowCommandBar(backdrop);
             _host.Focus();
             _barWatcher?.Start();
@@ -815,8 +856,13 @@ public partial class App : Application
             _barState = BarState.ForSearch();
             UpdateSearchResults(keepSelected: null);
 
-            // Same airspace rule as cycle mode: the webview would paint over the bar.
-            _registry.Active?.CollapseForCommandBar();
+            // Same airspace rule as cycle mode, but a Settings or Plugins page stays visible
+            // underneath: only the webview is collapsed when it is the surface being shown.
+            if (_host.IsPageOpen != true)
+            {
+                _registry.Active?.CollapseForCommandBar();
+            }
+
             _host.ShowCommandBar(backdrop);
             _host.Focus();
             _bar.FocusQuery();
@@ -1085,15 +1131,16 @@ public partial class App : Application
 
         if (mode == BarMode.Search)
         {
+            ClosePage();
             _ = ActivateServiceAsync(id);
             _log?.Info($"command bar search committed '{id}' via Ctrl+{index + 1}");
             return;
         }
 
+        ClosePage();
         var switched = _registry?.Activate(id) == true;
         _registry?.Active?.FocusPage();
-        _log?.Info($"command bar committed '{id}' via Ctrl+{index + 1}: switched={switched}");
-    }
+        _log?.Info($"command bar committed '{id}' via Ctrl+{index + 1}: switched={switched}");    }
 
     private void CommitSearchSelection()
     {        if (_barState is null)
@@ -1158,6 +1205,7 @@ public partial class App : Application
             return;
         }
 
+        ClosePage();
         _ = ActivateServiceAsync(selected);
         _log?.Info($"command bar search committed '{selected}'");
     }
@@ -1253,7 +1301,7 @@ public partial class App : Application
 
         _host?.HideCommandBar();
 
-        if (restore)
+        if (restore && _host?.IsPageOpen != true)
         {
             _registry?.Active?.RestoreFromCommandBar();
         }
@@ -1269,6 +1317,13 @@ public partial class App : Application
     {
         if (_quitting)
         {
+            return;
+        }
+
+        if (_host?.CloseToTray == false)
+        {
+            e.Cancel = true;
+            Quit();
             return;
         }
 
@@ -1294,6 +1349,13 @@ public partial class App : Application
             var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
             _themeMode = ThemeDecision.Parse(settings.Theme);
             ServiceRuntime.PageDarkeningEnabled = PluginState.IsEnabled(settings, PluginState.PageDarkId);
+
+            if (_host is not null)
+            {
+                _host.MinimizeToTray = settings.MinimizeToTray;
+                _host.CloseToTray = settings.CloseToTray;
+                _host.SetRailMode(settings.RailMode);
+            }
         }
         catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
         {
@@ -1316,7 +1378,24 @@ public partial class App : Application
     private void ApplyTheme()
     {
         var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
-        UiTheme.Apply(dark);
+
+        string? lightTheme = null;
+        string? darkTheme = null;
+        var catppuccin = false;
+
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            lightTheme = settings.LightTheme;
+            darkTheme = settings.DarkTheme;
+            catppuccin = PluginState.IsEnabled(settings, PluginState.CatppuccinId);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not read the palette selection: {ex.Message}");
+        }
+
+        UiTheme.Apply(dark, lightTheme, darkTheme, catppuccin);
         _host?.SetDark(dark);
         _settingsPage?.SetDark(dark);
         _pluginsPage?.Reload();
@@ -1419,6 +1498,7 @@ public partial class App : Application
         }
 
         _log?.Info($"closed tab '{instanceId}'");
+        RefreshServiceRail();
 
         if (_registry.Active is not null)
         {
@@ -1521,6 +1601,53 @@ public partial class App : Application
     private void UpdateBusyFor(ServiceRuntime? service) =>
         _host?.SetBusy(service?.IsNavigating == true);
 
+    /// <summary>Rebuilds the rail from the warm instances; multi-profile entries get a 1/2 badge.</summary>
+    private void RefreshServiceRail()
+    {
+        if (_host is null || _registry is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            var warm = settings.Services
+                .Where(instance => _registry.IsWarm(instance.InstanceId))
+                .OrderBy(instance => instance.Order)
+                .ToList();
+
+            var keys = warm.Select(instance => instance.DefinitionId ?? instance.InstanceId).ToList();
+            var counts = keys
+                .GroupBy(key => key, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
+            var ordinals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var entries = new List<HostWindow.ServiceRailEntry>();
+
+            foreach (var instance in warm)
+            {
+                var key = instance.DefinitionId ?? instance.InstanceId;
+                var ordinal = ordinals.TryGetValue(key, out var seen) ? seen + 1 : 1;
+                ordinals[key] = ordinal;
+
+                entries.Add(new HostWindow.ServiceRailEntry(
+                    instance.InstanceId,
+                    instance.Name,
+                    instance.DefinitionId,
+                    _catalog?.Find(instance.DefinitionId)?.Accent,
+                    ordinal,
+                    counts[key] > 1));
+            }
+
+            _host.SetServiceRail(entries, _registry.Active?.InstanceId);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not refresh the service rail: {ex.Message}");
+        }
+    }
+
     private void UpdateTrayStatus()
     {
         if (_tray is null)
@@ -1621,6 +1748,8 @@ public partial class App : Application
                 _catalog ?? new ServiceCatalog([]),
                 _panels,
                 _registry,
+                _host,
+                _themePacks.SelectMany(pack => pack.Flavors).ToList(),
                 _log,
                 ApplyTheme,
                 UpdateTrayStatus,
@@ -1827,6 +1956,7 @@ public partial class App : Application
         }
 
         store.Save(settings);
+        RefreshServiceRail();
         _log.Info($"plugin '{definition.Id}' turned off; sessions preserved");
     }
 
@@ -1927,6 +2057,11 @@ public partial class App : Application
                     await runtime.ApplyThemeAsync(dark);
                 }
             }
+        }
+
+        if (string.Equals(pluginId, PluginState.CatppuccinId, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyTheme();
         }
 
         // A filter plugin owns the packs; activating or deactivating it must reach every warm

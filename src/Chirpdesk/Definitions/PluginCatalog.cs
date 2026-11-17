@@ -2,6 +2,7 @@ using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Plugins;
+using Chirpdesk.Core.Theming;
 
 namespace Chirpdesk.Definitions;
 
@@ -41,6 +42,14 @@ internal static class PluginCatalog
 
     public static IReadOnlyList<FilterPack> LoadFilters(ILog log) =>
         PluginLoader.LoadFilters(
+            [
+                new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true),
+                new PluginScanRoot(AppPaths.UserPluginsDirectory, Bundled: false),
+            ],
+            log);
+
+    public static IReadOnlyList<ThemePack> LoadThemes(ILog log) =>
+        PluginLoader.LoadThemes(
             [
                 new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true),
                 new PluginScanRoot(AppPaths.UserPluginsDirectory, Bundled: false),

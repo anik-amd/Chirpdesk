@@ -12,7 +12,19 @@ internal static class UiTheme
 {
     private static readonly Uri Light = new("pack://application:,,,/Chirpdesk;component/Ui/TokensLight.xaml");
     private static readonly Uri Dark = new("pack://application:,,,/Chirpdesk;component/Ui/TokensDark.xaml");
+
+    private static readonly Dictionary<string, Uri> Catppuccin = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["latte"] = new("pack://application:,,,/Chirpdesk;component/Ui/CatppuccinLatte.xaml"),
+        ["frappe"] = new("pack://application:,,,/Chirpdesk;component/Ui/CatppuccinFrappe.xaml"),
+        ["macchiato"] = new("pack://application:,,,/Chirpdesk;component/Ui/CatppuccinMacchiato.xaml"),
+        ["mocha"] = new("pack://application:,,,/Chirpdesk;component/Ui/CatppuccinMocha.xaml"),
+    };
+
     private static bool _dark;
+    private static string? _lightFlavor;
+    private static string? _darkFlavor;
+    private static bool _useCatppuccin;
 
     static UiTheme()
     {
@@ -20,18 +32,40 @@ internal static class UiTheme
     }
 
     /// <summary>The last requested end; called again when high contrast flips.</summary>
-    public static void Apply(bool dark)
+    public static void Apply(
+        bool dark,
+        string? lightFlavor = null,
+        string? darkFlavor = null,
+        bool useCatppuccin = false)
     {
         _dark = dark;
+        _lightFlavor = lightFlavor;
+        _darkFlavor = darkFlavor;
+        _useCatppuccin = useCatppuccin;
 
         if (Application.Current is null)
         {
             return;
         }
 
-        var tokens = SystemParameters.HighContrast
-            ? HighContrastTokens()
-            : new ResourceDictionary { Source = dark ? Dark : Light };
+        ResourceDictionary tokens;
+
+        if (SystemParameters.HighContrast)
+        {
+            tokens = HighContrastTokens();
+        }
+        else
+        {
+            var flavor = dark ? darkFlavor : lightFlavor;
+            if (useCatppuccin && flavor is not null && Catppuccin.TryGetValue(flavor, out var source))
+            {
+                tokens = new ResourceDictionary { Source = source };
+            }
+            else
+            {
+                tokens = new ResourceDictionary { Source = dark ? Dark : Light };
+            }
+        }
 
         var dictionaries = Application.Current.Resources.MergedDictionaries;
 
@@ -58,7 +92,7 @@ internal static class UiTheme
             return;
         }
 
-        app.Dispatcher.BeginInvoke(() => Apply(_dark));
+        app.Dispatcher.BeginInvoke(() => Apply(_dark, _lightFlavor, _darkFlavor, _useCatppuccin));
     }
 
     /// <summary>
@@ -79,6 +113,7 @@ internal static class UiTheme
         ["CdOnAccent"] = SystemColors.HighlightTextBrush,
 
         ["CdPalette"] = SystemColors.WindowBrush,
+        ["CdPaletteSurface"] = SystemColors.WindowBrush,
         ["CdPaletteRaised"] = SystemColors.WindowBrush,
         ["CdPaletteText"] = SystemColors.WindowTextBrush,
         ["CdPaletteMuted"] = SystemColors.GrayTextBrush,

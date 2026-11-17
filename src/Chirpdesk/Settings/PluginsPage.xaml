@@ -24,10 +24,6 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource CdText}" />
                 </StackPanel>
-                <TextBlock Text="Plugins extend the desk: service definitions, filter packs, themes and bundled tools. Activate one to add what it provides."
-                           Style="{StaticResource MutedText}"
-                           Margin="0,5,0,0"
-                           TextWrapping="Wrap" />
             </StackPanel>
 
             <Button Grid.Column="1" Content="Back" Style="{StaticResource GhostButton}" VerticalAlignment="Top" Click="OnBack" />
@@ -38,10 +34,6 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Installed" Style="{StaticResource Heading}" />
-                        <TextBlock Text="Service plugins add their site; filter and theme plugins change how every tab behaves. Bundled plugins are active by default, and a plugin can be deactivated without signing out."
-                                   Style="{StaticResource MutedText}"
-                                   Margin="0,4,0,10"
-                                   TextWrapping="Wrap" />
                         <WrapPanel x:Name="PluginsPanel" Orientation="Horizontal" />
                     </StackPanel>
                 </Border>
@@ -49,16 +41,8 @@
                 <Border Style="{StaticResource Card}" Margin="0,20,0,0">
                     <StackPanel>
                         <TextBlock Text="Browse" Style="{StaticResource Heading}" />
-                        <TextBlock Text="A signed repository with install, update and signatures arrives in phase 5. It will carry service definitions, filter packs, themes and tools; user scripts are not part of v1."
-                                   Style="{StaticResource MutedText}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,4,0,12" />
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button Content="Open plugins folder" Style="{StaticResource GhostButton}" Click="OnOpenPluginsFolder" />
-                            <TextBlock Text="Install and update are not implemented yet."
-                                       Style="{StaticResource MutedText}"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,0,0" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

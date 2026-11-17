@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -9,6 +10,7 @@ using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Storage;
+using Chirpdesk.Core.Theming;
 using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Storage;
@@ -22,12 +24,12 @@ namespace Chirpdesk.Settings;
 /// </summary>
 public partial class SettingsPage : UserControl
 {
-    private static readonly string[] DndLabels = ["Off", "For 30 minutes", "For 1 hour", "Until tomorrow 08:00"];
-
     private readonly SettingsStore _store;
     private readonly ServiceCatalog _catalog;
     private readonly IReadOnlyList<PanelDefinition> _panels;
     private readonly ServiceRegistry _registry;
+    private readonly HostWindow _host;
+    private readonly IReadOnlyList<ThemeFlavor> _themeFlavors;
     private readonly ILog _log;
     private readonly Action _applyTheme;
     private readonly Action? _stateChanged;
@@ -42,6 +44,8 @@ public partial class SettingsPage : UserControl
         ServiceCatalog catalog,
         IReadOnlyList<PanelDefinition> panels,
         ServiceRegistry registry,
+        HostWindow host,
+        IReadOnlyList<ThemeFlavor> themeFlavors,
         ILog log,
         Action applyTheme,
         Action? stateChanged,
@@ -52,15 +56,16 @@ public partial class SettingsPage : UserControl
         _catalog = catalog;
         _panels = panels;
         _registry = registry;
+        _host = host;
+        _themeFlavors = themeFlavors;
         _log = log;
         _applyTheme = applyTheme;
         _stateChanged = stateChanged;
         _back = back;
         _settings = store.Load();
 
-        PageIcon.Content = UiIcons.Create("settings", Token("CdAccent"), 28);
-        ThemeBox.ItemsSource = new[] { "system", "light", "dark" };
-        DndBox.ItemsSource = DndLabels;
+        PageIcon.Content = UiIcons.Create("settings", Token("CdAccent"), 24);
+        RenderThemes();
 
         SetDark(dark: false);
         Reload();
@@ -88,11 +93,116 @@ public partial class SettingsPage : UserControl
     private System.Windows.Media.Brush Token(string key) =>
         TryFindResource(key) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Black;
 
+    private void RenderThemes()
+    {
+        LightSchemesPanel.Children.Clear();
+        DarkSchemesPanel.Children.Clear();
+
+        foreach (var flavor in _themeFlavors.OrderBy(flavor => flavor.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var card = new RadioButton
+            {
+                GroupName = string.Equals(flavor.Mode, "light", StringComparison.Ordinal) ? "LightFlavor" : "DarkFlavor",
+                Style = (Style)FindResource("ChoiceCard"),
+                Tag = flavor,
+            };
+            AutomationProperties.SetName(card, flavor.Name);
+
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(new Border
+            {
+                Width = 28,
+                Height = 28,
+                CornerRadius = new CornerRadius(7),
+                Background = BrushFromHex(flavor.Swatch),
+                BorderBrush = Token("CdRule"),
+                BorderThickness = new Thickness(1),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            content.Children.Add(new TextBlock
+            {
+                Text = flavor.Name,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Token("CdText"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(9, 0, 0, 0),
+            });
+
+            card.Content = content;
+            card.Checked += OnFlavorChoice;
+
+            if (string.Equals(flavor.Mode, "light", StringComparison.Ordinal))
+            {
+                LightSchemesPanel.Children.Add(card);
+            }
+            else
+            {
+                DarkSchemesPanel.Children.Add(card);
+            }
+        }
+    }
+
+    private static SolidColorBrush BrushFromHex(string hex)
+    {
+        try
+        {
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        }
+        catch (FormatException)
+        {
+            return Brushes.Transparent;
+        }
+    }
+
+    private void OnFlavorChoice(object sender, RoutedEventArgs e)
+    {
+        if (_loading || sender is not RadioButton { Tag: ThemeFlavor flavor })
+        {
+            return;
+        }
+
+        if (string.Equals(flavor.Mode, "light", StringComparison.Ordinal))
+        {
+            _settings.LightTheme = flavor.Id;
+        }
+        else
+        {
+            _settings.DarkTheme = flavor.Id;
+        }
+
+        Save();
+        _applyTheme();
+    }
+
     private void LoadControls()
     {
         _loading = true;
-        ThemeBox.SelectedItem = _settings.Theme;
+
+        ThemeSystem.IsChecked = !string.Equals(_settings.Theme, "light", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(_settings.Theme, "dark", StringComparison.OrdinalIgnoreCase);
+        ThemeLight.IsChecked = string.Equals(_settings.Theme, "light", StringComparison.OrdinalIgnoreCase);
+        ThemeDark.IsChecked = string.Equals(_settings.Theme, "dark", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var card in LightSchemesPanel.Children.OfType<RadioButton>())
+        {
+            card.IsChecked = card.Tag is ThemeFlavor flavor
+                && string.Equals(flavor.Id, _settings.LightTheme, StringComparison.OrdinalIgnoreCase);
+        }
+
+        foreach (var card in DarkSchemesPanel.Children.OfType<RadioButton>())
+        {
+            card.IsChecked = card.Tag is ThemeFlavor flavor
+                && string.Equals(flavor.Id, _settings.DarkTheme, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var catppuccin = PluginState.IsEnabled(_settings, PluginState.CatppuccinId);
+        LightSchemesPanel.IsEnabled = catppuccin;
+        DarkSchemesPanel.IsEnabled = catppuccin;
+
         AutostartBox.IsChecked = _settings.Autostart;
+        MinimizeToTrayBox.IsChecked = _settings.MinimizeToTray;
+        CloseToTrayBox.IsChecked = _settings.CloseToTray;
 
         var dndIndex = 0;
         if (_settings.DndUntil is { } dnd && dnd > DateTimeOffset.UtcNow)
@@ -101,7 +211,24 @@ public partial class SettingsPage : UserControl
             dndIndex = minutes <= 31 ? 1 : minutes <= 61 ? 2 : 3;
         }
 
-        DndBox.SelectedIndex = dndIndex;
+        DndOff.IsChecked = dndIndex == 0;
+        Dnd30.IsChecked = dndIndex == 1;
+        Dnd60.IsChecked = dndIndex == 2;
+        DndTomorrow.IsChecked = dndIndex == 3;
+
+        DndStatus.Text = _settings.DndUntil is { } until && until > DateTimeOffset.UtcNow
+            ? $"Toasts are quiet until {until.ToLocalTime():ddd HH:mm}. Unread still counts."
+            : "Toasts are on. Notifications still appear in Action Center while quiet.";
+
+        _host.MinimizeToTray = _settings.MinimizeToTray;
+        _host.CloseToTray = _settings.CloseToTray;
+
+        RailAlways.IsChecked = !string.Equals(_settings.RailMode, "hover", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(_settings.RailMode, "hidden", StringComparison.OrdinalIgnoreCase);
+        RailHover.IsChecked = string.Equals(_settings.RailMode, "hover", StringComparison.OrdinalIgnoreCase);
+        RailHidden.IsChecked = string.Equals(_settings.RailMode, "hidden", StringComparison.OrdinalIgnoreCase);
+        _host.SetRailMode(_settings.RailMode);
+
         _loading = false;
     }
 
@@ -109,29 +236,36 @@ public partial class SettingsPage : UserControl
     {
         ServicesPanel.Children.Clear();
 
-        foreach (var instance in _settings.Services.OrderBy(service => service.Order))
-        {
-            var state = _registry.StateOf(instance.InstanceId);
-            var row = new Grid { Margin = new Thickness(0, 3, 0, 3) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var ordered = _settings.Services.OrderBy(service => service.Order).ToList();
 
-            var label = new Grid();
-            label.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            label.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var instance = ordered[index];
+            var state = _registry.StateOf(instance.InstanceId);
+
+            var block = new StackPanel { Margin = new Thickness(0, 8, 0, 8) };
+
+            var header = new Grid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var badge = ServiceIcons.Create(
                 instance.DefinitionId,
                 instance.Name,
                 _catalog?.Find(instance.DefinitionId)?.Accent);
             Grid.SetColumn(badge, 0);
-            label.Children.Add(badge);
+            header.Children.Add(badge);
 
-            var names = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(10, 0, 0, 0) };
-            names.Children.Add(new TextBlock { Text = instance.Name, FontSize = 13 });
+            var names = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(12, 0, 12, 0) };
+            names.Children.Add(new TextBlock
+            {
+                Text = instance.Name,
+                FontFamily = (FontFamily)FindResource("CdBodyFont"),
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Token("CdText"),
+            });
 
             var blockingOff = string.Equals(instance.Blocking, "off", StringComparison.OrdinalIgnoreCase);
             var blocked = blockingOff ? 0 : _registry.Find(instance.InstanceId)?.BlockedRequests ?? 0;
@@ -143,46 +277,62 @@ public partial class SettingsPage : UserControl
 
             names.Children.Add(new TextBlock
             {
-                Text = $"{instance.DefinitionId ?? "legacy"} · {state.ToString().ToLowerInvariant()} · {blockingText}",
+                Text = $"{state.ToString().ToLowerInvariant()} · {blockingText} · {instance.DefinitionId ?? "legacy"}",
+                FontFamily = (FontFamily)FindResource("CdBodyFont"),
                 FontSize = 11,
-                Opacity = 0.65,
+                Foreground = Token("CdTextMuted"),
+                Margin = new Thickness(0, 2, 0, 0),
             });
             Grid.SetColumn(names, 1);
-            label.Children.Add(names);
+            header.Children.Add(names);
 
-            Grid.SetColumn(label, 0);
-            row.Children.Add(label);
+            var remove = new Button
+            {
+                Content = "Remove",
+                Width = 76,
+                Style = (Style)FindResource("GhostButton"),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            remove.Click += async (_, _) => await RemoveInstanceAsync(instance);
+            Grid.SetColumn(remove, 2);
+            header.Children.Add(remove);
 
+            block.Children.Add(header);
+
+            var actions = new WrapPanel { Margin = new Thickness(34, 6, 0, 0) };
             var warm = new CheckBox
             {
                 Content = "Warm at boot",
                 IsChecked = instance.WarmAtBoot,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 8, 0),
+                Style = (Style)FindResource("CdSwitch"),
+                Margin = new Thickness(0, 0, 18, 0),
             };
             warm.Checked += (_, _) => SaveInstance(instance, i => i.WarmAtBoot = true);
             warm.Unchecked += (_, _) => SaveInstance(instance, i => i.WarmAtBoot = false);
-            Grid.SetColumn(warm, 1);
-            row.Children.Add(warm);
+            actions.Children.Add(warm);
 
             var mute = new CheckBox
             {
                 Content = "Mute",
                 IsChecked = instance.Mute,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
+                Style = (Style)FindResource("CdSwitch"),
             };
             mute.Checked += (_, _) => SaveInstance(instance, i => i.Mute = true);
             mute.Unchecked += (_, _) => SaveInstance(instance, i => i.Mute = false);
-            Grid.SetColumn(mute, 2);
-            row.Children.Add(mute);
+            actions.Children.Add(mute);
 
-            var remove = new Button { Content = "Remove", Width = 76, Style = (Style)FindResource("GhostButton") };
-            remove.Click += async (_, _) => await RemoveInstanceAsync(instance);
-            Grid.SetColumn(remove, 3);
-            row.Children.Add(remove);
+            block.Children.Add(actions);
+            ServicesPanel.Children.Add(block);
 
-            ServicesPanel.Children.Add(row);
+            if (index < ordered.Count - 1)
+            {
+                ServicesPanel.Children.Add(new Border
+                {
+                    Height = 1,
+                    Background = Token("CdRule"),
+                    Margin = new Thickness(0, 2, 0, 2),
+                });
+            }
         }
 
         if (_settings.Services.Count == 0)
@@ -190,8 +340,10 @@ public partial class SettingsPage : UserControl
             ServicesPanel.Children.Add(new TextBlock
             {
                 Text = "No services yet. Open Plugins & services from Ctrl+P and activate one.",
-                Opacity = 0.7,
+                Foreground = Token("CdTextMuted"),
+                FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 8),
             });
         }
     }
@@ -232,9 +384,9 @@ public partial class SettingsPage : UserControl
         RefreshStorage();
     }
 
-    private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
+    private void OnThemeChoice(object sender, RoutedEventArgs e)
     {
-        if (_loading || ThemeBox.SelectedItem is not string theme)
+        if (_loading || sender is not RadioButton { Tag: string theme })
         {
             return;
         }
@@ -242,6 +394,32 @@ public partial class SettingsPage : UserControl
         _settings.Theme = theme;
         Save();
         _applyTheme();
+    }
+
+    private void OnWindowBehaviourChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _settings.MinimizeToTray = MinimizeToTrayBox.IsChecked == true;
+        _settings.CloseToTray = CloseToTrayBox.IsChecked == true;
+        _host.MinimizeToTray = _settings.MinimizeToTray;
+        _host.CloseToTray = _settings.CloseToTray;
+        Save();
+    }
+
+    private void OnRailChoice(object sender, RoutedEventArgs e)
+    {
+        if (_loading || sender is not RadioButton { Tag: string mode })
+        {
+            return;
+        }
+
+        _settings.RailMode = mode;
+        _host.SetRailMode(mode);
+        Save();
     }
 
     private void OnAutostartChanged(object sender, RoutedEventArgs e)
@@ -267,14 +445,14 @@ public partial class SettingsPage : UserControl
         Save();
     }
 
-    private void OnDndChanged(object sender, SelectionChangedEventArgs e)
+    private void OnDndChoice(object sender, RoutedEventArgs e)
     {
-        if (_loading)
+        if (_loading || sender is not RadioButton { Tag: string raw } || !int.TryParse(raw, out var index))
         {
             return;
         }
 
-        _settings.DndUntil = DndBox.SelectedIndex switch
+        _settings.DndUntil = index switch
         {
             1 => DateTimeOffset.UtcNow.AddMinutes(30),
             2 => DateTimeOffset.UtcNow.AddHours(1),
@@ -284,6 +462,9 @@ public partial class SettingsPage : UserControl
 
         Save();
         _stateChanged?.Invoke();
+        DndStatus.Text = _settings.DndUntil is { } until
+            ? $"Toasts are quiet until {until.ToLocalTime():ddd HH:mm}. Unread still counts."
+            : "Toasts are on. Notifications still appear in Action Center while quiet.";
     }
 
     private static DateTimeOffset TomorrowMorning()

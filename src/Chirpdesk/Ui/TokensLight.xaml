@@ -12,6 +12,7 @@
     <SolidColorBrush x:Key="CdOnAccent" Color="#FFFFFF" />
 
     <SolidColorBrush x:Key="CdPalette" Color="#F510171A" />
+    <SolidColorBrush x:Key="CdPaletteSurface" Color="#10171A" />
     <SolidColorBrush x:Key="CdPaletteRaised" Color="#1A242A" />
     <SolidColorBrush x:Key="CdPaletteText" Color="#EDE9E0" />
     <SolidColorBrush x:Key="CdPaletteMuted" Color="#9AA7AC" />

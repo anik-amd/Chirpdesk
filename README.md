@@ -1,53 +1,120 @@
 # Chirpdesk
 
-**All your conversations.**
+**Your chats, out of the way.**
 
-A tiny Windows tray app that keeps your web messengers (WhatsApp, Messenger, Telegram, Facebook, or any chat site you add) warm in the background, turns their notifications into real Windows toasts, and switches between them with `Ctrl+Tab`.
+Chirpdesk is a Windows tray app that keeps your web messengers warm in the background and turns
+their notifications into real Windows toasts. One window, one tray icon, `Ctrl+P` when you need it.
 
-No bundled Chromium. No Electron. No sidebar. No subscription.
+It is not an Electron app and does not bundle a browser. It uses the WebView2 runtime that ships
+with Windows and keeps each account in its own profile.
 
-## Status
+## Install
 
-**Planning.** Nothing is implemented yet. The full technical plan lives in [PLAN.md](PLAN.md).
+Download the latest **Chirpdesk-Setup-x.y.z.exe** from
+[Releases](https://github.com/anik-amd/Chirpdesk/releases). The installer is per-user and does not
+need admin rights.
 
-## What it will do
+A portable **Chirpdesk-x.y.z-portable.zip** is published with every release. Portable builds never
+self-update; replace the folder to upgrade.
 
-- Tray-only start at boot — no window, no taskbar entry, notifications only
-- Per-service **warm** (loaded and toasting) or **cold** (loads when you ask)
-- Native Windows toasts with your service's icon, dedupe, and no boot-time backlog storm
-- `Ctrl+Tab` (hold) cycles open services, VSCode-style MRU switching
-- `Ctrl+P` opens the same command bar in search mode — switch services, run commands, change theme
-- Add any chat site by URL — a built-in flow creates a normal service instance, no plugin required
-- Isolated session per service instance, so multiple accounts coexist
-- Built-in ad, tracker and junk-script blocking — request-level, fail-open, one-click off per service
-- Storage panel: per-service cache breakdown, safe trimming, and a scan for chat-app leftovers from apps you no longer use
-- Theme families (Dracula, Nord, Catppuccin, Tokyo Night, Gruvbox, Rosé Pine, Solarized, GitHub) each shipping dark **and** light variants
-- **Plugin-shaped content**: shipped service definitions, themes, adblock packs and bundled tool panels share one manifest — add your own or a third-party plugin repo later. The sites you add are settings, not plugins.
+Requirements:
 
-## Target footprint
+- Windows 10 1809 or later, 64-bit
+- .NET 8 Desktop Runtime
+- Microsoft Edge WebView2 Runtime (preinstalled on Windows 11)
 
-| | |
+The installer checks both and points you at the official download if one is missing.
+
+## First run
+
+1. Start Chirpdesk. It opens once to teach the tray, the palette and the plugin page.
+2. Open **Plugins & services** and activate WhatsApp, Telegram, Messenger or Facebook.
+3. Scan the QR code or sign in in the window that opens. Close the window when you are done.
+
+After that Chirpdesk lives in the tray. Closing the window keeps chats warm. Use **Quit** from the
+tray menu to stop it.
+
+## Everyday use
+
+| Action | How |
 |---|---|
-| App | ~5 MB |
-| Runtimes | .NET 8 Desktop Runtime + WebView2 Evergreen (WebView2 is on Windows 11 and a one-time install on Windows 10; .NET 8 is installed by setup on any clean machine) |
-| Disk incl. 3 warm profiles, cache-trimmed | under 200 MB after a week |
-| RAM | ~50 MB shell + 150–400 MB per warm service |
+| Show the window | Tray icon, or launch Chirpdesk again |
+| Open the palette | `Ctrl+P` |
+| Switch chats | `Ctrl+Tab` while the palette is open |
+| Close a tab | `Ctrl+W` |
+| Back / close a page | `Esc` |
+| Second account | Plugins & services → Add account |
+| Blocking for one tab | `Ctrl+P` → “Turn blocking off for this tab” |
 
-## Stack
+The palette lists open chats and inactive service plugins. Type to search tabs, plugins and
+commands.
 
-C# / .NET 8 / WPF + WebView2, published framework-dependent. No Visual Studio, no full Windows SDK, no MSIX.
+## What it does
+
+- **Warm in the tray.** Services stay loaded so their WebSockets keep receiving messages. Pinned
+  services warm after login without showing a window.
+- **Windows toasts.** Real Action Center notifications with the service icon, dedupe and a short
+  warm-up gate so a reconnect cannot replay a backlog.
+- **A minimal service rail.** Open chats sit on the left edge with a 1/2 badge when one plugin has
+  two accounts. The **+** button opens the palette to activate another chat; palette, plugins and
+  settings are one click from the same strip. It can be always on, edge-hover or hidden in Settings.
+- **Accounts stay separate.** Every account gets its own WebView2 profile and session. Two WhatsApp
+  accounts can be signed in side by side.
+- **Ad and tracker blocking.** Conservative request blocking plus cosmetic hiding, always fail-open,
+  with a permanent allowlist for login, WebSocket and update traffic. Toggle it per tab.
+- **Storage that explains itself.** Data is the session and is never trimmed. Cache is trimmed only
+  after a profile sleeps. A leftover scan finds old profiles and sends them to the Recycle Bin.
+- **Light and dark.** Catppuccin Latte for light, and Frappé, Macchiato or Mocha for dark, chosen
+  separately. The mode follows Windows or stays where you put it. Page darkening is its own plugin.
+- **Plugins.** Service definitions, filter packs, themes and tools share one manifest. Bundled
+  plugins work out of the box; the signed plugin repository is not part of v0.1.
+
+## Privacy
+
+- No account, no telemetry and no Chirpdesk server.
+- Chats run in WebView2 profiles under `%LOCALAPPDATA%\Chirpdesk\profiles`.
+- Settings and logs are under `%APPDATA%\Chirpdesk`; logs never contain message bodies, contact
+  names or full URLs with query strings.
+- Blocking happens locally. No browsing data leaves the machine.
+
+## Portable build
+
+Unzip and run `Chirpdesk.exe`. The same data folders are used, so you can move between the installer
+and the portable build without signing in again. Portable builds do not self-update.
+
+## Build from source
+
+```powershell
+dotnet build
+dotnet test --filter Category!=Integration
+dotnet run --project src/Chirpdesk
+```
+
+Build the release artifacts:
+
+```powershell
+pwsh scripts/pack-release.ps1 -Version 0.1.0
+```
+
+This needs the .NET 8 SDK and Inno Setup 6. It writes the installer, the portable zip and the publish
+folder to `dist/`.
+
+## Known limits
+
+- Sites that refuse embedded sign-in (some Google and Cloudflare flows) show an honest message and
+  an **open in browser** action. Cookies cannot be moved between the browser and the webview.
+- There is no global hotkey in v0.1. The tray icon and a second launch are the entry points.
+- The signed plugin repository is not shipped yet; only bundled plugins are installable.
+- Updates are signed and opt-in, but the check/apply UI is still being finished.
 
 ## Docs
 
-- [PLAN.md](PLAN.md) — requirements, architecture, phases, risks, accepted trade-offs
-- [docs/plans/](docs/plans/) — task-by-task implementation plans (phase 0 ready)
-- [docs/plugins.md](docs/plugins.md) — plugin manifest, kinds, trust tiers, repo format
-- [docs/testing-strategy.md](docs/testing-strategy.md) — test pyramid, seams, manual E2E matrix
-- [docs/measurements.md](docs/measurements.md) — recorded RAM, disk, latency and soak results
-- [docs/adr/](docs/adr/) — architecture decision records
-- [docs/engineering.md](docs/engineering.md) — conventions, commits, definition of done
-- [AGENTS.md](AGENTS.md) — invariants for coding agents working in this repo
+- [docs/manual-verification.md](docs/manual-verification.md) - what to test by hand
+- [docs/plugins.md](docs/plugins.md) - plugin manifest and filter format
+- [docs/updates.md](docs/updates.md) - release manifest and signing
+- [docs/adr/](docs/adr/) - why the architecture looks like this
+- [PLAN.md](PLAN.md) - the full product and engineering plan
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

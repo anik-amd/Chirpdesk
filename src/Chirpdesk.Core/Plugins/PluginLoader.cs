@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
+using Chirpdesk.Core.Theming;
 
 namespace Chirpdesk.Core.Plugins;
 
@@ -298,6 +299,113 @@ public static partial class PluginLoader
             .Select(entry => entry.Pack)
             .OrderBy(pack => pack.Id, StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>
+    /// Loads `theme` plugins. A flavour must have a safe id, a mode and a hex swatch; bad
+    /// flavours are dropped with a log line rather than taking the whole pack down.
+    /// </summary>
+    public static IReadOnlyList<ThemePack> LoadThemes(IEnumerable<PluginScanRoot> roots, ILog? log = null)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+
+        var loaded = new Dictionary<string, (ThemePack Pack, bool Bundled)>(StringComparer.Ordinal);
+        var errors = new List<string>();
+
+        foreach (var root in roots)
+        {
+            foreach (var folder in EnumeratePluginFolders(root.Directory, errors))
+            {
+                var folderName = NameOf(folder);
+                var manifest = ReadManifest(folder, folderName, root.Bundled, errors);
+
+                if (manifest is null || !string.Equals(manifest.Kind, "theme", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                // A theme plugin may be a host capability (page-dark) rather than a palette pack.
+                if (!File.Exists(Path.Combine(folder, "themes.json")))
+                {
+                    continue;
+                }
+
+                var pack = ReadJson<ThemePack>(folder, folderName, "themes.json", errors);
+                if (pack is null)
+                {
+                    continue;
+                }
+
+                pack.Id = manifest.Id;
+                pack.Flavors = pack.Flavors
+                    .Where(flavor => IsValidFlavor(flavor, folderName, errors))
+                    .GroupBy(flavor => flavor.Id, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .ToList();
+
+                if (pack.Flavors.Count == 0)
+                {
+                    errors.Add($"{folderName}: no valid flavours");
+                    continue;
+                }
+
+                if (loaded.TryGetValue(pack.Id, out var existing))
+                {
+                    if (existing.Bundled && !root.Bundled)
+                    {
+                        loaded[pack.Id] = (pack, root.Bundled);
+                    }
+                    else if (existing.Bundled == root.Bundled)
+                    {
+                        errors.Add($"{folderName}: duplicate theme id '{pack.Id}'");
+                    }
+
+                    continue;
+                }
+
+                loaded[pack.Id] = (pack, root.Bundled);
+            }
+        }
+
+        foreach (var error in errors)
+        {
+            log?.Warn($"theme pack skipped: {error}");
+        }
+
+        return loaded.Values
+            .Select(entry => entry.Pack)
+            .OrderBy(pack => pack.Id, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static bool IsValidFlavor(ThemeFlavor flavor, string folderName, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(flavor.Id)
+            || !Regex.IsMatch(flavor.Id, "^[a-z0-9-]{1,24}$", RegexOptions.CultureInvariant))
+        {
+            errors.Add($"{folderName}: invalid flavour id '{flavor.Id}'");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(flavor.Name))
+        {
+            errors.Add($"{folderName}: flavour '{flavor.Id}' has no name");
+            return false;
+        }
+
+        if (flavor.Mode is not ("light" or "dark"))
+        {
+            errors.Add($"{folderName}: flavour '{flavor.Id}' has mode '{flavor.Mode}'");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(flavor.Swatch) || !Regex.IsMatch(flavor.Swatch, "^#[0-9a-fA-F]{6}$"))
+        {
+            errors.Add($"{folderName}: flavour '{flavor.Id}' has invalid swatch");
+            return false;
+        }
+
+        return true;
     }
 
     private static List<string> EnumeratePluginFolders(string directory, List<string> errors)

@@ -14,11 +14,13 @@ internal sealed record StartupOptions(
     bool Hidden,
     bool NotifyTest,
     bool WarmAll,
-    bool Autostart)
+    bool Autostart,
+    string? Page)
 {
     private const string SoakPrefix = "--soak-seconds=";
     private const string QuitPrefix = "--quit-after=";
     private const string OpenPrefix = "--open";
+    private const string PagePrefix = "--page=";
 
     public static StartupOptions Parse(string[] args)
     {
@@ -28,6 +30,8 @@ internal sealed record StartupOptions(
         var notifyTest = Array.Exists(args, a => a.Equals("--notify-test", StringComparison.OrdinalIgnoreCase));
         var warmAll = Array.Exists(args, a => a.Equals("--warm-all", StringComparison.OrdinalIgnoreCase));
         var autostart = Array.Exists(args, a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase));
+        var pageArg = args.FirstOrDefault(a => a.StartsWith(PagePrefix, StringComparison.OrdinalIgnoreCase));
+        var page = pageArg is null ? null : pageArg[PagePrefix.Length..].Trim();
 
         var soak = TimeSpan.FromSeconds(60);
         TimeSpan? quitAfter = null;
@@ -60,7 +64,7 @@ internal sealed record StartupOptions(
             }
         }
 
-        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, warmAll, autostart);
+        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, warmAll, autostart, page);
     }
 
     /// <summary>Any timeout is clamped to something a human would accept (10 s to 1 h).</summary>

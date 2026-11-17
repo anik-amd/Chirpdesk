@@ -1,0 +1,26 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Catppuccin Macchiato. -->
+    <SolidColorBrush x:Key="CdCanvas" Color="#24273A" />
+    <SolidColorBrush x:Key="CdSurface" Color="#1E2030" />
+    <SolidColorBrush x:Key="CdSurfaceAlt" Color="#363A4F" />
+    <SolidColorBrush x:Key="CdText" Color="#CAD3F5" />
+    <SolidColorBrush x:Key="CdTextMuted" Color="#B8C0E0" />
+    <SolidColorBrush x:Key="CdRule" Color="#494D64" />
+    <SolidColorBrush x:Key="CdAccent" Color="#C6A0F6" />
+    <SolidColorBrush x:Key="CdAccentSoft" Color="#363A4F" />
+    <SolidColorBrush x:Key="CdDanger" Color="#ED8796" />
+    <SolidColorBrush x:Key="CdOnAccent" Color="#24273A" />
+
+    <SolidColorBrush x:Key="CdPalette" Color="#181926" />
+    <SolidColorBrush x:Key="CdPaletteSurface" Color="#24273A" />
+    <SolidColorBrush x:Key="CdPaletteRaised" Color="#1E2030" />
+    <SolidColorBrush x:Key="CdPaletteText" Color="#CAD3F5" />
+    <SolidColorBrush x:Key="CdPaletteMuted" Color="#B8C0E0" />
+    <SolidColorBrush x:Key="CdPaletteRule" Color="#494D64" />
+    <SolidColorBrush x:Key="CdPaletteSelection" Color="#363A4F" />
+    <SolidColorBrush x:Key="CdPaletteAccent" Color="#C6A0F6" />
+    <SolidColorBrush x:Key="CdScrollThumb" Color="#5B6078" />
+    <SolidColorBrush x:Key="CdControlHover" Color="#363A4F" />
+    <SolidColorBrush x:Key="CdScrim" Color="#99000000" />
+</ResourceDictionary>

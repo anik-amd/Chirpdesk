@@ -1,0 +1,8 @@
+{
+  "flavors": [
+    { "id": "latte", "name": "Latte", "mode": "light", "swatch": "#EFF1F5" },
+    { "id": "frappe", "name": "Frappé", "mode": "dark", "swatch": "#303446" },
+    { "id": "macchiato", "name": "Macchiato", "mode": "dark", "swatch": "#24273A" },
+    { "id": "mocha", "name": "Mocha", "mode": "dark", "swatch": "#1E1E2E" }
+  ]
+}

@@ -14,15 +14,26 @@ desktop session.
 - Start Chirpdesk from the Start menu, the shortcut or the exe: the window appears as soon as the first pinned service is warm, within a few seconds.
 - Start it again while it is hidden: the resident instance shows the same window; no second process stays alive.
 - Reboot with autostart on: no window, tray only; warm services appear after about 20 s.
+- Settings → **Minimize to tray** on: the minimize button hides the desk to the tray; off sends it to the taskbar.
+- Settings → **Close to tray** on: the close button hides the desk; off quits the app and releases every profile.
 - `--selftest` no longer leaves its toast in Action Center; one left by an older build must be dismissed once.
 
 ## Window chrome and motion
 
 - Maximize with the taskbar at the top: the whole title bar including minimize/maximize/close stays below the taskbar, and restore returns to the previous bounds.
+- The app animates maximize/restore, minimize and close; the command palette fades/slides and pages fade in.
 - Windows 11 shows rounded outer corners; Windows 10 keeps the square frame.
-- The title bar shows the app mark before the name; the command palette fades and slides in, pages fade, and the window itself fades on show/hide.
+- The title bar shows the app mark before the name.
 - A 2 px accent bar runs along the bottom of the title bar while the active tab is loading.
 - Resize to roughly 360 px wide and open `Ctrl+P`: the palette, query, rows and hint stay inside the window instead of clipping.
+- Open `Ctrl+P` while Settings or Plugins is showing: the palette opens **over the page**, and closing it returns to the same page, not to the chat.
+
+## Side rail
+
+- The left rail lists every open chat. Activate two accounts of one plugin: each icon gets a small 1 and 2 badge.
+- The **+** button opens the palette with the plugin list, so another service can be activated; the palette, plugins and settings icons in the rail open their surfaces directly.
+- Settings → Side rail: **Always show**, **On left edge** and **Hide completely**. On hover, the rail animates its width from the left edge; the chat must not reflow or reload.
+- Switch between rail modes while a chat is open and confirm the rail animation does not steal keyboard focus from the page.
 
 ## Icons
 
@@ -33,9 +44,10 @@ desktop session.
 
 - Open `Ctrl+P` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
 - Switch the theme in Settings between light, dark and system: the page, palette and warm pages repaint immediately, with no restart and no flash of the old palette.
+- In Appearance, pick a light palette (Latte) and a dark palette (Frappé, Macchiato or Mocha) separately. The light choice should apply while the app is light and the dark choice while it is dark.
 - Turn on a Windows contrast theme: Chirpdesk should repaint with system colours; toggling it back should restore the normal palette without a restart.
 - At 150 % scaling, check that plugin cards and service rows do not clip their descriptions or buttons.
-- Open `Ctrl+P` → **Plugins & services**: installed plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state. Plugins are broader than services: filter packs, themes and tools share the same ecosystem. Expect service plugins, the bundled `page-dark` theme, the `filters-core` filter pack and the bundled cleaner.
+- Open `Ctrl+P` → **Plugins & services**: installed plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state. Plugins are broader than services: filter packs, themes and tools share the same ecosystem. Expect service plugins, the bundled `page-dark` theme, `catppuccin`, the `filters-core` filter pack and the bundled cleaner.
 - Toggle `page-dark` off: warm pages stop being inverted; toggle it on again and they invert without a restart.
 - Toggle `filters-core` off: the next page load has no ad rules; toggle it on again and rules return.
 - Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+P` afterwards.

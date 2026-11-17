@@ -22,6 +22,21 @@ public sealed class AppSettings
     /// <summary>Mirror of the HKCU Run entry, so Settings can show the real state.</summary>
     public bool Autostart { get; set; }
 
+    /// <summary>Minimize hides to the tray instead of the taskbar.</summary>
+    public bool MinimizeToTray { get; set; }
+
+    /// <summary>Close hides to the tray instead of quitting. True preserves the tray-app behavior.</summary>
+    public bool CloseToTray { get; set; } = true;
+
+    /// <summary><c>always</c>, <c>hover</c> or <c>hidden</c> for the service rail.</summary>
+    public string RailMode { get; set; } = "always";
+
+    /// <summary>Flavour id for light mode; Latte in the Catppuccin pack.</summary>
+    public string LightTheme { get; set; } = "latte";
+
+    /// <summary>Flavour id for dark mode; Mocha in the Catppuccin pack.</summary>
+    public string DarkTheme { get; set; } = "mocha";
+
     /// <summary>Cache budget per profile, in MB. Session data is never counted.</summary>
     public int CacheBudgetMb { get; set; } = DefaultCacheBudgetMb;
 

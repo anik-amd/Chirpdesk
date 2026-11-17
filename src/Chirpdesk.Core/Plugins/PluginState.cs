@@ -12,6 +12,9 @@ public static class PluginState
     /// <summary>The bundled theme plugin that owns the page-darkening master switch.</summary>
     public const string PageDarkId = "page-dark";
 
+    /// <summary>The bundled palette plugin.</summary>
+    public const string CatppuccinId = "catppuccin";
+
     public static bool IsEnabled(AppSettings settings, string pluginId)
     {
         ArgumentNullException.ThrowIfNull(settings);

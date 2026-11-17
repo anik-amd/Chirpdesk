@@ -20,6 +20,20 @@ internal static partial class SettingsValidator
 
         settings.Theme = Theming.ThemeDecision.ToStorageValue(Theming.ThemeDecision.Parse(settings.Theme));
 
+        settings.RailMode = settings.RailMode?.Trim().ToLowerInvariant() switch
+        {
+            "hidden" => "hidden",
+            "hover" => "hover",
+            _ => "always",
+        };
+
+        settings.LightTheme = string.IsNullOrWhiteSpace(settings.LightTheme)
+            ? "latte"
+            : settings.LightTheme.Trim().ToLowerInvariant();
+        settings.DarkTheme = string.IsNullOrWhiteSpace(settings.DarkTheme)
+            ? "mocha"
+            : settings.DarkTheme.Trim().ToLowerInvariant();
+
         settings.CacheBudgetMb = settings.CacheBudgetMb <= 0
             ? AppSettings.DefaultCacheBudgetMb
             : Math.Clamp(settings.CacheBudgetMb, AppSettings.MinCacheBudgetMb, AppSettings.MaxCacheBudgetMb);

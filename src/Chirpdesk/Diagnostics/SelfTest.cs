@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Blocking;
@@ -20,6 +21,7 @@ using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Notifications;
 using Chirpdesk.Storage;
+using Chirpdesk.Ui;
 using Windows.UI.Notifications;
 
 namespace Chirpdesk.Diagnostics;
@@ -55,6 +57,7 @@ internal sealed class SelfTest
         Guarded("app-identity", CheckAppIdentity);
         Guarded("app-icon", CheckAppIcon);
         Guarded("contrast", CheckContrast);
+        Guarded("theme", CheckTheme);
         Guarded("tray", CheckTray);
         Guarded("window-hidden", CheckWindowIsHidden);
         Guarded("single-instance", CheckSingleInstance);
@@ -662,7 +665,15 @@ internal sealed class SelfTest
     {
         var failures = new List<string>();
 
-        foreach (var name in new[] { "TokensLight", "TokensDark" })
+        foreach (var name in new[]
+                 {
+                     "TokensLight",
+                     "TokensDark",
+                     "CatppuccinLatte",
+                     "CatppuccinFrappe",
+                     "CatppuccinMacchiato",
+                     "CatppuccinMocha",
+                 })
         {
             var tokens = LoadTokens(name);
             if (tokens is null)
@@ -709,6 +720,26 @@ internal sealed class SelfTest
         ("CdPaletteMuted", "CdPaletteRaised", 4.5),
         ("CdPaletteAccent", "CdPaletteRaised", 4.5),
     ];
+
+    private void CheckTheme()
+    {
+        if (Application.Current is null)
+        {
+            Check("theme", false, "no application resources");
+            return;
+        }
+
+        UiTheme.Apply(false, "latte", "mocha", useCatppuccin: true);
+        var light = ((SolidColorBrush)Application.Current.Resources["CdCanvas"]).Color;
+
+        UiTheme.Apply(true, "latte", "mocha", useCatppuccin: true);
+        var dark = ((SolidColorBrush)Application.Current.Resources["CdCanvas"]).Color;
+
+        var ok = light == Color.FromRgb(0xE6, 0xE9, 0xEF)
+            && dark == Color.FromRgb(0x1E, 0x1E, 0x2E);
+
+        Check("theme", ok, $"latte={light} mocha={dark}");
+    }
 
     private ResourceDictionary? LoadTokens(string name)
     {

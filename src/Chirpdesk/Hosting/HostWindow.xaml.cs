@@ -1,9 +1,15 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Chirpdesk.Interop;
+using Chirpdesk.Settings;
+using Chirpdesk.Ui;
 
 namespace Chirpdesk.Hosting;
 
@@ -17,11 +23,334 @@ public partial class HostWindow : Window
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
-        StateChanged += (_, _) => UpdateMaximizeGlyph();
+        StateChanged += (_, _) => OnStateChanged();
         SizeChanged += (_, _) => UpdateBarLayout();
+
+        _railTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
+        _railTimer.Tick += (_, _) =>
+        {
+            _railTimer.Stop();
+            if (_railMode == ServiceRailMode.Hover && !RailPanel.IsMouseOver)
+            {
+                HideRail(animate: true);
+            }
+        };
+
+        RailPanel.MouseEnter += (_, _) => _railTimer.Stop();
+        RailPanel.MouseLeave += (_, _) => ScheduleRailHide();
+
+        _railHoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(70) };
+        _railHoverTimer.Tick += (_, _) => CheckRailHover();
     }
 
     public nint Handle => new WindowInteropHelper(this).Handle;
+
+    private readonly DispatcherTimer _railHoverTimer;
+
+    /// <summary>Rebuilds the service rail from the warm instances and the current active tab.</summary>
+    public void SetServiceRail(IReadOnlyList<ServiceRailEntry> entries, string? activeId)
+    {
+        RailServices.Children.Clear();
+
+        foreach (var entry in entries)
+        {
+            var button = new Button
+            {
+                Style = (Style)FindResource("RailButton"),
+                ToolTip = entry.Name,
+                Background = string.Equals(entry.InstanceId, activeId, StringComparison.OrdinalIgnoreCase)
+                    ? Palette("CdPaletteSelection")
+                    : Brushes.Transparent,
+            };
+            AutomationProperties.SetName(button, entry.Name);
+
+            var content = new Grid { Width = 40, Height = 40 };
+            var icon = ServiceIcons.Create(entry.DefinitionId, entry.Name, entry.Accent, 26);
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            content.Children.Add(icon);
+
+            if (entry.ShowOrdinal)
+            {
+                var badge = new Border
+                {
+                    Width = 16,
+                    Height = 16,
+                    CornerRadius = new CornerRadius(8),
+                    Background = Palette("CdPaletteAccent"),
+                    BorderBrush = Palette("CdPaletteRaised"),
+                    BorderThickness = new Thickness(1),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                };
+                badge.Child = new TextBlock
+                {
+                    Text = entry.Ordinal.ToString(CultureInfo.InvariantCulture),
+                    FontSize = 8,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Palette("CdPaletteSurface"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                content.Children.Add(badge);
+            }
+
+            button.Content = content;
+            button.Click += (_, _) => RailServiceSelected?.Invoke(this, entry.InstanceId);
+            RailServices.Children.Add(button);
+        }
+
+        if (entries.Count == 0)
+        {
+            RailServices.Children.Add(new TextBlock
+            {
+                Text = "No open chats",
+                Foreground = Palette("CdPaletteMuted"),
+                FontSize = 10,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(6, 10, 6, 0),
+            });
+        }
+
+        RailActions.Children.Clear();
+        RailActions.Children.Add(RailAction("plus", "Add a chat", (_, _) => RailAddRequested?.Invoke(this, EventArgs.Empty), accent: true));
+        RailActions.Children.Add(RailAction("search", "Command palette (Ctrl+P)", (_, _) => RailSearchRequested?.Invoke(this, EventArgs.Empty)));
+        RailActions.Children.Add(RailAction("plugins", "Plugins & services", (_, _) => RailPluginsRequested?.Invoke(this, EventArgs.Empty)));
+        RailActions.Children.Add(RailAction("settings", "Settings", (_, _) => RailSettingsRequested?.Invoke(this, EventArgs.Empty)));
+    }
+
+    public void SetRailMode(string? mode)
+    {
+        _railMode = mode?.Trim().ToLowerInvariant() switch
+        {
+            "hidden" => ServiceRailMode.Hidden,
+            "hover" => ServiceRailMode.Hover,
+            _ => ServiceRailMode.Always,
+        };
+
+        ApplyRailMode();
+
+        if (_railMode == ServiceRailMode.Hover)
+        {
+            _railHoverTimer.Start();
+        }
+        else
+        {
+            _railHoverTimer.Stop();
+        }
+    }
+
+    private void ApplyRailMode()
+    {
+        switch (_railMode)
+        {
+            case ServiceRailMode.Always:
+                RailColumn.Width = GridLength.Auto;
+                RailPanel.Visibility = Visibility.Visible;
+                RailPanel.Width = 62;
+                RailPanel.Opacity = 1;
+                _railVisible = true;
+                break;
+
+            case ServiceRailMode.Hover:
+                RailColumn.Width = GridLength.Auto;
+                HideRail(animate: false);
+                break;
+
+            default:
+                RailColumn.Width = new GridLength(0);
+                RailPanel.BeginAnimation(WidthProperty, null);
+                RailPanel.Width = 0;
+                RailPanel.Opacity = 0;
+                RailPanel.Visibility = Visibility.Collapsed;
+                _railVisible = false;
+                break;
+        }
+    }
+
+    private void ShowRail(bool animate)
+    {
+        if (_railMode == ServiceRailMode.Hidden)
+        {
+            return;
+        }
+
+        _railVisible = true;
+        RailPanel.Visibility = Visibility.Visible;
+
+        if (!animate || !SystemParameters.ClientAreaAnimation)
+        {
+            RailPanel.BeginAnimation(WidthProperty, null);
+            RailPanel.Width = 62;
+            RailPanel.Opacity = 1;
+            return;
+        }
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var width = new DoubleAnimation(RailPanel.ActualWidth, 62, TimeSpan.FromMilliseconds(200))
+        {
+            EasingFunction = ease,
+        };
+        width.Completed += (_, _) =>
+        {
+            RailPanel.BeginAnimation(WidthProperty, null);
+            RailPanel.Width = 62;
+        };
+        RailPanel.BeginAnimation(WidthProperty, width);
+
+        RailPanel.Opacity = 0;
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease };
+        fade.Completed += (_, _) =>
+        {
+            RailPanel.BeginAnimation(OpacityProperty, null);
+            RailPanel.Opacity = 1;
+        };
+        RailPanel.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void HideRail(bool animate)
+    {
+        if (_railMode == ServiceRailMode.Always)
+        {
+            return;
+        }
+
+        _railVisible = false;
+
+        if (!animate || !SystemParameters.ClientAreaAnimation)
+        {
+            RailPanel.BeginAnimation(WidthProperty, null);
+            RailPanel.Width = 0;
+            RailPanel.Opacity = 0;
+            RailPanel.Visibility = Visibility.Collapsed;
+
+            return;
+        }
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var width = new DoubleAnimation(RailPanel.ActualWidth, 0, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = ease,
+        };
+        width.Completed += (_, _) =>
+        {
+            if (_railVisible || _railMode != ServiceRailMode.Hover)
+            {
+                return;
+            }
+
+            RailPanel.BeginAnimation(WidthProperty, null);
+            RailPanel.Width = 0;
+            RailPanel.BeginAnimation(OpacityProperty, null);
+            RailPanel.Opacity = 0;
+            RailPanel.Visibility = Visibility.Collapsed;
+        };
+        RailPanel.BeginAnimation(WidthProperty, width);
+
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(140)) { EasingFunction = ease };
+        RailPanel.BeginAnimation(OpacityProperty, fade);
+    }
+
+    /// <summary>
+    /// WebView2 is an HWND, so it swallows mouse input at the left edge. Poll the real cursor
+    /// against the window bounds instead: no reserved gutter, no invisible strip.
+    /// </summary>
+    private void CheckRailHover()
+    {
+        if (_railMode != ServiceRailMode.Hover || !IsVisible || WindowState == WindowState.Minimized)
+        {
+            return;
+        }
+
+        if (!NativeMethods.GetCursorPos(out var cursor))
+        {
+            return;
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var origin = PointToScreen(new Point(0, 0));
+        var bottom = PointToScreen(new Point(0, ActualHeight)).Y;
+        var left = origin.X;
+        var insideVertical = cursor.Y >= origin.Y && cursor.Y <= bottom;
+
+        if (_railVisible)
+        {
+            var right = left + 62 * dpi.DpiScaleX;
+            if (!insideVertical || cursor.X < left || cursor.X > right)
+            {
+                ScheduleRailHide();
+            }
+
+            return;
+        }
+
+        var threshold = left + 8 * dpi.DpiScaleX;
+        if (insideVertical && cursor.X >= left && cursor.X <= threshold)
+        {
+            _railTimer.Stop();
+            ShowRail(animate: true);
+        }
+    }
+
+    private void ScheduleRailHide()
+    {
+        if (_railMode == ServiceRailMode.Hover && !_railTimer.IsEnabled)
+        {
+            _railTimer.Start();
+        }
+    }
+
+    private Button RailAction(string icon, string tooltip, RoutedEventHandler click, bool accent = false)
+    {
+        var button = new Button
+        {
+            Style = (Style)FindResource("RailButton"),
+            ToolTip = tooltip,
+            Content = UiIcons.Create(icon, Palette(accent ? "CdPaletteAccent" : "CdPaletteText"), 20),
+        };
+        AutomationProperties.SetName(button, tooltip);
+        button.Click += click;
+        return button;
+    }
+
+    private Brush Palette(string key) => (Brush)FindResource(key);
+
+    private readonly DispatcherTimer _railTimer;
+    private ServiceRailMode _railMode = ServiceRailMode.Always;
+    private bool _railVisible;
+
+    /// <summary>The row of open services on the left edge, plus the three global actions.</summary>
+    public enum ServiceRailMode
+    {
+        Always,
+        Hover,
+        Hidden,
+    }
+
+    public sealed record ServiceRailEntry(
+        string InstanceId,
+        string Name,
+        string? DefinitionId,
+        string? Accent,
+        int Ordinal,
+        bool ShowOrdinal);
+
+    public event EventHandler<string>? RailServiceSelected;
+    public event EventHandler? RailSearchRequested;
+    public event EventHandler? RailAddRequested;
+    public event EventHandler? RailPluginsRequested;
+    public event EventHandler? RailSettingsRequested;
+
+    /// <summary>Set from settings; minimize hides to the tray instead of the taskbar.</summary>
+    public bool MinimizeToTray { get; set; }
+
+    /// <summary>Set from settings; close hides to the tray instead of quitting.</summary>
+    public bool CloseToTray { get; set; } = true;
+
+    /// <summary>Raised when the minimize button should hide to the tray.</summary>
+    public event EventHandler? HideToTrayRequested;
 
     /// <summary>Hosts non-visual framework elements (the tray icon) so they get a Loaded event.</summary>
     public void Attach(System.Windows.UIElement element) => ContentRoot.Children.Add(element);
@@ -66,12 +395,18 @@ public partial class HostWindow : Window
         }
 
         PageLayer.Opacity = 0;
-        PageLayer.BeginAnimation(
-            OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+
+        fade.Completed += (_, _) =>
+        {
+            PageLayer.BeginAnimation(OpacityProperty, null);
+            PageLayer.Opacity = 1;
+        };
+
+        PageLayer.BeginAnimation(OpacityProperty, fade);
 
         var slide = PageHost.RenderTransform as TranslateTransform ?? new TranslateTransform();
         PageHost.RenderTransform = slide;
@@ -108,21 +443,30 @@ public partial class HostWindow : Window
         }
 
         BarLayer.Opacity = 0;
-        BarLayer.BeginAnimation(
-            OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
 
-        var slide = BarHost.RenderTransform as TranslateTransform ?? new TranslateTransform();
-        BarHost.RenderTransform = slide;
-        slide.BeginAnimation(
-            TranslateTransform.YProperty,
-            new DoubleAnimation(-8, 0, TimeSpan.FromMilliseconds(170))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
+        fade.Completed += (_, _) =>
+        {
+            BarLayer.BeginAnimation(OpacityProperty, null);
+            BarLayer.Opacity = 1;
+        };
+
+        BarLayer.BeginAnimation(OpacityProperty, fade);
+
+        var scale = new ScaleTransform(0.985, 0.985);
+        var slide = new TranslateTransform(0, -10);
+        BarHost.RenderTransformOrigin = new Point(0.5, 0.5);
+        BarHost.RenderTransform = new TransformGroup { Children = { scale, slide } };
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var duration = TimeSpan.FromMilliseconds(210);
+
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
+        slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-10, 0, duration) { EasingFunction = ease });
     }
 
     public void HideCommandBar()
@@ -223,6 +567,11 @@ public partial class HostWindow : Window
         _visibilityToken++;
         BeginAnimation(OpacityProperty, null);
 
+        if (_railMode == ServiceRailMode.Hover)
+        {
+            _railHoverTimer.Start();
+        }
+
         if (SystemParameters.ClientAreaAnimation)
         {
             Opacity = 0;
@@ -237,12 +586,18 @@ public partial class HostWindow : Window
 
         if (SystemParameters.ClientAreaAnimation)
         {
-            BeginAnimation(
-                OpacityProperty,
-                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(130))
-                {
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-                });
+            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            };
+
+            fade.Completed += (_, _) =>
+            {
+                BeginAnimation(OpacityProperty, null);
+                Opacity = 1;
+            };
+
+            BeginAnimation(OpacityProperty, fade);
         }
 
         // Activate() alone loses to Windows' foreground lock when the request came from a
@@ -253,6 +608,8 @@ public partial class HostWindow : Window
     /// <summary>Hide without tearing anything down: the webviews keep running.</summary>
     public void HideToBackground()
     {
+        _railHoverTimer.Stop();
+
         if (!SystemParameters.ClientAreaAnimation || !IsVisible)
         {
             Hide();
@@ -261,7 +618,7 @@ public partial class HostWindow : Window
         }
 
         var token = ++_visibilityToken;
-        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(110))
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
         };
@@ -294,29 +651,165 @@ public partial class HostWindow : Window
 
         if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
         {
+            if (_isMaximized)
+            {
+                _isMaximized = false;
+                UpdateMaximizeGlyph();
+            }
+
             DragMove();
         }
     }
 
-    private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void OnMinimizeClick(object sender, RoutedEventArgs e)
+    {
+        if (MinimizeToTray)
+        {
+            HideToTrayRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        MinimizeToTaskbar();
+    }
 
     private void OnMaximizeClick(object sender, RoutedEventArgs e) => ToggleMaximize();
 
-    /// <summary>Close means hide: the product is a tray app and the webviews must survive.</summary>
+    /// <summary>Close means hide by default; settings can turn it into a real quit.</summary>
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
     /// <summary>
-    /// The shell owns maximize so taskbar placement, animation and restore bounds are native.
-    /// WM_GETMINMAXINFO pins the window to the monitor work area, which keeps the title bar and
-    /// caption buttons below a top taskbar instead of under it.
+    /// A user-facing maximize that animates the window bounds instead of snapping. The shell
+    /// still fixes OS maximize through WM_GETMINMAXINFO; this path keeps the title bar and its
+    /// buttons inside the work area when the taskbar is at the top.
     /// </summary>
-    private void ToggleMaximize() =>
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
+    private void ToggleMaximize()
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+            _isMaximized = false;
+            UpdateMaximizeGlyph();
+            return;
+        }
+
+        if (_isMaximized)
+        {
+            AnimateBounds(_restoreBounds);
+            _isMaximized = false;
+        }
+        else
+        {
+            _restoreBounds = new Rect(Left, Top, Width, Height);
+            AnimateBounds(SystemParameters.WorkArea);
+            _isMaximized = true;
+        }
+
+        UpdateMaximizeGlyph();
+    }
 
     private void UpdateMaximizeGlyph() =>
-        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+        MaximizeButton.Content = _isMaximized || WindowState == WindowState.Maximized
+            ? "\uE923"
+            : "\uE922";
+
+    private bool _isMaximized;
+    private Rect _restoreBounds;
+
+    /// <summary>Animates the four window bounds together; the content follows the real window.</summary>
+    private void AnimateBounds(Rect target)
+    {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            Left = target.Left;
+            Top = target.Top;
+            Width = target.Width;
+            Height = target.Height;
+            return;
+        }
+
+        var from = new Rect(Left, Top, Width, Height);
+        var duration = TimeSpan.FromMilliseconds(190);
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+
+        DoubleAnimation Bound(double start, double end) => new(start, end, duration)
+        {
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop,
+        };
+
+        var left = Bound(from.Left, target.Left);
+        left.Completed += (_, _) => SettleBounds(target);
+        BeginAnimation(LeftProperty, left);
+        BeginAnimation(TopProperty, Bound(from.Top, target.Top));
+        BeginAnimation(WidthProperty, Bound(from.Width, target.Width));
+        BeginAnimation(HeightProperty, Bound(from.Height, target.Height));
+    }
+
+    private void SettleBounds(Rect target)
+    {
+        BeginAnimation(LeftProperty, null);
+        BeginAnimation(TopProperty, null);
+        BeginAnimation(WidthProperty, null);
+        BeginAnimation(HeightProperty, null);
+        Left = target.Left;
+        Top = target.Top;
+        Width = target.Width;
+        Height = target.Height;
+    }
+
+    private void MinimizeToTaskbar()
+    {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            WindowState = WindowState.Minimized;
+            return;
+        }
+
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(170))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+
+        fade.Completed += (_, _) =>
+        {
+            WindowState = WindowState.Minimized;
+            BeginAnimation(OpacityProperty, null);
+            Opacity = 1;
+        };
+
+        BeginAnimation(OpacityProperty, fade);
+    }
+
+    private void FadeInFromTaskbar()
+    {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            Opacity = 1;
+            return;
+        }
+
+        Opacity = 0;
+        BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+    }
+
+    private void OnStateChanged()
+    {
+        UpdateMaximizeGlyph();
+
+        if (WindowState == WindowState.Normal && _wasMinimized)
+        {
+            FadeInFromTaskbar();
+        }
+
+        _wasMinimized = WindowState == WindowState.Minimized;
+    }
+
+    private bool _wasMinimized;
 
     /// <summary>A 2 px indeterminate bar along the title bar; pure WPF, never over the webview.</summary>
     public void SetBusy(bool busy)
