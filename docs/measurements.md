@@ -106,3 +106,33 @@ This is higher than the phase-0 single-service reading (547 MB) because it inclu
 **Manual evidence gathered during phase 1.** `Ctrl+Tab`/`Ctrl+Shift+Tab` cycles warm tabs; `Ctrl+P` lists open tabs and filters (`tel` ranks Telegram first); `Up`/`Down`/`Tab` move the highlight; `Esc` hides; `Ctrl+W` closes the highlighted tab and the next takes over; palette scroll survives open/close (CDP: `scrollTop=300` before, open and after); page focus returns on close; five bundled definitions load from `plugins/`; a user plugin in `%APPDATA%\Chirpdesk\plugins` loaded as a sixth definition before removal.
 
 **Not yet covered by hand.** Two WhatsApp accounts signed in simultaneously; a cold service started from search; a real inbound message while the palette is open; three warm services RAM; sleep/standby delivery. These remain in `docs/testing-strategy.md` §5.
+
+## Phase 2 automated gate, 2026-11-17
+
+Base commit `e2aa6e9` (two warm services, settings v3).
+
+```
+[PASS] settings - round-trip, atomic replace and corrupt-file quarantine
+[PASS] definitions - bundled=5 skipped=1 shadowed=whatsapp
+[PASS] catalog - instance overrides, definition fallback, unknown id fails closed
+[PASS] migration - v1 fixture migrated to v3, instance preserved
+[PASS] bar-state - cycle wraps, Esc hides, Ctrl+W closes, Ctrl+2 selects, prefix ranking
+[PASS] storage - Data and Cache separated, cache planned, outside path refused
+[PASS] orphans - unreferenced profile and known root found, referenced profile skipped
+[PASS] dnd - mute and live DND suppress; expired DND does not
+[PASS] autostart - quoted command and idempotence
+[PASS] environment - created under the profiles root, cached per profile
+[PASS] registry - mru=registry-a cycleOk=True sleepOk=True wakeOk=True
+[PASS] hidden-warm - timers=10/10 ready=complete
+[PASS] notification-capability - event=True script=True permission=granted
+[PASS] toast-shown - appeared in Action Center history
+[PASS] profile-released - no process is holding the profile
+```
+
+`pwsh scripts/gate.ps1 -SkipBuild -SoakSeconds 10`: all five outer checks passed (no-running-instance, selftest, warm-service-quit, no-orphan-webviews, no-orphan-app).
+
+**RAM and disk after phase 2, two warm services.** App 127.3 MB; WebView2 1437.3 MB across 13 processes; total **1564.6 MB**. Profiles **391.1 MB**. This is within ~35 MB of ADR 0005's 1.6 GB revisit trigger with only two warm services, so three-warm guidance should wait for a real three-account measurement.
+
+**Verified while building phase 2.** Normal launch warmed two pinned services hidden (`boot: warmed 2 pinned service(s)`, no `window shown`); settings migrated v2→v3 with the same two instances; `--selftest` slept both test runtimes, left no active, re-added and woke one; the bundled cleaner panel loaded (`tool panels: 1 loaded`); the Settings window opened from the tray and exposed services, add, theme, autostart, DND and storage controls through UI Automation; Esc hides; Ctrl+W closes a tab and activates the next.
+
+**Needs the user's hands.** Settings visual check at 100 %/150 %; add a service from a definition and sign in; sleep then wake without re-pairing; enable autostart and reboot to see the 20 s delay; DND 30 min with a real message; trim > 0 bytes and confirm the session survives; seed and restore an orphan from the Recycle Bin; three warm + one cold RAM. These remain in `docs/testing-strategy.md` §5.

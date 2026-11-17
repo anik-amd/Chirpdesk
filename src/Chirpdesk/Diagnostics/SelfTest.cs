@@ -7,10 +7,12 @@ using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
+using Chirpdesk.Core.Storage;
 using Chirpdesk.Core.Time;
 using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Notifications;
+using Chirpdesk.Storage;
 using Windows.UI.Notifications;
 
 namespace Chirpdesk.Diagnostics;
@@ -51,6 +53,10 @@ internal sealed class SelfTest
         Guarded("catalog", CheckCatalog);
         Guarded("migration", CheckMigration);
         Guarded("bar-state", CheckBarState);
+        Guarded("storage", CheckStorage);
+        Guarded("orphans", CheckOrphans);
+        Guarded("dnd", CheckDnd);
+        Guarded("autostart", CheckAutostart);
 
         try
         {
@@ -418,6 +424,101 @@ internal sealed class SelfTest
         public void Show(ToastMessage message)
         {
         }
+    }
+
+    private void CheckStorage()
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), "chirpdesk-selftest-storage", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var profiles = Path.Combine(temporary, "profiles");
+            var profile = Path.Combine(profiles, "probe");
+            Directory.CreateDirectory(Path.Combine(profile, "Cache"));
+            Directory.CreateDirectory(Path.Combine(profile, "Network"));
+            File.WriteAllBytes(Path.Combine(profile, "Cache", "cache.bin"), new byte[40]);
+            File.WriteAllBytes(Path.Combine(profile, "Network", "Cookies"), new byte[10]);
+
+            var usage = ProfileScanner.ScanRoot(profiles).Single();
+            var plan = TrimPlanner.Plan(
+                [new ProfileCache(usage.ProfileId, profile, usage.CacheBytes, Disposed: true, DateTimeOffset.UtcNow)],
+                perProfileBudget: 0,
+                globalBudget: 0);
+
+            Check(
+                "storage",
+                usage.DataBytes == 10
+                && usage.CacheBytes == 40
+                && plan.ReclaimedBytes == 40
+                && PathGuard.IsUnder(profiles, profile)
+                && !PathGuard.IsUnder(profiles, Path.Combine(temporary, "outside")),
+                "Data and Cache separated, cache planned, outside path refused");
+        }
+        finally
+        {
+            TryDelete(temporary);
+        }
+    }
+
+    private void CheckOrphans()
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), "chirpdesk-selftest-orphans", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var profiles = Path.Combine(temporary, "profiles");
+            Directory.CreateDirectory(Path.Combine(profiles, "leftover", "Cache"));
+            Directory.CreateDirectory(Path.Combine(profiles, "referenced", "Cache"));
+            File.WriteAllBytes(Path.Combine(profiles, "leftover", "Cache", "x"), new byte[8]);
+
+            var known = Path.Combine(temporary, "KnownApp");
+            Directory.CreateDirectory(known);
+            File.WriteAllBytes(Path.Combine(known, "data.bin"), new byte[4]);
+
+            var found = OrphanScanner.Scan(
+                profiles,
+                new HashSet<string> { "referenced" },
+                [new ScanRoot(known, "KnownApp")],
+                _ => false);
+
+            Check(
+                "orphans",
+                found.Count == 2
+                && found.Any(item => item.ProfileId == "leftover")
+                && found.Any(item => item.App == "KnownApp")
+                && found.All(item => item.ProfileId != "referenced"),
+                "unreferenced profile and known root found, referenced profile skipped");
+        }
+        finally
+        {
+            TryDelete(temporary);
+        }
+    }
+
+    private void CheckDnd()
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        Check(
+            "dnd",
+            NotificationPolicy.ShouldSuppress(muted: true, dndUntil: null, now)
+            && NotificationPolicy.ShouldSuppress(muted: false, dndUntil: now.AddMinutes(5), now)
+            && !NotificationPolicy.ShouldSuppress(muted: false, dndUntil: now.AddMinutes(-5), now)
+            && !NotificationPolicy.ShouldSuppress(muted: false, dndUntil: null, now),
+            "mute and live DND suppress; expired DND does not");
+    }
+
+    private void CheckAutostart()
+    {
+        var executable = Environment.ProcessPath ?? "Chirpdesk.exe";
+        var command = AutostartEntry.Command(executable);
+
+        Check(
+            "autostart",
+            AutostartEntry.IsCurrent(command, executable)
+            && !AutostartEntry.IsCurrent(null, executable)
+            && !AutostartEntry.IsCurrent("Chirpdesk.exe", executable),
+            "quoted command and idempotence");
     }
 
     private void CheckAppIdentity()

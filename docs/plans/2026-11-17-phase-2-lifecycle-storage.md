@@ -165,6 +165,8 @@ Render the closed primitive set (`list`, `table`, `text`, `progress`, `button`, 
 
 ## Task 10: Phase 2 gate
 
+**Status:** automated gate complete (2026-11-17): 20 self-test checks and `gate.ps1` pass; phase-2 RAM/disk recorded. Human rows 10.2/10.3 are the remaining work and need the user's hands.
+
 ### 10.1 Automated — extend `--selftest`
 
 | Check | Asserts |
