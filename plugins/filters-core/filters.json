@@ -1,0 +1,50 @@
+{
+  "blockHosts": [
+    "*.doubleclick.net",
+    "*.googlesyndication.com",
+    "*.googleadservices.com",
+    "*.adnxs.com",
+    "*.ads-twitter.com",
+    "*.amazon-adsystem.com",
+    "*.criteo.com",
+    "*.criteo.net",
+    "*.taboola.com",
+    "*.outbrain.com",
+    "*.scorecardresearch.com",
+    "*.quantserve.com",
+    "*.moatads.com",
+    "*.rubiconproject.com",
+    "*.pubmatic.com",
+    "*.openx.net",
+    "*.adform.net",
+    "*.casalemedia.com",
+    "*.smartadserver.com",
+    "*.adsrvr.org",
+    "*.bidswitch.net",
+    "*.3lift.com",
+    "*.sharethrough.com",
+    "*.teads.tv",
+    "*.zedo.com",
+    "*.yieldmo.com",
+    "*.spotxchange.com",
+    "*.tremorhub.com",
+    "*.applovin.com",
+    "*.unityads.unity3d.com",
+    "*.vungle.com",
+    "*.chartboost.com",
+    "*.inmobi.com",
+    "*.tapjoy.com"
+  ],
+  "blockPaths": [
+    "*/tr/",
+    "*/ads/*",
+    "*/adserver/*"
+  ],
+  "allowHosts": [],
+  "cosmetic": [
+    "[aria-label='Sponsored']",
+    "[data-testid='ad-banner']",
+    "[data-ad-slot]",
+    ".sponsored-content"
+  ]
+}

@@ -1,6 +1,8 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
@@ -45,11 +47,14 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private readonly IToastSink _toast;
     private readonly DateTimeOffset _startedAt;
     private readonly WebView2 _view = new();
+    private IReadOnlyList<FilterPack> _filterPacks;
 
     private WebNotificationBridge? _bridge;
     private WarmUpGate? _gate;
     private NotificationDedupe? _fallbackDedupe;
+    private RequestMatcher? _matcher;
     private int _lastUnread;
+    private int _blockedRequests;
     private bool _darkTheme;
     private bool _disposed;
 
@@ -197,7 +202,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         IClock clock,
         IToastSink toast,
         DateTimeOffset startedAt,
-        bool darkTheme)
+        bool darkTheme,
+        IReadOnlyList<FilterPack> filterPacks)
     {
         _host = host;
         _instance = instance;
@@ -206,6 +212,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _toast = toast;
         _startedAt = startedAt;
         _darkTheme = darkTheme;
+        _filterPacks = filterPacks;
         _view.MessageHook += OnMessageHook;
     }
 
@@ -224,6 +231,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     public string? DefinitionId => _instance.DefinitionId;
 
     public string? Url => _instance.Url;
+
+    /// <summary><c>default</c> or <c>off</c> for this tab.</summary>
+    public string Blocking => _instance.Blocking;
 
     /// <summary>The persisted page-dark policy: <c>on</c>, <c>auto</c>, <c>off</c> or unset.</summary>
     public string? PageDarkMode => _instance.PageDarkMode;
@@ -331,6 +341,33 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// <summary>Last parsed unread count; 0 when the title does not show one.</summary>
     public int UnreadCount { get; private set; }
 
+    /// <summary>Requests cancelled by the blocking matcher for this runtime.</summary>
+    public int BlockedRequests => Volatile.Read(ref _blockedRequests);
+
+    /// <summary>Live per-tab switch used by the Command Bar; persists through the caller.</summary>
+    public void SetBlockingEnabled(bool enabled, IReadOnlyList<FilterPack>? packs = null)
+    {
+        _instance.Blocking = enabled ? "default" : "off";
+
+        if (packs is not null)
+        {
+            _filterPacks = packs;
+        }
+
+        _matcher = enabled ? new RequestMatcher(_instance.Url ?? string.Empty, _filterPacks) : null;
+    }
+
+    /// <summary>Replaces the packs after a filter plugin is activated or deactivated.</summary>
+    public void SetFilterPacks(IReadOnlyList<FilterPack> packs)
+    {
+        _filterPacks = packs;
+
+        if (!string.Equals(_instance.Blocking, "off", StringComparison.OrdinalIgnoreCase))
+        {
+            _matcher = new RequestMatcher(_instance.Url ?? string.Empty, _filterPacks);
+        }
+    }
+
     /// <summary>
     /// Master switch owned by the bundled <c>page-dark</c> theme plugin. When the plugin is
     /// deactivated no page is darkened, whatever the per-service policy says.
@@ -344,9 +381,18 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         IClock clock,
         IToastSink toast,
         DateTimeOffset startedAt,
-        bool darkTheme)
+        bool darkTheme,
+        IReadOnlyList<FilterPack>? filterPacks = null)
     {
-        var runtime = new ServiceRuntime(host, instance, log, clock, toast, startedAt, darkTheme);
+        var runtime = new ServiceRuntime(
+            host,
+            instance,
+            log,
+            clock,
+            toast,
+            startedAt,
+            darkTheme,
+            filterPacks ?? []);
         await runtime.InitializeAsync();
         return runtime;
     }
@@ -430,6 +476,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             _startedAt);
 
         _bridge.Attach();
+        SetupBlocking(core);
         core.DocumentTitleChanged += OnDocumentTitleChanged;
         core.NavigationCompleted += (_, args) =>
         {
@@ -438,6 +485,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 _gate.MarkReady();
                 _ = LogPageCapabilitiesAsync(core);
                 _ = ApplyThemeAsync(_darkTheme);
+                _ = ApplyCosmeticFiltersAsync(core);
             }
             else
             {
@@ -614,6 +662,111 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     {
         _instance.PageDarkMode = mode;
         return ApplyThemeAsync(_darkTheme);
+    }
+
+    /// <summary>
+    /// Installs the request matcher. Any failure leaves blocking off for this runtime rather
+    /// than half-applied: a chat client that cannot log in is worse than an ad (ADR 0004).
+    /// </summary>
+    private void SetupBlocking(Microsoft.Web.WebView2.Core.CoreWebView2 core)
+    {
+        try
+        {
+            core.AddWebResourceRequestedFilter("*", Microsoft.Web.WebView2.Core.CoreWebView2WebResourceContext.All);
+            core.WebResourceRequested += OnWebResourceRequested;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            _matcher = null;
+            _log.Warn($"blocking unavailable for '{_instance.InstanceId}': {ex.Message}");
+            return;
+        }
+
+        if (string.Equals(_instance.Blocking, "off", StringComparison.OrdinalIgnoreCase))
+        {
+            _log.Info($"blocking for '{_instance.InstanceId}': off");
+            return;
+        }
+
+        try
+        {
+            _matcher = new RequestMatcher(_instance.Url ?? string.Empty, _filterPacks);
+            _log.Info(
+                $"blocking for '{_instance.InstanceId}': on, packs={_filterPacks.Count}, skipped={_matcher.SkippedRules}");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            _matcher = null;
+            _log.Warn($"blocking disabled for '{_instance.InstanceId}': {ex.Message}");
+        }
+    }
+
+    private void OnWebResourceRequested(
+        object? sender,
+        Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        try
+        {
+            if (_matcher?.Evaluate(e.Request.Uri) != RequestVerdict.Block)
+            {
+                return;
+            }
+
+            var core = _view.CoreWebView2;
+            if (core is null)
+            {
+                return;
+            }
+
+            e.Response = core.Environment.CreateWebResourceResponse(
+                null,
+                403,
+                "Blocked",
+                "Content-Type: text/plain");
+            Interlocked.Increment(ref _blockedRequests);
+        }
+        catch
+        {
+            // Fail open: a matcher that throws must never break the page.
+        }
+    }
+
+    /// <summary>
+    /// Tier 2: hide promoted containers with a single injected stylesheet. Selectors that look
+    /// like they could break out of the rule are dropped; a bad selector is a visual bug only.
+    /// </summary>
+    private async Task ApplyCosmeticFiltersAsync(Microsoft.Web.WebView2.Core.CoreWebView2 core)
+    {
+        var selectors = _matcher?.CosmeticSelectors;
+        if (selectors is not { Count: > 0 })
+        {
+            return;
+        }
+
+        var safe = selectors
+            .Where(selector => !selector.Contains('{')
+                && !selector.Contains('}')
+                && !selector.Contains("</", StringComparison.Ordinal))
+            .ToArray();
+
+        if (safe.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var css = string.Join(",", safe) + "{display:none !important}";
+            var script = "(function(){var s=document.createElement('style');s.textContent="
+                + JsonSerializer.Serialize(css)
+                + ";document.documentElement.appendChild(s);})()";
+            await core.ExecuteScriptAsync(script);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException
+            or System.Runtime.InteropServices.COMException)
+        {
+            _log.Warn($"could not apply cosmetic filters for '{_instance.InstanceId}': {ex.Message}");
+        }
     }
 
     /// <summary>Counts only: a title is user content and never goes to the log.</summary>

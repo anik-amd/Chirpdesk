@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Chirpdesk.CommandBar;
+using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Lifecycle;
@@ -45,6 +46,7 @@ public partial class App : Application
     private ServiceCatalog? _catalog;
     private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
     private IReadOnlyList<InstalledPlugin> _installedPlugins = Array.Empty<InstalledPlugin>();
+    private IReadOnlyList<FilterPack> _filterPacks = Array.Empty<FilterPack>();
     private SettingsPage? _settingsPage;
     private PluginsPage? _pluginsPage;
     private CommandBarView? _bar;
@@ -65,7 +67,8 @@ public partial class App : Application
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
         _installedPlugins = PluginCatalog.LoadInstalled(_log);
-        _log.Info($"tool panels: {_panels.Count} loaded; plugins: {_installedPlugins.Count} installed");
+        _filterPacks = PluginCatalog.LoadFilters(_log);
+        _log.Info($"tool panels: {_panels.Count} loaded; plugins: {_installedPlugins.Count} installed; filter packs: {_filterPacks.Count}");
         LinkLegacyInstances();
 
         // Windows starts this process to answer a toast click that has left the screen.
@@ -250,11 +253,13 @@ public partial class App : Application
             UnreadRegex = resolved.UnreadRegex,
             NotificationMode = resolved.NotificationMode,
             PageDarkMode = resolved.PageDarkMode,
+            Blocking = instance.Blocking,
             DefinitionId = resolved.DefinitionId,
             ProfileId = instance.ProfileId ?? resolved.InstanceId,
         };
 
         var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
+        var filterPacks = EnabledFilterPacks();
 
         var service = await ServiceRuntime.CreateAsync(
             _host!,
@@ -266,7 +271,8 @@ public partial class App : Application
                 new SettingsStore(AppPaths.SettingsFile, _log!),
                 _log!),
             DateTimeOffset.UtcNow,
-            dark);
+            dark,
+            filterPacks);
 
         service.ShortcutRequested += OnServiceShortcutRequested;
 
@@ -917,7 +923,42 @@ public partial class App : Application
                 Initial: "D"));
         }
 
+        // Per-tab blocking switch; only when a tab is active.
+        if (_registry.Active is { } blockingTab)
+        {
+            var blockingOff = string.Equals(
+                blockingTab.Blocking,
+                "off",
+                StringComparison.OrdinalIgnoreCase);
+
+            candidates.Add(new SearchCandidate(
+                "command:blocking",
+                blockingOff ? "Turn blocking on for this tab" : "Turn blocking off for this tab",
+                SearchKind.Command,
+                ["blocking", "ads", "adblock", "tracker", "filters", "on", "off"],
+                State: null,
+                Accent: "#8A4B2A",
+                Initial: "B"));
+        }
+
         return candidates;
+    }
+
+    private IReadOnlyList<FilterPack> EnabledFilterPacks()
+    {
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            return _filterPacks
+                .Where(pack => PluginState.IsEnabled(settings, pack.Id))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            // Fail open: if settings cannot be read, keep the packs loaded at boot.
+            _log?.Warn($"could not read filter plugin state: {ex.Message}");
+            return _filterPacks;
+        }
     }
 
     private AppSettings LoadSearchSettings()
@@ -1011,6 +1052,12 @@ public partial class App : Application
             return;
         }
 
+        if (string.Equals(selected, "command:blocking", StringComparison.Ordinal))
+        {
+            ToggleBlocking();
+            return;
+        }
+
         if (selected.StartsWith("plugin:", StringComparison.Ordinal))
         {
             var definition = _catalog?.Find(selected["plugin:".Length..]);
@@ -1100,6 +1147,7 @@ public partial class App : Application
                     "command:settings" => UiIcons.Create("settings", accentBrush, 22),
                     "command:plugins" => UiIcons.Create("plugins", accentBrush, 22),
                     "command:page-dark" => UiIcons.Create("moon", accentBrush, 22),
+                    "command:blocking" => UiIcons.Create("shield", accentBrush, 22),
                     _ => definitionId is null
                         ? ServiceBadge.Create(name, accent, 22)
                         : ServiceIcons.Create(definitionId, name, accent, 22),
@@ -1665,6 +1713,38 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Flips request blocking for the current tab. The choice is persisted per instance, so it
+    /// survives a restart and stays scoped to that account. Turning it on never weakens the
+    /// permanent allowlist (ADR 0004).
+    /// </summary>
+    private void ToggleBlocking()
+    {
+        if (_log is null || _registry?.Active is not { } runtime)
+        {
+            return;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log);
+        var settings = store.Load();
+
+        var next = string.Equals(runtime.Blocking, "off", StringComparison.OrdinalIgnoreCase)
+            ? "default"
+            : "off";
+
+        var instance = settings.Services.FirstOrDefault(
+            service => string.Equals(service.InstanceId, runtime.InstanceId, StringComparison.OrdinalIgnoreCase));
+
+        if (instance is not null)
+        {
+            instance.Blocking = next;
+            store.Save(settings);
+        }
+
+        runtime.SetBlockingEnabled(!string.Equals(next, "off", StringComparison.OrdinalIgnoreCase), EnabledFilterPacks());
+        _log.Info($"blocking for '{runtime.InstanceId}' set to {next}");
+    }
+
+    /// <summary>
     /// Activates or deactivates a non-service plugin. The page-dark theme plugin owns the
     /// global darkening switch, so its state is mirrored onto every warm runtime immediately.
     /// </summary>
@@ -1691,6 +1771,18 @@ public partial class App : Application
                 {
                     await runtime.ApplyThemeAsync(dark);
                 }
+            }
+        }
+
+        // A filter plugin owns the packs; activating or deactivating it must reach every warm
+        // runtime now, not at the next restart.
+        if (_filterPacks.Any(pack => string.Equals(pack.Id, pluginId, StringComparison.OrdinalIgnoreCase)))
+        {
+            var packs = EnabledFilterPacks();
+
+            foreach (var id in _registry?.Order ?? Array.Empty<string>())
+            {
+                _registry?.Find(id)?.SetFilterPacks(packs);
             }
         }
 

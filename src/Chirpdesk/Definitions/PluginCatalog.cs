@@ -1,3 +1,4 @@
+using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Plugins;
@@ -32,6 +33,14 @@ internal static class PluginCatalog
 
     public static IReadOnlyList<InstalledPlugin> LoadInstalled(ILog log) =>
         PluginLoader.LoadInstalledPlugins(
+            [
+                new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true),
+                new PluginScanRoot(AppPaths.UserPluginsDirectory, Bundled: false),
+            ],
+            log);
+
+    public static IReadOnlyList<FilterPack> LoadFilters(ILog log) =>
+        PluginLoader.LoadFilters(
             [
                 new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true),
                 new PluginScanRoot(AppPaths.UserPluginsDirectory, Bundled: false),

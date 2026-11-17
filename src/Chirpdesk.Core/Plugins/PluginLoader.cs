@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 
@@ -237,6 +238,66 @@ public static partial class PluginLoader
         }
 
         return panels;
+    }
+
+    /// <summary>
+    /// Loads `filter` plugins. User packs shadow bundled packs of the same id; a broken pack is
+    /// skipped and logged, never fatal (invariant 8).
+    /// </summary>
+    public static IReadOnlyList<FilterPack> LoadFilters(IEnumerable<PluginScanRoot> roots, ILog? log = null)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+
+        var loaded = new Dictionary<string, (FilterPack Pack, bool Bundled)>(StringComparer.Ordinal);
+        var errors = new List<string>();
+
+        foreach (var root in roots)
+        {
+            foreach (var folder in EnumeratePluginFolders(root.Directory, errors))
+            {
+                var folderName = NameOf(folder);
+                var manifest = ReadManifest(folder, folderName, root.Bundled, errors);
+
+                if (manifest is null || !string.Equals(manifest.Kind, "filter", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var pack = ReadJson<FilterPack>(folder, folderName, "filters.json", errors);
+                if (pack is null)
+                {
+                    continue;
+                }
+
+                pack.Id = manifest.Id;
+
+                if (loaded.TryGetValue(pack.Id, out var existing))
+                {
+                    if (existing.Bundled && !root.Bundled)
+                    {
+                        loaded[pack.Id] = (pack, root.Bundled);
+                    }
+                    else if (existing.Bundled == root.Bundled)
+                    {
+                        errors.Add($"{folderName}: duplicate filter id '{pack.Id}'");
+                    }
+
+                    continue;
+                }
+
+                loaded[pack.Id] = (pack, root.Bundled);
+            }
+        }
+
+        foreach (var error in errors)
+        {
+            log?.Warn($"filter pack skipped: {error}");
+        }
+
+        return loaded.Values
+            .Select(entry => entry.Pack)
+            .OrderBy(pack => pack.Id, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static List<string> EnumeratePluginFolders(string directory, List<string> errors)

@@ -275,6 +275,8 @@ Validation: variant ids `^[a-z0-9-]{1,24}$`, unique; `mode` is `dark` or `light`
 
 `blockHosts` / `allowHosts` are host patterns; paths belong in `blockPaths`. A pack may only **add** to the auth/WebSocket allowlist, never remove from it, and the service's own origin is allowlisted by the host regardless.
 
+Bundled filter packs are active by default. Deactivating one on the Plugins page removes its rules from every warm tab immediately; re-activating restores them. The permanent allowlist and the per-tab `blocking: off` command are independent of any pack.
+
 ## 8. `panel.json` — the `tool` kind
 
 Tools are bundled only in v1 and cannot add capability. The host renders a closed set of primitives and executes a closed set of actions; there is no XAML, script, path or arbitrary command.

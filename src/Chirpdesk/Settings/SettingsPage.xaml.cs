@@ -132,9 +132,18 @@ public partial class SettingsPage : UserControl
 
             var names = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(10, 0, 0, 0) };
             names.Children.Add(new TextBlock { Text = instance.Name, FontSize = 13 });
+
+            var blockingOff = string.Equals(instance.Blocking, "off", StringComparison.OrdinalIgnoreCase);
+            var blocked = blockingOff ? 0 : _registry.Find(instance.InstanceId)?.BlockedRequests ?? 0;
+            var blockingText = blockingOff
+                ? "blocking off"
+                : blocked > 0
+                    ? $"blocking on · {blocked} blocked"
+                    : "blocking on";
+
             names.Children.Add(new TextBlock
             {
-                Text = $"{instance.DefinitionId ?? "legacy"} · {state.ToString().ToLowerInvariant()}",
+                Text = $"{instance.DefinitionId ?? "legacy"} · {state.ToString().ToLowerInvariant()} · {blockingText}",
                 FontSize = 11,
                 Opacity = 0.65,
             });

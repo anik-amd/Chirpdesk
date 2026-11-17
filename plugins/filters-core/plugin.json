@@ -1,0 +1,11 @@
+{
+  "id": "filters-core",
+  "kind": "filter",
+  "name": "Ad and tracker blocking",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Conservative tier-1 blocking for ad and tracker hosts, plus cosmetic hiding of promoted containers. Auth, WebSocket and update traffic is always allowed.",
+  "permissions": ["filters"],
+  "accent": "#8A4B2A"
+}

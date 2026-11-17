@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using Chirpdesk.Core.CommandBar;
+using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Logging;
@@ -9,6 +10,7 @@ using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Storage;
 using Chirpdesk.Core.Time;
+using Chirpdesk.Definitions;
 using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Notifications;
@@ -51,6 +53,7 @@ internal sealed class SelfTest
         Guarded("single-instance", CheckSingleInstance);
         Guarded("definitions", CheckDefinitions);
         Guarded("catalog", CheckCatalog);
+        Guarded("blocking", CheckBlocking);
         Guarded("migration", CheckMigration);
         Guarded("bar-state", CheckBarState);
         Guarded("storage", CheckStorage);
@@ -229,6 +232,29 @@ internal sealed class SelfTest
         {
             TryDelete(temp);
         }
+    }
+
+    private void CheckBlocking()
+    {
+        var packs = PluginCatalog.LoadFilters(_log);
+        var bundled = packs.Where(pack => pack.Id == "filters-core").ToList();
+        var matcher = new RequestMatcher("https://web.whatsapp.com/", bundled);
+
+        var allowlist = matcher.Evaluate("https://web.whatsapp.com/ws") == RequestVerdict.Allow
+            && matcher.Evaluate("https://example.org/oauth/callback") == RequestVerdict.Allow;
+        var blocks = matcher.Evaluate("https://ads.doubleclick.net/pixel") == RequestVerdict.Block;
+        var cosmetic = matcher.CosmeticSelectors.Count > 0;
+
+        var broken = new RequestMatcher(
+            "https://web.whatsapp.com/",
+            [new FilterPack { Id = "broken", BlockHosts = ["bad host", "https://nope"] }]);
+        var failOpen = broken.SkippedRules >= 2
+            && broken.Evaluate("https://safe.example/x") == RequestVerdict.Allow;
+
+        Check(
+            "blocking",
+            allowlist && blocks && cosmetic && failOpen && bundled.Count == 1,
+            $"allowlist={allowlist} blocks={blocks} cosmetic={cosmetic} fail-open={failOpen} packs={bundled.Count}");
     }
 
     private void CheckCatalog()
