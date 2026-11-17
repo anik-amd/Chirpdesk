@@ -23,6 +23,9 @@ internal sealed class ServiceRegistry
 
     public bool IsWarm(string instanceId) => _warm.ContainsKey(instanceId);
 
+    public ServiceRuntime? Find(string instanceId) =>
+        _warm.TryGetValue(instanceId, out var runtime) ? runtime : null;
+
     /// <summary>Replaces a runtime of the same id, disposing the previous one.</summary>
     public async Task AddAsync(ServiceRuntime runtime)
     {

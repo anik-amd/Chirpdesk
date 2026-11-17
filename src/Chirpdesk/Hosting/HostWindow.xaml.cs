@@ -39,12 +39,31 @@ public partial class HostWindow : Window
     /// <summary>Detaches one webview without touching another instance's content.</summary>
     public void RemoveServiceContent(System.Windows.UIElement element) => ServiceLayer.Children.Remove(element);
 
+    /// <summary>Mounts the Command Bar once; the caller owns its lifetime.</summary>
+    public void SetCommandBar(System.Windows.UIElement element) => BarHost.Content = element;
+
+    public bool IsCommandBarOpen => BarLayer.Visibility == System.Windows.Visibility.Visible;
+
+    /// <summary>Shows the overlay at 12 % from the top, horizontally centred (§12 budget).</summary>
+    public void ShowCommandBar()
+    {
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+        BarHost.Margin = new Thickness(0, Math.Max(24, height * 0.12), 0, 0);
+        BarLayer.Visibility = System.Windows.Visibility.Visible;
+    }
+
+    public void HideCommandBar() => BarLayer.Visibility = System.Windows.Visibility.Collapsed;
+
+    public bool IsDark { get; private set; }
+
     /// <summary>
     /// One palette, two ends. The window background is the only chrome that exists before the
     /// title bar lands, so it is also the visible proof that the theme was applied.
     /// </summary>
     public void SetDark(bool dark)
     {
+        IsDark = dark;
+
         Background = new System.Windows.Media.SolidColorBrush(
             dark
                 ? System.Windows.Media.Color.FromRgb(0x11, 0x12, 0x14)

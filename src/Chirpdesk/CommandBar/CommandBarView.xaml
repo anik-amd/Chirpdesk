@@ -1,0 +1,82 @@
+<UserControl x:Class="Chirpdesk.CommandBar.CommandBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="560"
+             MaxHeight="420"
+             Focusable="False"
+             IsTabStop="False">
+
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="BarSelectionBrush" Color="#342C3E" />
+
+        <Style x:Key="BarRow" TargetType="ListBoxItem">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Row"
+                                Background="Transparent"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource BarSelectionBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Size budget is a product constraint: 560 x 420, anchored by the host. -->
+    <Border x:Name="Root"
+            CornerRadius="10"
+            BorderThickness="1"
+            Background="#1A171C"
+            BorderBrush="#2C2730">
+        <Grid Margin="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- The query line is the bar's one "terminal" flavour. -->
+            <TextBlock x:Name="Header"
+                       Margin="10,8,10,6"
+                       FontFamily="Cascadia Mono, Consolas"
+                       FontSize="13"
+                       Foreground="#8F8894"
+                       Text="Switch service" />
+
+            <ListBox x:Name="Rows"
+                     Grid.Row="1"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Focusable="False"
+                     IsTabStop="False"
+                     IsHitTestVisible="False"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ItemContainerStyle="{StaticResource BarRow}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Name}" FontSize="14" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock x:Name="EmptyText"
+                       Grid.Row="1"
+                       Margin="14,10"
+                       FontSize="14"
+                       Foreground="#8F8894"
+                       Visibility="Collapsed"
+                       Text="No warm services." />
+        </Grid>
+    </Border>
+</UserControl>

@@ -189,6 +189,17 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     public string InstanceId => _instance.InstanceId;
 
+    public string Name => _instance.Name;
+
+    /// <summary>Hides the page while the Command Bar is open. Not disposed; state survives.</summary>
+    public void CollapseForCommandBar() => _view.Visibility = Visibility.Collapsed;
+
+    public void RestoreFromCommandBar()
+    {
+        _view.Visibility = Visibility.Visible;
+        _host.UpdateLayout();
+    }
+
     public int ReceivedNotifications => _bridge?.Received ?? 0;
 
     public static async Task<ServiceRuntime> CreateAsync(

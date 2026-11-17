@@ -9,6 +9,8 @@ internal static class NativeMethods
     internal const long WsExToolWindow = 0x0000_0080L;
     internal const long WsExAppWindow = 0x0004_0000L;
 
+    private const int VkControl = 0x11;
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern nint GetWindowLongPtr64(nint hWnd, int nIndex);
 
@@ -38,6 +40,15 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool IsWindowVisible(nint hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
+
+    /// <summary>
+    /// Used by the Command Bar to commit on Ctrl release; WebView2 never delivers that key-up
+    /// (ADR 0002). Polled, not hooked, so no input goes through the app.
+    /// </summary>
+    internal static bool IsControlDown() => (GetAsyncKeyState(VkControl) & 0x8000) != 0;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct WindowRect

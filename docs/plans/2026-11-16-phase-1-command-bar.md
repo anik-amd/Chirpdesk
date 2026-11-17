@@ -107,6 +107,8 @@ Every failure is per-plugin and logged: missing payload, invalid JSON, id mismat
 
 ## Task 5: Command Bar — cycle mode
 
+**Status:** complete (2026-11-17). The bar is an overlay inside `HostWindow` (airspace, ADR 0002); `BarState` in Core owns cycle/latch/release/cancel; `ModifierWatcher` polls Ctrl at 30 ms; opening collapses the active view and closing restores it. Search ranking is Task 6; scroll/focus survival is verified in Task 7.
+
 **Files:**
 - Create: `src/Chirpdesk/CommandBar/CommandBarWindow.xaml(.cs)`, `BarState.cs`, `ModifierWatcher.cs`
 - Test: `tests/Chirpdesk.Core.Tests/CommandBar/BarStateTests.cs`

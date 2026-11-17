@@ -3,6 +3,8 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Chirpdesk.CommandBar;
+using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
@@ -35,6 +37,9 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private ServiceRegistry? _registry;
     private ServiceCatalog? _catalog;
+    private CommandBarView? _bar;
+    private BarState? _barState;
+    private ModifierWatcher? _barWatcher;
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
 
@@ -104,6 +109,13 @@ public partial class App : Application
         _tray = TrayIconFactory.Create(OpenHost, HideHost, Quit);
         _host.Attach(_tray);
 
+        _bar = new CommandBarView();
+        _host.SetCommandBar(_bar);
+        _barWatcher = new ModifierWatcher(Dispatcher);
+        _barWatcher.ControlReleased += OnControlReleased;
+        _host.PreviewKeyDown += OnHostPreviewKeyDown;
+        _host.PreviewTextInput += OnHostPreviewTextInput;
+
         InitializeTheme();
 
         _log.Info("started hidden");
@@ -126,6 +138,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         ToastActivation.RevokeClassObject();
+        _barWatcher?.Detach();
         _tray?.Dispose();
 
         try
@@ -333,6 +346,11 @@ public partial class App : Application
 
     private void OnHostKeyDown(object sender, KeyEventArgs e)
     {
+        if (_barState is not null)
+        {
+            return;
+        }
+
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
@@ -340,15 +358,198 @@ public partial class App : Application
             return;
         }
 
-        // Ctrl+Tab / Ctrl+Shift+Tab cycles warm services while the window has focus. The
+        // Ctrl+Tab opens cycle mode on the next warm service; releasing Ctrl commits. The
         // always-available version needs the global hotkey and the overlay, which is the next
-        // slice; this one proves the registry and keyboard path.
+        // slice; this one proves the registry and bar path.
         if (e.Key == Key.Tab && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             e.Handled = true;
             var direction = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1;
-            _registry?.Cycle(direction);
+            OpenCommandBar(direction);
         }
+    }
+
+    private void OnHostPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_barState is null)
+        {
+            return;
+        }
+
+        // With Ctrl held, WPF does not raise TextInput for a printable key, but typing a letter
+        // is exactly how cycle latches into search (ADR 0002), and how the query grows before
+        // Ctrl is released.
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryMapText(e.Key, out var typed))
+        {
+            e.Handled = true;
+
+            if (_barState.Mode == BarMode.Cycle)
+            {
+                _barState.Latch(typed);
+            }
+            else
+            {
+                _barState.Append(typed);
+            }
+
+            RenderCommandBar();
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Escape:
+                e.Handled = true;
+                CloseCommandBar(restore: true);
+                return;
+
+            case Key.Tab:
+                e.Handled = true;
+                if (_barState.Move((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1))
+                {
+                    RenderCommandBar();
+                }
+
+                return;
+
+            case Key.Back when _barState.Mode == BarMode.Search:
+                e.Handled = true;
+                _barState.Backspace();
+                RenderCommandBar();
+                return;
+        }
+    }
+
+    private static bool TryMapText(Key key, out string text)
+    {
+        if (key is >= Key.A and <= Key.Z)
+        {
+            text = ((char)('a' + ((int)key - (int)Key.A))).ToString();
+            return true;
+        }
+
+        if (key is >= Key.D0 and <= Key.D9)
+        {
+            text = ((char)('0' + ((int)key - (int)Key.D0))).ToString();
+            return true;
+        }
+
+        if (key is >= Key.NumPad0 and <= Key.NumPad9)
+        {
+            text = ((char)('0' + ((int)key - (int)Key.NumPad0))).ToString();
+            return true;
+        }
+
+        text = string.Empty;
+        return false;
+    }
+
+    private void OnHostPreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (_barState is null || string.IsNullOrEmpty(e.Text))
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_barState.Mode == BarMode.Cycle)
+        {
+            _barState.Latch(e.Text);
+        }
+        else
+        {
+            _barState.Append(e.Text);
+        }
+
+        RenderCommandBar();
+    }
+
+    /// <summary>
+    /// Ctrl is up. In cycle mode that is the commit gesture; in search the bar stays open and
+    /// nothing switches (ADR 0002).
+    /// </summary>
+    private void OnControlReleased(object? sender, EventArgs e)
+    {
+        if (_barState is null)
+        {
+            return;
+        }
+
+        var committed = _barState.ReleaseControl();
+
+        if (committed is null)
+        {
+            if (_barState.IsOpen)
+            {
+                RenderCommandBar();
+            }
+            else
+            {
+                CloseCommandBar(restore: true);
+            }
+
+            return;
+        }
+
+        CloseCommandBar(restore: true);
+        var switched = _registry?.Activate(committed) == true;
+        _log?.Info($"command bar committed '{committed}': switched={switched}");
+    }
+
+    private void OpenCommandBar(int direction)
+    {
+        if (_host is null || _bar is null || _registry is null)
+        {
+            return;
+        }
+
+        var order = _registry.Order;
+        if (order.Count == 0)
+        {
+            return;
+        }
+
+        _barState = BarState.ForCycle(order, _registry.Active?.InstanceId, direction);
+        RenderCommandBar();
+
+        // The webview is an HWND and would paint over the bar until it is collapsed.
+        _registry.Active?.CollapseForCommandBar();
+        _host.ShowCommandBar();
+        _host.Focus();
+        _barWatcher?.Start();
+
+        _log?.Info($"command bar opened: {order.Count} warm service(s)");
+    }
+
+    private void RenderCommandBar()
+    {
+        if (_bar is null || _barState is null || _host is null || _registry is null)
+        {
+            return;
+        }
+
+        var rows = _barState.Entries
+            .Select(id => new BarRow(id, _registry.Find(id)?.Name ?? id))
+            .ToList();
+
+        _bar.Render(rows, _barState.Highlight, _barState.Mode, _barState.Query, _host.IsDark);
+    }
+
+    private void CloseCommandBar(bool restore)
+    {
+        _barWatcher?.Stop();
+        _barState?.Cancel();
+        _barState = null;
+
+        _host?.HideCommandBar();
+
+        if (restore)
+        {
+            _registry?.Active?.RestoreFromCommandBar();
+        }
+
+        _host?.UpdateLayout();
     }
 
     /// <summary>
@@ -414,6 +615,11 @@ public partial class App : Application
         {
             _ = active.ApplyThemeAsync(dark);
         }
+
+        if (_host?.IsCommandBarOpen == true)
+        {
+            RenderCommandBar();
+        }
     }
 
     private void ShowHost()
@@ -421,6 +627,11 @@ public partial class App : Application
         if (_host is null)
         {
             return;
+        }
+
+        if (_barState is not null)
+        {
+            CloseCommandBar(restore: true);
         }
 
         var wasVisible = _host.IsVisible;
@@ -450,6 +661,11 @@ public partial class App : Application
 
     private void HideHost()
     {
+        if (_barState is not null)
+        {
+            CloseCommandBar(restore: true);
+        }
+
         _registry?.ParkActive();
         _host?.HideToBackground();
     }
