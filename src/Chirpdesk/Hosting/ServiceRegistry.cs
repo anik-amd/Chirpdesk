@@ -20,6 +20,9 @@ internal sealed class ServiceRegistry
 
     public ServiceRuntime? Active { get; private set; }
 
+    /// <summary>Raised after <see cref="Active"/> changes, including to null.</summary>
+    public event EventHandler? ActiveChanged;
+
     public RuntimeState StateOf(string instanceId) => _state.StateOf(instanceId);
 
     /// <summary>Most-recently-used first.</summary>
@@ -62,6 +65,7 @@ internal sealed class ServiceRegistry
             Active?.Park();
             target.Activate();
             Active = target;
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
         }
 
         _mru.Activate(instanceId);
@@ -89,6 +93,7 @@ internal sealed class ServiceRegistry
         if (wasActive)
         {
             Active = null;
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
         }
 
         await runtime.DisposeAsync();
@@ -122,6 +127,7 @@ internal sealed class ServiceRegistry
         if (wasActive)
         {
             Active = null;
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
         }
 
         await runtime.DisposeAsync();

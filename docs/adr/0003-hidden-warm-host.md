@@ -34,3 +34,11 @@ and a 30 s tick re-asserts `Controller.IsVisible = true` and `TrySuspendAsync(fa
 - A service that only emits background service-worker notifications degrades to a generic toast. If content is required, the gate fails for that service and the fallback is recorded here.
 - Fallbacks, in order: 1×1 `WS_EX_NOACTIVATE` window at screen edge; then a minimised taskbar window (still zero in-app chrome).
 - **Phase 0 gate decides this.** Log in once with the window shown, hide it, then 3 hours tray-hidden with a real login, then an inbound message must toast. Failure is recorded here with the observed mode and the fallback chosen.
+
+## Amendment 2026-11-17 - a user launch is a request
+
+Starting Chirpdesk from the shortcut, the Start menu or a second launch while it is resident now
+shows the window: the launch is the user asking for it. Only `--autostart` (the HKCU Run path at
+login) and an explicit `--hidden` stay in the tray. The host still starts off-screen and warms
+hidden before the first frame is shown, so the rule "never show the window except because the user
+asked" is unchanged - boot is not a request.

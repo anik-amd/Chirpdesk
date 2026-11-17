@@ -48,6 +48,47 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     internal static extern nint SetFocus(nint hWnd);
 
+    internal const int WmGetMinMaxInfo = 0x0024;
+    internal const uint MonitorDefaultToNearest = 0x0000_0002;
+    internal const int DwmwaWindowCornerPreference = 33;
+    internal const int DwmWindowCornerRound = 2;
+
+    [DllImport("user32.dll")]
+    internal static extern nint MonitorFromWindow(nint hWnd, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmSetWindowAttribute(nint hWnd, int attribute, ref int value, int size);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MonitorInfo
+    {
+        public int Size;
+        public WindowRect Monitor;
+        public WindowRect Work;
+        public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MinMaxInfo
+    {
+        public NativePoint Reserved;
+        public NativePoint MaxSize;
+        public NativePoint MaxPosition;
+        public NativePoint MinTrackSize;
+        public NativePoint MaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
     /// <summary>
     /// Used by the Command Bar to commit on Ctrl release; WebView2 never delivers that key-up
     /// (ADR 0002). Polled, not hooked, so no input goes through the app.

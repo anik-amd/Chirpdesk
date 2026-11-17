@@ -49,7 +49,7 @@ function Get-Stamp([string] $line) {
 $cutoff = $app.StartTime.AddSeconds(-5)
 $session = @($lines | Where-Object { $stamp = Get-Stamp $_; $null -ne $stamp -and $stamp -ge $cutoff })
 
-$started = @($session | Where-Object { $_ -match 'started hidden' })
+$started = @($session | Where-Object { $_ -match 'info started' })
 $toasts = @($session | Where-Object { $_ -match 'toast shown' })
 $unread = @($session | Where-Object { $_ -match 'unread \d+ for' })
 $shows = @($session | Where-Object { $_ -match 'showing the window on request' })

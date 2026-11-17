@@ -61,11 +61,11 @@
               Background="{DynamicResource CdPaletteRaised}"
               MouseLeftButtonDown="OnTitleBarMouseDown">
             <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
-                <Border Width="7"
-                        Height="7"
-                        CornerRadius="3.5"
-                        Background="{DynamicResource CdPaletteAccent}"
-                        VerticalAlignment="Center" />
+                <Image Width="16"
+                       Height="16"
+                       Source="pack://application:,,,/Chirpdesk;component/Assets/chirpdesk.ico"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       VerticalAlignment="Center" />
                 <TextBlock x:Name="TitleText"
                            Text="Chirpdesk"
                            Margin="9,0,0,0"
@@ -82,6 +82,24 @@
                            Foreground="{DynamicResource CdPaletteMuted}"
                            Visibility="Collapsed" />
             </StackPanel>
+
+            <Grid x:Name="BusyTrack"
+                  Height="2"
+                  VerticalAlignment="Bottom"
+                  Background="{DynamicResource CdPaletteRule}"
+                  ClipToBounds="True"
+                  IsHitTestVisible="False"
+                  Visibility="Collapsed">
+                <Rectangle x:Name="BusyBar"
+                           Width="96"
+                           HorizontalAlignment="Left"
+                           Fill="{DynamicResource CdPaletteAccent}"
+                           Opacity="0.9">
+                    <Rectangle.RenderTransform>
+                        <TranslateTransform x:Name="BusyShift" />
+                    </Rectangle.RenderTransform>
+                </Rectangle>
+            </Grid>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="MinimizeButton"
@@ -118,10 +136,11 @@
                 <Image x:Name="BarBackdrop" Stretch="Fill" />
                 <Grid Background="{DynamicResource CdScrim}">
                     <ContentControl x:Name="BarHost"
-                                    HorizontalAlignment="Center"
+                                    HorizontalAlignment="Stretch"
                                     VerticalAlignment="Top"
-                                    Width="560"
-                                    MaxHeight="420" />
+                                    MaxWidth="560"
+                                    MaxHeight="420"
+                                    Margin="24,0" />
                 </Grid>
             </Grid>
 

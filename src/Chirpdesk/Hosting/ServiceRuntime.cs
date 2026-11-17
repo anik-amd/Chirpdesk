@@ -341,6 +341,23 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// <summary>Last parsed unread count; 0 when the title does not show one.</summary>
     public int UnreadCount { get; private set; }
 
+    /// <summary>True between Navigate and NavigationCompleted, including redirects.</summary>
+    public bool IsNavigating { get; private set; }
+
+    /// <summary>Raised when <see cref="IsNavigating"/> changes; the host filters by active tab.</summary>
+    public event EventHandler? NavigationStateChanged;
+
+    private void SetNavigating(bool navigating)
+    {
+        if (IsNavigating == navigating)
+        {
+            return;
+        }
+
+        IsNavigating = navigating;
+        NavigationStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Requests cancelled by the blocking matcher for this runtime.</summary>
     public int BlockedRequests => Volatile.Read(ref _blockedRequests);
 
@@ -480,6 +497,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         core.DocumentTitleChanged += OnDocumentTitleChanged;
         core.NavigationCompleted += (_, args) =>
         {
+            SetNavigating(false);
+
             if (args.IsSuccess)
             {
                 _gate.MarkReady();
@@ -512,6 +531,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             // Installed before navigation so it is in place before any app script runs.
             await core.AddScriptToExecuteOnDocumentCreatedAsync(NotificationShimScript);
             await core.AddScriptToExecuteOnDocumentCreatedAsync(ThemeScript);
+            SetNavigating(true);
             core.Navigate(_instance.Url);
         }
     }

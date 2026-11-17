@@ -832,6 +832,15 @@ internal sealed class SelfTest
         // Soft: Windows can have notifications switched off for this app, which is a user setting,
         // not a defect in Chirpdesk.
         Check("toast-shown", found, found ? "appeared in Action Center history" : "not in history (notifications may be off)", soft: true);
+
+        try
+        {
+            ToastNotificationManager.History.Remove("selftest", "selftest", Aumid.AppId);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
+        {
+            _log.Warn($"could not remove the self-test toast: {ex.Message}");
+        }
     }
 
     private static ProcessStartInfo? StartInfo()

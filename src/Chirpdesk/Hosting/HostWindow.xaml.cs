@@ -1,5 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using Chirpdesk.Interop;
 
 namespace Chirpdesk.Hosting;
 
@@ -13,6 +17,7 @@ public partial class HostWindow : Window
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
+        StateChanged += (_, _) => UpdateMaximizeGlyph();
     }
 
     public nint Handle => new WindowInteropHelper(this).Handle;
@@ -49,9 +54,41 @@ public partial class HostWindow : Window
 
     public void SetPage(System.Windows.UIElement page) => PageHost.Content = page;
 
-    public void ShowPage() => PageLayer.Visibility = System.Windows.Visibility.Visible;
+    public void ShowPage()
+    {
+        PageLayer.Visibility = System.Windows.Visibility.Visible;
 
-    public void HidePage() => PageLayer.Visibility = System.Windows.Visibility.Collapsed;
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            PageLayer.Opacity = 1;
+            return;
+        }
+
+        PageLayer.Opacity = 0;
+        PageLayer.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+
+        var slide = PageHost.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        PageHost.RenderTransform = slide;
+        slide.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(170))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+    }
+
+    public void HidePage()
+    {
+        PageLayer.BeginAnimation(OpacityProperty, null);
+        PageLayer.Opacity = 1;
+        PageHost.RenderTransform = null;
+        PageLayer.Visibility = System.Windows.Visibility.Collapsed;
+    }
 
     /// <summary>Shows the overlay at 12 % from the top, horizontally centred (§12 budget).</summary>
     public void ShowCommandBar(System.Windows.Media.ImageSource? backdrop = null)
@@ -59,14 +96,76 @@ public partial class HostWindow : Window
         BarBackdrop.Source = backdrop;
 
         var height = ActualHeight > 0 ? ActualHeight : Height;
-        BarHost.Margin = new Thickness(0, Math.Max(24, height * 0.12), 0, 0);
+        var top = Math.Max(24, height * 0.12);
+        BarHost.Margin = new Thickness(24, top, 24, 0);
+        BarHost.MaxHeight = Math.Max(180, height - top - 24);
         BarLayer.Visibility = System.Windows.Visibility.Visible;
+
+        _barHideToken++;
+
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            BarLayer.Opacity = 1;
+            return;
+        }
+
+        BarLayer.Opacity = 0;
+        BarLayer.BeginAnimation(
+            OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+
+        var slide = BarHost.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        BarHost.RenderTransform = slide;
+        slide.BeginAnimation(
+            TranslateTransform.YProperty,
+            new DoubleAnimation(-8, 0, TimeSpan.FromMilliseconds(170))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
     }
 
     public void HideCommandBar()
     {
+        if (!IsCommandBarOpen)
+        {
+            return;
+        }
+
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            CollapseCommandBar();
+            return;
+        }
+
+        var token = ++_barHideToken;
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(80))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+
+        fade.Completed += (_, _) =>
+        {
+            if (token == _barHideToken)
+            {
+                CollapseCommandBar();
+            }
+        };
+
+        BarLayer.BeginAnimation(OpacityProperty, fade);
+    }
+
+    private int _barHideToken;
+
+    private void CollapseCommandBar()
+    {
+        BarLayer.BeginAnimation(OpacityProperty, null);
+        BarLayer.Opacity = 1;
         BarLayer.Visibility = System.Windows.Visibility.Collapsed;
         BarBackdrop.Source = null;
+        BarHost.RenderTransform = null;
     }
 
     public bool IsDark { get; private set; }
@@ -110,8 +209,30 @@ public partial class HostWindow : Window
             PlaceOnScreen();
         }
 
+        _visibilityToken++;
+        BeginAnimation(OpacityProperty, null);
+
+        if (SystemParameters.ClientAreaAnimation)
+        {
+            Opacity = 0;
+        }
+        else
+        {
+            Opacity = 1;
+        }
+
         Show();
         Activate();
+
+        if (SystemParameters.ClientAreaAnimation)
+        {
+            BeginAnimation(
+                OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(130))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                });
+        }
 
         // Activate() alone loses to Windows' foreground lock when the request came from a
         // toast; asking directly is the only lever a desktop app has.
@@ -121,9 +242,36 @@ public partial class HostWindow : Window
     /// <summary>Hide without tearing anything down: the webviews keep running.</summary>
     public void HideToBackground()
     {
-        Hide();
-        WindowChrome.MakeToolWindow(Handle);
+        if (!SystemParameters.ClientAreaAnimation || !IsVisible)
+        {
+            Hide();
+            WindowChrome.MakeToolWindow(Handle);
+            return;
+        }
+
+        var token = ++_visibilityToken;
+        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(110))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+
+        fade.Completed += (_, _) =>
+        {
+            if (token != _visibilityToken)
+            {
+                return;
+            }
+
+            Hide();
+            Opacity = 1;
+            BeginAnimation(OpacityProperty, null);
+            WindowChrome.MakeToolWindow(Handle);
+        };
+
+        BeginAnimation(OpacityProperty, fade);
     }
+
+    private int _visibilityToken;
 
     private void OnTitleBarMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -147,38 +295,118 @@ public partial class HostWindow : Window
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
     /// <summary>
-    /// Sizes the window to the work area instead of letting the shell maximise a
-    /// <c>WindowStyle=None</c> window, which pushes the custom title bar off-screen. Bounds are
-    /// remembered so restoring returns to exactly where the user had it.
+    /// The shell owns maximize so taskbar placement, animation and restore bounds are native.
+    /// WM_GETMINMAXINFO pins the window to the monitor work area, which keeps the title bar and
+    /// caption buttons below a top taskbar instead of under it.
     /// </summary>
-    private void ToggleMaximize()
-    {
-        if (_restore is null)
-        {
-            _restore = new Rect(Left, Top, Width, Height);
+    private void ToggleMaximize() =>
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
 
-            var area = SystemParameters.WorkArea;
-            Left = area.Left;
-            Top = area.Top;
-            Width = area.Width;
-            Height = area.Height;
-            MaximizeButton.Content = "\uE923";
-        }
-        else
+    private void UpdateMaximizeGlyph() =>
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
+
+    /// <summary>A 2 px indeterminate bar along the title bar; pure WPF, never over the webview.</summary>
+    public void SetBusy(bool busy)
+    {
+        if (busy)
         {
-            var bounds = _restore.Value;
-            Left = bounds.Left;
-            Top = bounds.Top;
-            Width = bounds.Width;
-            Height = bounds.Height;
-            _restore = null;
-            MaximizeButton.Content = "\uE922";
+            BusyTrack.Visibility = Visibility.Visible;
+
+            if (!SystemParameters.ClientAreaAnimation)
+            {
+                BusyShift.X = 0;
+                return;
+            }
+
+            var travel = Math.Max(ActualWidth, 240) + 96;
+            BusyShift.BeginAnimation(
+                TranslateTransform.XProperty,
+                new DoubleAnimation(-96, travel, TimeSpan.FromMilliseconds(1100))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever,
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                });
+            return;
+        }
+
+        BusyShift.BeginAnimation(TranslateTransform.XProperty, null);
+        BusyShift.X = 0;
+        BusyTrack.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        WindowChrome.MakeToolWindow(Handle);
+
+        if (PresentationSource.FromVisual(this) is HwndSource source)
+        {
+            source.AddHook(WndProc);
+        }
+
+        EnableRoundedCorners();
+        UpdateMaximizeGlyph();
+    }
+
+    /// <summary>Windows 11 rounds the frame itself; Windows 10 simply ignores the attribute.</summary>
+    private void EnableRoundedCorners()
+    {
+        try
+        {
+            var preference = NativeMethods.DwmWindowCornerRound;
+            _ = NativeMethods.DwmSetWindowAttribute(
+                Handle,
+                NativeMethods.DwmwaWindowCornerPreference,
+                ref preference,
+                sizeof(int));
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Older Windows: the square frame is the correct fallback.
         }
     }
 
-    private Rect? _restore;
+    /// <summary>
+    /// A borderless window maximises to the full monitor unless it is told otherwise, which is
+    /// how a top taskbar ends up covering the caption buttons. Always answer with the monitor
+    /// work area, in the physical pixels WM_GETMINMAXINFO expects.
+    /// </summary>
+    private nint WndProc(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
+    {
+        if (message != NativeMethods.WmGetMinMaxInfo)
+        {
+            return nint.Zero;
+        }
 
-    private void OnSourceInitialized(object? sender, EventArgs e) => WindowChrome.MakeToolWindow(Handle);
+        var monitor = NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MonitorDefaultToNearest);
+        if (monitor == nint.Zero)
+        {
+            return nint.Zero;
+        }
+
+        var info = new NativeMethods.MonitorInfo
+        {
+            Size = Marshal.SizeOf<NativeMethods.MonitorInfo>(),
+        };
+
+        if (!NativeMethods.GetMonitorInfo(monitor, ref info))
+        {
+            return nint.Zero;
+        }
+
+        var bounds = Marshal.PtrToStructure<NativeMethods.MinMaxInfo>(lParam);
+        bounds.MaxPosition.X = info.Work.Left - info.Monitor.Left;
+        bounds.MaxPosition.Y = info.Work.Top - info.Monitor.Top;
+        bounds.MaxSize.X = info.Work.Right - info.Work.Left;
+        bounds.MaxSize.Y = info.Work.Bottom - info.Work.Top;
+        bounds.MaxTrackSize.X = Math.Max(bounds.MaxTrackSize.X, bounds.MaxSize.X);
+        bounds.MaxTrackSize.Y = Math.Max(bounds.MaxTrackSize.Y, bounds.MaxSize.Y);
+        Marshal.StructureToPtr(bounds, lParam, fDeleteOld: true);
+
+        handled = true;
+        return nint.Zero;
+    }
 
     private bool IsOnScreen() => Left > -10_000 && Top > -10_000;
 

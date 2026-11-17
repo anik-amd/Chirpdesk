@@ -144,12 +144,13 @@ public partial class App : Application
         _barWatcher = new ModifierWatcher(Dispatcher);
         _barWatcher.ControlReleased += OnControlReleased;
         _host.PreviewKeyDown += OnHostPreviewKeyDown;
+        _registry.ActiveChanged += (_, _) => UpdateBusyFor(_registry.Active);
 
         InitializeTheme();
         SyncAutostartMirror();
         UpdateTrayStatus();
 
-        _log.Info("started hidden");
+        _log.Info("started");
 
         if (options.WarmAll)
         {
@@ -161,7 +162,7 @@ public partial class App : Application
         }
         else
         {
-            _ = WarmPinnedAtBootAsync(options.Autostart);
+            _ = WarmPinnedAtBootAsync(options.Autostart, show: !options.Autostart && !options.Hidden && !_firstRun);
         }
 
         if (_firstRun)
@@ -290,6 +291,7 @@ public partial class App : Application
             filterPacks);
 
         service.ShortcutRequested += OnServiceShortcutRequested;
+        service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
 
         await service.ApplyThemeAsync(dark);
         await _registry!.AddAsync(service);
@@ -337,7 +339,7 @@ public partial class App : Application
     /// Normal launch path: warm every instance pinned at boot, hidden, staggered. Autostart adds
     /// one 20 s delay before the first webview so login is not competing with Chromium.
     /// </summary>
-    private async Task WarmPinnedAtBootAsync(bool autostart)
+    private async Task WarmPinnedAtBootAsync(bool autostart, bool show)
     {
         try
         {
@@ -347,6 +349,11 @@ public partial class App : Application
             if (plan.Count == 0)
             {
                 _log?.Info("boot: no services pinned warm");
+                if (show)
+                {
+                    ShowLaunchTarget();
+                }
+
                 return;
             }
 
@@ -363,6 +370,12 @@ public partial class App : Application
                 }
 
                 await OpenInstanceAsync(plan[index], show: false, probe: false);
+
+                // A user launch should surface promptly; the rest keep warming behind it.
+                if (show && index == 0)
+                {
+                    ShowHost();
+                }
             }
 
             _log?.Info($"boot: warmed {plan.Count} pinned service(s)");
@@ -370,6 +383,35 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or InvalidSettingsException or InvalidOperationException)
         {
             _log?.Error("could not warm pinned services", ex);
+        }
+    }
+
+    /// <summary>
+    /// A normal launch has no service argument. Show the first enabled account, or the plugin
+    /// page when there is nothing to open. Autostart never reaches this method with show=true.
+    /// </summary>
+    private void ShowLaunchTarget()
+    {
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            var first = settings.Services
+                .Where(instance => instance.Enabled)
+                .OrderBy(instance => instance.Order)
+                .FirstOrDefault();
+
+            if (first is null)
+            {
+                OpenPlugins();
+                return;
+            }
+
+            _ = ActivateServiceAsync(first.InstanceId);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not choose a launch target: {ex.Message}");
+            OpenPlugins();
         }
     }
 
@@ -457,7 +499,17 @@ public partial class App : Application
     private void OnShowRequested(object? sender, EventArgs e)
     {
         _log?.Info("show requested by another launch");
-        Dispatcher.Invoke(ShowHost);
+        Dispatcher.Invoke(() =>
+        {
+            if (_registry?.Active is null)
+            {
+                ShowLaunchTarget();
+            }
+            else
+            {
+                ShowHost();
+            }
+        });
     }
 
     private void OnHostKeyDown(object sender, KeyEventArgs e)
@@ -1303,6 +1355,7 @@ public partial class App : Application
 
         var wasVisible = _host.IsVisible;
         _registry?.Active?.Activate();
+        UpdateBusyFor(_registry?.Active);
         var foreground = _host.ShowForUser();
         _registry?.Active?.FocusPage();
 
@@ -1465,6 +1518,9 @@ public partial class App : Application
     }
 
     /// <summary>Keeps the tray honest about DND without opening Settings.</summary>
+    private void UpdateBusyFor(ServiceRuntime? service) =>
+        _host?.SetBusy(service?.IsNavigating == true);
+
     private void UpdateTrayStatus()
     {
         if (_tray is null)

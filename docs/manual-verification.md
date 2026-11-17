@@ -9,6 +9,21 @@ desktop session.
 - **Got it** and **Esc** both hide the window back to the tray; **Open plugins** opens the plugin page instead.
 - The next launch goes straight to hidden-warm, with no overlay.
 
+## Startup
+
+- Start Chirpdesk from the Start menu, the shortcut or the exe: the window appears as soon as the first pinned service is warm, within a few seconds.
+- Start it again while it is hidden: the resident instance shows the same window; no second process stays alive.
+- Reboot with autostart on: no window, tray only; warm services appear after about 20 s.
+- `--selftest` no longer leaves its toast in Action Center; one left by an older build must be dismissed once.
+
+## Window chrome and motion
+
+- Maximize with the taskbar at the top: the whole title bar including minimize/maximize/close stays below the taskbar, and restore returns to the previous bounds.
+- Windows 11 shows rounded outer corners; Windows 10 keeps the square frame.
+- The title bar shows the app mark before the name; the command palette fades and slides in, pages fade, and the window itself fades on show/hide.
+- A 2 px accent bar runs along the bottom of the title bar while the active tab is loading.
+- Resize to roughly 360 px wide and open `Ctrl+P`: the palette, query, rows and hint stay inside the window instead of clipping.
+
 ## Icons
 
 - Taskbar, Alt+Tab, the window title bar and the tray all show the paper-bubble mark; the tray glyph stays readable on a light and a dark taskbar.

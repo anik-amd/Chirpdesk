@@ -59,6 +59,15 @@ internal sealed class ToastService : IToastSink
             document.LoadXml(xml);
 
             var toast = new ToastNotification(document);
+
+            // The gate's toast is proof, not a notification the user should keep. Tagging it
+            // lets SelfTest remove exactly this one from Action Center afterwards.
+            if (string.Equals(message.ServiceId, "selftest", StringComparison.Ordinal))
+            {
+                toast.Tag = "selftest";
+                toast.Group = "selftest";
+            }
+
             Remember(toast);
 
             toast.Activated += (_, _) =>
