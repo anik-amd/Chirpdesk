@@ -229,6 +229,7 @@ public partial class App : Application
             UnreadRegex = resolved.UnreadRegex,
             NotificationMode = resolved.NotificationMode,
             PageDarkMode = resolved.PageDarkMode,
+            DefinitionId = resolved.DefinitionId,
             ProfileId = instance.ProfileId ?? resolved.InstanceId,
         };
 
@@ -563,8 +564,13 @@ public partial class App : Application
             return;
         }
 
-        _barState = BarState.ForSearch();
         _searchCandidates = BuildSearchCandidates();
+        if (_searchCandidates.Count == 0)
+        {
+            return;
+        }
+
+        _barState = BarState.ForSearch();
         UpdateSearchResults(keepSelected: null);
 
         // Same airspace rule as cycle mode: the webview would paint over the bar.
@@ -572,7 +578,7 @@ public partial class App : Application
         _host.ShowCommandBar();
         _host.Focus();
 
-        _log?.Info($"command bar opened in search mode: {_searchCandidates.Count} candidate(s)");
+        _log?.Info($"command bar opened in search mode: {_searchCandidates.Count} tab(s)");
     }
 
     /// <summary>
@@ -603,76 +609,25 @@ public partial class App : Application
             return Array.Empty<SearchCandidate>();
         }
 
-        var settings = LoadSearchSettings();
-        var byId = new Dictionary<string, ServiceInstance>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var instance in settings.Services)
-        {
-            byId[instance.InstanceId] = instance;
-        }
-
         var candidates = new List<SearchCandidate>();
 
-        // Warm rows keep MRU order; cold rows follow settings order.
         foreach (var id in _registry.Order)
         {
-            byId.TryGetValue(id, out var instance);
-            var resolved = instance is null ? null : _catalog?.Resolve(instance);
-            var aliases = resolved?.DefinitionId is { } definitionId
-                ? _catalog?.Find(definitionId)?.Aliases
-                : null;
+            var runtime = _registry.Find(id);
+            if (runtime is null)
+            {
+                continue;
+            }
 
             candidates.Add(new SearchCandidate(
                 id,
-                resolved?.Name ?? _registry.Find(id)?.Name ?? id,
+                runtime.Name,
                 SearchKind.Warm,
-                aliases,
-                HostOf(resolved?.Url)));
+                _catalog?.Find(runtime.DefinitionId)?.Aliases,
+                HostOf(runtime.Url)));
         }
-
-        foreach (var instance in settings.Services.OrderBy(service => service.Order))
-        {
-            if (_registry.IsWarm(instance.InstanceId))
-            {
-                continue;
-            }
-
-            var resolved = _catalog?.Resolve(instance);
-            if (resolved is null)
-            {
-                continue;
-            }
-
-            var aliases = resolved.DefinitionId is { } definitionId
-                ? _catalog?.Find(definitionId)?.Aliases
-                : null;
-
-            candidates.Add(new SearchCandidate(
-                instance.InstanceId,
-                resolved.Name,
-                SearchKind.Cold,
-                aliases,
-                HostOf(resolved.Url)));
-        }
-
-        candidates.Add(new SearchCandidate("command:hide", "Hide window", SearchKind.Command, ["hide"]));
-        candidates.Add(new SearchCandidate("command:reload", "Reload active tab", SearchKind.Command, ["reload"]));
-        candidates.Add(new SearchCandidate("command:quit", "Quit Chirpdesk", SearchKind.Command, ["quit"]));
 
         return candidates;
-    }
-
-    private AppSettings LoadSearchSettings()
-    {
-        try
-        {
-            return new SettingsStore(AppPaths.SettingsFile, _log!).Load();
-        }
-        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
-        {
-            _log?.Warn($"search settings unavailable: {ex.Message}");
-            return new AppSettings();
-        }
     }
 
     private void UpdateSearchResults(string? keepSelected)
@@ -702,35 +657,8 @@ public partial class App : Application
 
         _barState.Commit();
         CloseCommandBar(restore: true);
-
-        if (selected.StartsWith("command:", StringComparison.Ordinal))
-        {
-            ExecuteCommand(selected["command:".Length..]);
-            return;
-        }
-
         _ = ActivateServiceAsync(selected);
         _log?.Info($"command bar search committed '{selected}'");
-    }
-
-    private void ExecuteCommand(string command)
-    {
-        _log?.Info($"command bar command: {command}");
-
-        switch (command)
-        {
-            case "hide":
-                HideHost();
-                return;
-
-            case "reload":
-                _registry?.Active?.Reload();
-                return;
-
-            case "quit":
-                Quit();
-                return;
-        }
     }
 
     private static string? HostOf(string? url) =>

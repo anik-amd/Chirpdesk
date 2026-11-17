@@ -215,6 +215,10 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     public string Name => _instance.Name;
 
+    public string? DefinitionId => _instance.DefinitionId;
+
+    public string? Url => _instance.Url;
+
     /// <summary>Hides the page while the Command Bar is open. Not disposed; state survives.</summary>
     public void CollapseForCommandBar() => _view.Visibility = Visibility.Collapsed;
 
@@ -271,9 +275,6 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
         return nint.Zero;
     }
-
-    /// <summary>Reloads the page without touching the profile or the notification pipeline.</summary>
-    public void Reload() => _view.CoreWebView2?.Reload();
 
     public int ReceivedNotifications => _bridge?.Received ?? 0;
 

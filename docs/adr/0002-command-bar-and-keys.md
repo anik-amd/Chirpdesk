@@ -11,7 +11,7 @@ The app has no sidebar, tab strip or menu bar by requirement. Navigation, comman
 One overlay component with two entry modes:
 
 - `Ctrl+Tab` (hold) → **cycle** mode: MRU list of warm services, commit on `Ctrl` release.
-- `Ctrl+P` → **search** mode: sticky input, warm services → cold services → commands. Typing during cycle does **not** open search; cycle stays a pure switcher.
+- `Ctrl+P` → **search** mode: sticky input, **open (warm) tabs only** in MRU order. Typing during cycle does **not** open search; cycle stays a pure switcher. Cold services and commands stay out of the palette until their own tasks.
 - The bar takes focus when it opens, so it receives those keys; reserved accelerators (`Ctrl+W`, `Ctrl+1..9`, `Esc`) keep their meaning.
 
 There is deliberately no "second `Tab`" latch: with `Ctrl` still held, another `Tab` produces the same `Ctrl+Tab` event as the first (and as auto-repeat), so it cannot be distinguished.

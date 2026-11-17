@@ -123,16 +123,16 @@ Size cap 560 × 420, anchored 12 % from the top, centred (§12 budget). Cycle mo
 
 ## Task 6: Search mode and ranking
 
-**Status:** complete (2026-11-17). `Ctrl+P` opens the same bar in search mode; warm tabs come first, then cold instances, then the built-in `hide`, `reload` and `quit` commands. `SearchIndex` ranks prefix over substring, then kind, then input order; aliases and legacy hosts match.
+**Status:** complete (2026-11-17). `Ctrl+P` opens the same bar in search mode over **open tabs only**; MRU order, prefix-over-substring ranking, aliases and host matching. Cold instances and commands are deferred by product decision, so the palette is a tab list, not a command surface yet.
 
 **Files:**
 - Create: `src/Chirpdesk.Core/CommandBar/SearchIndex.cs`
 - Modify: `src/Chirpdesk/App.xaml.cs`, `src/Chirpdesk.Core/Definitions/ServiceDefinition.cs`, `src/Chirpdesk/CommandBar/CommandBarView.xaml`, `CommandBarView.xaml.cs`
 - Test: `tests/Chirpdesk.Core.Tests/CommandBar/SearchIndexTests.cs`
 
-Order: warm services, then cold services, then commands. Matching: prefix beats substring, case-insensitive, and a definition's aliases match (`wa` → WhatsApp). Typing `tel` must put Telegram first even when a cold service named "Telethon" also exists.
+Palette rows: **open (warm) tabs only**, in MRU order. Matching: prefix beats substring, case-insensitive, and a definition's aliases match (`wa` → WhatsApp). Typing `tel` puts Telegram first. Cold instances and commands are not fed to the palette; the ranking utility keeps their kinds for later tasks.
 
-**Tests:** prefix outranks substring; warm outranks cold at equal score; a legacy custom instance matches by name and host; empty query shows warm services in MRU order; no match shows nothing and `Enter` does nothing.
+**Tests:** prefix outranks substring and exact beats prefix; aliases and legacy host match; empty query shows open tabs in MRU order; no match shows nothing and `Enter` does nothing; the utility still orders warm before cold before command when those kinds are supplied.
 
 **Commit:** `feat(app): command bar search mode and ranking`.
 
