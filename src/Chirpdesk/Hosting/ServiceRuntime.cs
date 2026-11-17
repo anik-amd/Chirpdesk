@@ -27,6 +27,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private WarmUpGate? _gate;
     private NotificationDedupe? _fallbackDedupe;
     private int _lastUnread;
+    private bool _darkTheme;
     private bool _disposed;
 
     /// <summary>
@@ -39,21 +40,60 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// </summary>
     private const string NotificationShimScript = """
         (function () {
-          try {
-            if (!self.ServiceWorkerRegistration || !ServiceWorkerRegistration.prototype) { return; }
-            var proto = ServiceWorkerRegistration.prototype;
-            if (proto.__chirpdeskShim || typeof proto.showNotification !== 'function') { return; }
-            var original = proto.showNotification;
-            proto.showNotification = function (title, options) {
-              try {
-                new Notification(title, options || {});
-                return Promise.resolve();
-              } catch (e) {
-                return original.apply(this, arguments);
-              }
-            };
-            Object.defineProperty(proto, '__chirpdeskShim', { value: true });
-          } catch (e) { }
+          function install() {
+            try {
+              if (!self.ServiceWorkerRegistration || !ServiceWorkerRegistration.prototype) { return; }
+              var proto = ServiceWorkerRegistration.prototype;
+              if (proto.__chirpdeskShim || typeof proto.showNotification !== 'function') { return; }
+              var original = proto.showNotification;
+              proto.showNotification = function (title, options) {
+                try {
+                  new Notification(title, options || {});
+                  return Promise.resolve();
+                } catch (e) {
+                  return original.apply(this, arguments);
+                }
+              };
+              Object.defineProperty(proto, '__chirpdeskShim', { value: true });
+            } catch (e) { }
+          }
+          install();
+          document.addEventListener('DOMContentLoaded', install);
+        })();
+        """;
+
+    /// <summary>
+    /// Dark mode has to reach the page, not just the window. Two levers, in order: the
+    /// profile's <c>prefers-color-scheme</c> (free and correct where the site supports it),
+    /// then a filter on the root element for sites that do not. Images, video and canvases
+    /// are inverted back so they keep their real colours.
+    /// </summary>
+    private const string ThemeScript = """
+        (function () {
+          function install() {
+            if (!document.documentElement) { return false; }
+            if (document.getElementById('cd-theme-style')) { return true; }
+            var style = document.createElement('style');
+            style.id = 'cd-theme-style';
+            style.textContent =
+              'html.cd-dark{background:#111214 !important;filter:invert(1) hue-rotate(180deg);}' +
+              'html.cd-dark img,html.cd-dark video,html.cd-dark canvas,html.cd-dark svg,html.cd-dark iframe{filter:invert(1) hue-rotate(180deg) !important;}';
+            (document.head || document.documentElement).appendChild(style);
+            return true;
+          }
+          window.__chirpdeskTheme = function (dark) {
+            try {
+              if (!install()) { return 'no-document'; }
+              var root = document.documentElement;
+              if (!dark) { root.classList.remove('cd-dark'); return 'light'; }
+              var bg = document.body ? getComputedStyle(document.body).backgroundColor : '';
+              var m = bg.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
+              var lum = m ? (0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3]) / 255 : 1;
+              root.classList.add('cd-dark');
+              return 'dark:' + lum.toFixed(2);
+            } catch (e) { return 'error:' + e; }
+          };
+          document.addEventListener('DOMContentLoaded', install);
         })();
         """;
 
@@ -164,6 +204,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             {
                 _gate.MarkReady();
                 _ = LogPageCapabilitiesAsync(core);
+                _ = ApplyThemeAsync(_darkTheme);
             }
             else
             {
@@ -183,6 +224,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
             // Installed before navigation so it is in place before any app script runs.
             await core.AddScriptToExecuteOnDocumentCreatedAsync(NotificationShimScript);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(ThemeScript);
             core.Navigate(_instance.Url);
         }
     }
@@ -278,6 +320,47 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         {
             _log.Warn($"probe notification failed for '{_instance.InstanceId}': {ex.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Applies dark or light to the page. <c>PreferredColorScheme</c> is the clean lever and
+    /// works without touching the DOM where the site supports it; the filter fallback is what
+    /// makes dark actually dark on sites that ignore the media query. The returned string is
+    /// logged so the choice is observable, not assumed.
+    /// </summary>
+    public async Task ApplyThemeAsync(bool dark)
+    {
+        _darkTheme = dark;
+
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            var core = _view.CoreWebView2;
+            if (core is null)
+            {
+                return;
+            }
+
+            core.Profile.PreferredColorScheme = dark
+                ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
+                : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
+
+            var argument = dark ? "true" : "false";
+            var script = "window.__chirpdeskTheme ? window.__chirpdeskTheme(" + argument + ") : ''";
+            var result = await core.ExecuteScriptAsync(script);
+
+            var mode = dark ? "dark" : "light";
+            var outcome = result.Trim('"');
+            _log.Info($"web theme for '{_instance.InstanceId}': mode={mode} result={outcome}");
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+        {
+            _log.Warn($"could not apply the page theme for '{_instance.InstanceId}': {ex.Message}");
         }
     }
 

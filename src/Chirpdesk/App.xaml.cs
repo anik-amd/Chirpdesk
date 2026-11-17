@@ -5,11 +5,13 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
+using Chirpdesk.Core.Theming;
 using Chirpdesk.Core.Time;
 using Chirpdesk.Diagnostics;
 using Chirpdesk.Hosting;
 using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
+using Chirpdesk.Theming;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Chirpdesk;
@@ -31,6 +33,7 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private ServiceRuntime? _service;
     private bool _quitting;
+    private ThemeMode _themeMode = ThemeMode.System;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -95,6 +98,8 @@ public partial class App : Application
 
         _tray = TrayIconFactory.Create(OpenHost, HideHost, Quit);
         _host.Attach(_tray);
+
+        InitializeTheme();
 
         _log.Info("started hidden");
 
@@ -197,6 +202,8 @@ public partial class App : Application
             new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
             DateTimeOffset.UtcNow);
         _service = service;
+
+        await service.ApplyThemeAsync(ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight()));
 
         if (show)
         {
@@ -352,6 +359,50 @@ public partial class App : Application
     {
         await Task.Delay(delay);
         Dispatcher.Invoke(Quit);
+    }
+
+    /// <summary>
+    /// Reads the one theme setting and follows Windows while it is <c>system</c>. There is no
+    /// colour-family picker yet on purpose: one palette, two ends, so the contrast is right
+    /// before there is anything to choose between.
+    /// </summary>
+    private void InitializeTheme()
+    {
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            _themeMode = ThemeDecision.Parse(settings.Theme);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _themeMode = ThemeMode.System;
+        }
+
+        SystemTheme.Start();
+        SystemTheme.Changed += (_, _) =>
+        {
+            if (_themeMode == ThemeMode.System)
+            {
+                ApplyTheme();
+            }
+        };
+
+        ApplyTheme();
+    }
+
+    private void ApplyTheme()
+    {
+        var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
+        _host?.SetDark(dark);
+
+        var mode = ThemeDecision.ToStorageValue(_themeMode);
+        var resolved = dark ? "dark" : "light";
+        _log?.Info($"theme: {mode} -> {resolved}");
+
+        if (_service is not null)
+        {
+            _ = _service.ApplyThemeAsync(dark);
+        }
     }
 
     private void ShowHost()

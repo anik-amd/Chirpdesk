@@ -30,6 +30,16 @@ public partial class HostWindow : Window
     public void ClearServiceContent() => ServiceLayer.Children.Clear();
 
     /// <summary>
+    /// One palette, two ends. The window background is the only chrome that exists before the
+    /// title bar lands, so it is also the visible proof that the theme was applied.
+    /// </summary>
+    public void SetDark(bool dark) =>
+        Background = new System.Windows.Media.SolidColorBrush(
+            dark
+                ? System.Windows.Media.Color.FromRgb(0x11, 0x12, 0x14)
+                : System.Windows.Media.Color.FromRgb(0xF6, 0xF5, 0xF3));
+
+    /// <summary>
     /// User-requested show: normal app window, taskbar button, Alt+Tab entry.
     /// Returns whether Windows actually granted the foreground, which is the part that
     /// silently fails when the request comes from the shell rather than from this process.

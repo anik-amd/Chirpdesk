@@ -18,6 +18,8 @@ internal static partial class SettingsValidator
             ? AppSettings.CurrentSchemaVersion
             : settings.SchemaVersion;
 
+        settings.Theme = Theming.ThemeDecision.ToStorageValue(Theming.ThemeDecision.Parse(settings.Theme));
+
         foreach (var instance in settings.Services)
         {
             if (string.IsNullOrWhiteSpace(instance.ProfileId))

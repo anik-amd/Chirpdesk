@@ -7,5 +7,8 @@ public sealed class AppSettings
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
+    /// <summary><c>system</c>, <c>light</c> or <c>dark</c>. One palette; no colour families yet.</summary>
+    public string Theme { get; set; } = "system";
+
     public List<ServiceInstance> Services { get; set; } = [];
 }
