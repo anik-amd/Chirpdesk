@@ -19,4 +19,6 @@
     <SolidColorBrush x:Key="CdPaletteSelection" Color="#26383C" />
     <SolidColorBrush x:Key="CdPaletteAccent" Color="#D8A45A" />
     <SolidColorBrush x:Key="CdScrollThumb" Color="#B8B4A8" />
+    <SolidColorBrush x:Key="CdControlHover" Color="#E4E0D6" />
+    <SolidColorBrush x:Key="CdScrim" Color="#8C0B0F12" />
 </ResourceDictionary>

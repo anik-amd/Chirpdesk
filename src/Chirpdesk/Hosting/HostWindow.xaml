@@ -28,7 +28,7 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#C9C4CC" />
+            <Setter Property="Foreground" Value="{DynamicResource CdPaletteText}" />
             <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
             <Setter Property="FontSize" Value="10" />
             <Setter Property="Template">
@@ -39,7 +39,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#2C2730" />
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CdControlHover}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -50,21 +50,37 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="36" />
+            <RowDefinition Height="42" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <!-- Custom chrome: native chrome cannot be themed (PLAN §12). -->
         <Grid x:Name="TitleBar"
               Grid.Row="0"
-              Background="#1A171C"
+              Background="{DynamicResource CdPaletteRaised}"
               MouseLeftButtonDown="OnTitleBarMouseDown">
-            <TextBlock x:Name="TitleText"
-                       Text="Chirpdesk"
-                       Margin="14,0,0,0"
-                       VerticalAlignment="Center"
-                       FontSize="12"
-                       Foreground="#C9C4CC" />
+            <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center">
+                <Border Width="7"
+                        Height="7"
+                        CornerRadius="3.5"
+                        Background="{DynamicResource CdPaletteAccent}"
+                        VerticalAlignment="Center" />
+                <TextBlock x:Name="TitleText"
+                           Text="Chirpdesk"
+                           Margin="9,0,0,0"
+                           VerticalAlignment="Center"
+                           FontFamily="Segoe UI Variable Display, Segoe UI"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource CdPaletteText}" />
+                <TextBlock x:Name="ServiceTitle"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           FontFamily="Segoe UI Variable Text, Segoe UI"
+                           FontSize="12"
+                           Foreground="{DynamicResource CdPaletteMuted}"
+                           Visibility="Collapsed" />
+            </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="MinimizeButton"
@@ -91,7 +107,7 @@
 
             <!-- Settings/Plugins pages replace the page area; the webview is collapsed while
                  a page is open because it is an HWND. -->
-            <Grid x:Name="PageLayer" Background="#F6F5F3" Visibility="Collapsed">
+            <Grid x:Name="PageLayer" Background="{DynamicResource CdCanvas}" Visibility="Collapsed">
                 <ContentControl x:Name="PageHost" />
             </Grid>
 
@@ -99,7 +115,7 @@
                  frame sits here as the backdrop and the bar still reads as an overlay. -->
             <Grid x:Name="BarLayer" Visibility="Collapsed">
                 <Image x:Name="BarBackdrop" Stretch="Fill" />
-                <Grid Background="#66000000">
+                <Grid Background="{DynamicResource CdScrim}">
                     <ContentControl x:Name="BarHost"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Top"
