@@ -16,20 +16,20 @@ public class BarKeyTests
     }
 
     [Fact]
-    public void Escape_cancels_in_both_modes()
+    public void Escape_hides_the_window()
     {
-        Assert.Equal(BarKeyActionKind.Cancel, BarKeys.Decide(Cycle(), BarKey.Escape, BarModifiers.None).Kind);
-        Assert.Equal(BarKeyActionKind.Cancel, BarKeys.Decide(Search(), BarKey.Escape, BarModifiers.None).Kind);
+        Assert.Equal(BarKeyActionKind.Hide, BarKeys.Decide(Cycle(), BarKey.Escape, BarModifiers.None).Kind);
+        Assert.Equal(BarKeyActionKind.Hide, BarKeys.Decide(Search(), BarKey.Escape, BarModifiers.None).Kind);
     }
 
     [Fact]
-    public void Control_w_hides_the_window_without_closing_tabs()
+    public void Control_w_closes_the_tab()
     {
         Assert.Equal(
-            BarKeyActionKind.Hide,
+            BarKeyActionKind.CloseTab,
             BarKeys.Decide(Cycle(), BarKey.W, BarModifiers.Control).Kind);
         Assert.Equal(
-            BarKeyActionKind.Hide,
+            BarKeyActionKind.CloseTab,
             BarKeys.Decide(Search(), BarKey.W, BarModifiers.Control).Kind);
     }
 

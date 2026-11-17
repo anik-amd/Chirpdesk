@@ -442,7 +442,7 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, 
 
 | Entry | Mode | Behaviour |
 |---|---|---|
-| `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` cancels. Query line hidden. |
+| `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` hides the window. Query line hidden. |
 | `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: **open (warm) tabs only**, in MRU order. Fuzzy filter as you type. `Enter` activates, `Esc` dismisses. Cold services and commands are deliberately not in this palette yet. |
 | `Ctrl+P` while cycling | **Search** | The same open bar switches to search with the highlighted tab still selected (unified palette, one focus model). There is no "second `Tab`" gesture: with `Ctrl` still down another `Tab` is indistinguishable from the first `Ctrl+Tab` and from key auto-repeat. |
 
@@ -471,10 +471,10 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 | `Ctrl+P` | search mode |
 | `Ctrl+Shift+P` | passed through to the page (site print shortcut) |
 | `Ctrl+1..9` | direct jump, settings order (power path, no UI) |
-| `Ctrl+W` | hide the window to tray |
-| `Esc` | dismiss / cancel |
+| `Ctrl+W` | close the highlighted tab in the palette, otherwise the active tab; last tab hides the window |
+| `Esc` | hide the window |
 
-**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; `Ctrl+W`, the close button and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text.
+**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; the close button, `Esc` and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text. `Ctrl+W` closes a tab instead; the instance stays in settings and becomes cold.
 
 **Interception:** `Ctrl+Tab` and `Ctrl+P` are handled by a WebView2 message hook while the page has focus; once the bar opens it takes focus and handles `Tab`, arrows, `Ctrl+1..9`, `Ctrl+W`, `Esc` and text itself. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global hotkey is deferred.
 

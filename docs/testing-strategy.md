@@ -44,7 +44,7 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | `PluginManifest` | missing required field, bad id pattern, unknown `apiVersion`, unimplemented permission rejected, asset path traversal rejected |
 | `ThemeVariants` | duplicate variant id rejected, `defaults` must reference an existing variant of matching mode, missing token in one variant disables the family, family with no light variant keeps dark under follow-system, all-themes-missing falls back to baseline |
 | `PluginLoader` | manifest id/kind/version/apiVersion/permissions validated; user plugin shadows bundled; duplicate ids, missing payload, id mismatch, bad JSON and traversing assets skip only that plugin |
-| `BarState` | cycle opens on the next/previous MRU row; highlight wraps; Ctrl release commits; Esc cancels; empty list is a no-op; search results keep the selected id when it survives filtering |
+| `BarState` | cycle opens on the next/previous MRU row; highlight wraps; Ctrl release commits; Esc is a hide action; empty list is a no-op; search results keep the selected id when it survives filtering |
 | `SearchIndex` | prefix beats substring and exact beats prefix; warm beats cold beats command at equal score; aliases and legacy host match; empty query lists warm rows in input order; no match returns nothing |
 | `ToolPanel` | unknown primitive disables only that action, `revealFolder` rejects a path argument, `deleteOrphan` rejects an id from another session, missing permission greys the action, panel still renders when all actions fail |
 | `UpdateManifest` | ECDSA P-256 signature verified against the pinned SPKI key, tampered payload hash rejected, wrong key rejected, malformed manifest rejected, version not newer than running build rejected, no network path taken on failure |
@@ -85,6 +85,7 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 15 | Tray entry | tray click shows the window when hidden, then `Ctrl+P` opens the palette; no global hotkey in v1 |
 | 16 | Tool panel | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
 | 17 | Multiple accounts | one definition, two instances: both warm with separate unread counts and toasts, signing one out leaves the other signed in; Messenger and Facebook are separate definitions and open their own sites |
+| 18 | Close tab | `Ctrl+W` closes the highlighted tab in the palette or the active tab when closed; the next tab takes over, the instance stays cold in settings, and the last tab hides the window |
 
 Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbers.
 

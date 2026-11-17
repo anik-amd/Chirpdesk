@@ -14,10 +14,11 @@ namespace Chirpdesk.Hosting;
 /// <summary>A shortcut pressed inside the page that the host should handle instead.</summary>
 public sealed class ServiceShortcutEventArgs : EventArgs
 {
-    public ServiceShortcutEventArgs(bool search, int direction)
+    public ServiceShortcutEventArgs(bool search, int direction, bool closeTab = false)
     {
         Search = search;
         Direction = direction;
+        CloseTab = closeTab;
     }
 
     /// <summary>True for Ctrl+P; false for the cycle shortcut.</summary>
@@ -25,6 +26,9 @@ public sealed class ServiceShortcutEventArgs : EventArgs
 
     /// <summary>+1 for forward cycling, -1 for Shift+Tab.</summary>
     public int Direction { get; }
+
+    /// <summary>True for Ctrl+W, which closes the active tab.</summary>
+    public bool CloseTab { get; }
 }
 
 /// <summary>
@@ -286,6 +290,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         const int WmSysKeyDown = 0x0104;
         const int VkTab = 0x09;
         const int VkP = 0x50;
+        const int VkW = 0x57;
 
         if ((msg != WmKeyDown && msg != WmSysKeyDown) || !NativeMethods.IsControlDown())
         {
@@ -305,6 +310,13 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         {
             handled = true;
             ShortcutRequested?.Invoke(this, new ServiceShortcutEventArgs(search: true, direction: 1));
+        }
+        else if (key == VkW)
+        {
+            handled = true;
+            ShortcutRequested?.Invoke(
+                this,
+                new ServiceShortcutEventArgs(search: false, direction: 1, closeTab: true));
         }
 
         return nint.Zero;

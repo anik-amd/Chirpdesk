@@ -66,6 +66,37 @@ internal sealed class ServiceRegistry
 
     public void ParkActive() => Active?.Park();
 
+    /// <summary>
+    /// Closes one warm tab: disposes its runtime and makes the instance cold again. If it was
+    /// active, the first remaining MRU tab takes over; with none left, there is no active page.
+    /// </summary>
+    public async Task<bool> CloseAsync(string instanceId)
+    {
+        if (!_warm.TryGetValue(instanceId, out var runtime))
+        {
+            return false;
+        }
+
+        _warm.Remove(instanceId);
+        _mru.Remove(instanceId);
+
+        var wasActive = ReferenceEquals(Active, runtime);
+        if (wasActive)
+        {
+            Active = null;
+        }
+
+        await runtime.DisposeAsync();
+
+        if (wasActive && _mru.Items.Count > 0)
+        {
+            Activate(_mru.Items[0]);
+        }
+
+        _log.Info($"closed service: {instanceId}");
+        return true;
+    }
+
     /// <summary>Next/previous warm service in MRU order. False when there is nothing to move to.</summary>
     public bool Cycle(int direction)
     {

@@ -115,7 +115,7 @@ Every failure is per-plugin and logged: missing payload, invalid JSON, id mismat
 
 Size cap 560 × 420, anchored 12 % from the top, centred (§12 budget). Cycle mode is a list of warm services in MRU order, highlight moved by `Tab`/`Shift+Tab`, committed on `Ctrl` release. `ModifierWatcher` polls `GetAsyncKeyState` at 30 ms in one class (ADR 0002) and raises "released".
 
-**Tests:** highlight wraps; a printable key during cycle does not enter search; releasing `Ctrl` commits the highlight; `Esc` cancels without switching; empty list is a no-op, not a crash.
+**Tests:** highlight wraps; a printable key during cycle does not enter search; releasing `Ctrl` commits the highlight; `Esc` hides the window; empty list is a no-op, not a crash.
 
 **Commit:** `feat(app): command bar cycle mode`.
 
@@ -162,7 +162,7 @@ WPF cannot paint over a WebView2 HWND (PLAN §16). While the bar is open, the ac
 - Modify: `src/Chirpdesk/App.xaml.cs`
 - Test: `tests/Chirpdesk.Core.Tests/CommandBar/BarKeyTests.cs`
 
-Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible list, `Ctrl+W` hides the window without closing the service, `Esc` closes the bar. `Up`/`Down` move the highlight like `Tab`/`Shift+Tab`.
+Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible list, `Ctrl+W` closes the highlighted tab, `Esc` hides the window. `Up`/`Down` move the highlight like `Tab`/`Shift+Tab`. Closing a tab disposes its runtime and leaves the instance cold; the last tab closes the window.
 
 **Tests:** key handling is a pure state machine, so every combination above is unit-tested; WPF only maps keys in and executes the returned action.
 
@@ -180,7 +180,7 @@ Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible
 | catalog | instance overrides resolve; definition fallback resolves; unknown id is a clear failure |
 | migration | v1 fixture migrates to v2 without inventing or losing an instance |
 | registry | two warm services park/activate without disposing; shared profile reuses one environment; MRU order after three switches |
-| bar state | cycle wrap, cancel, Ctrl+P switch to search keeping the highlight, search filtering, and reserved `Ctrl+1..9` / `Ctrl+W`, all from the pure state machine |
+| bar state | cycle wrap, Esc hides, Ctrl+P switch to search keeping the highlight, search filtering, tab close, and reserved `Ctrl+1..9`, all from the pure state machine |
 
 `scripts/gate.ps1` runs all of it.
 

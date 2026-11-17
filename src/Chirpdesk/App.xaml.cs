@@ -373,6 +373,13 @@ public partial class App : Application
             return;
         }
 
+        if (e.Key == Key.W && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            e.Handled = true;
+            _ = CloseTabAsync(_registry?.Active?.InstanceId);
+            return;
+        }
+
         // Ctrl+Tab opens cycle mode on the next warm service; releasing Ctrl commits. The
         // always-available version needs the global hotkey and the overlay, which is the next
         // slice; this one proves the registry and bar path.
@@ -428,14 +435,14 @@ public partial class App : Application
                 CommitSearchSelection();
                 return;
 
-            case BarKeyActionKind.Cancel:
-                e.Handled = true;
-                CloseCommandBar(restore: true);
-                return;
-
             case BarKeyActionKind.Hide:
                 e.Handled = true;
                 HideHost();
+                return;
+
+            case BarKeyActionKind.CloseTab:
+                e.Handled = true;
+                _ = CloseTabAsync(_barState.Selected ?? _registry?.Active?.InstanceId);
                 return;
 
             case BarKeyActionKind.SelectIndex:
@@ -577,6 +584,12 @@ public partial class App : Application
         {
             if (_barState is not null)
             {
+                return;
+            }
+
+            if (e.CloseTab)
+            {
+                _ = CloseTabAsync(_registry?.Active?.InstanceId);
                 return;
             }
 
@@ -938,6 +951,40 @@ public partial class App : Application
 
         _registry?.ParkActive();
         _host?.HideToBackground();
+    }
+
+    /// <summary>
+    /// Closes a warm tab (the highlighted one when the palette is open, otherwise the active
+    /// one). The instance stays in settings and becomes cold; if it was the last tab, the
+    /// window hides.
+    /// </summary>
+    private async Task CloseTabAsync(string? instanceId)
+    {
+        if (_registry is null || string.IsNullOrWhiteSpace(instanceId))
+        {
+            return;
+        }
+
+        if (_barState is not null)
+        {
+            CloseCommandBar(restore: false);
+        }
+
+        if (!await _registry.CloseAsync(instanceId))
+        {
+            return;
+        }
+
+        _log?.Info($"closed tab '{instanceId}'");
+
+        if (_registry.Active is not null)
+        {
+            ShowHost();
+        }
+        else
+        {
+            HideHost();
+        }
     }
 
     private void RegisterAppIdentity()
