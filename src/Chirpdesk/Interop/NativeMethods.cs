@@ -54,8 +54,23 @@ internal static class NativeMethods
 
     internal const int AwHide = 0x0001_0000;
     internal const int AwBlend = 0x0002_0000;
+    internal const int SwHide = 0;
+    internal const int SwShow = 5;
     internal const uint SwpNoZorder = 0x0004;
     internal const uint SwpNoActivate = 0x0010;
+    internal const uint SwpNoCopyBits = 0x0100;
+    internal const uint RdwInvalidate = 0x0001;
+    internal const uint RdwUpdatenow = 0x0100;
+    internal const uint RdwNoerase = 0x0020;
+    internal const uint RdwAllchildren = 0x0080;
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RedrawWindow(nint hwnd, nint lprc, nint hrgn, uint flags);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -69,6 +84,7 @@ internal static class NativeMethods
     internal const uint MonitorDefaultToNearest = 0x0000_0002;
     internal const int DwmwaWindowCornerPreference = 33;
     internal const int DwmWindowCornerRound = 2;
+    internal const int DwmwaTransitionsForcedDisabled = 3;
 
     [DllImport("user32.dll")]
     internal static extern nint MonitorFromWindow(nint hWnd, uint flags);
@@ -79,6 +95,9 @@ internal static class NativeMethods
 
     [DllImport("dwmapi.dll")]
     internal static extern int DwmSetWindowAttribute(nint hWnd, int attribute, ref int value, int size);
+
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmFlush();
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct MonitorInfo

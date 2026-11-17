@@ -54,6 +54,7 @@ public partial class App : Application
     private OnboardingPage? _onboarding;
     private bool _firstRun;
     private CommandBarView? _bar;
+    private BitmapSource? _lastBackdrop;
     private BarState? _barState;
     private ModifierWatcher? _barWatcher;
     private IReadOnlyList<SearchCandidate> _searchCandidates = Array.Empty<SearchCandidate>();
@@ -156,6 +157,7 @@ public partial class App : Application
         _barWatcher = new ModifierWatcher(Dispatcher);
         _barWatcher.ControlReleased += OnControlReleased;
         _host.PreviewKeyDown += OnHostPreviewKeyDown;
+        _host.SizeChanged += (_, _) => _registry?.Active?.SyncToHost();
         _registry.ActiveChanged += (_, _) =>
         {
             UpdateBusyFor(_registry.Active);
@@ -844,8 +846,16 @@ public partial class App : Application
 
         try
         {
-            var backdrop = await CaptureActiveAsync();
-            if (_barState is not null)
+             var backdrop = await CaptureActiveAsync();
+             if (backdrop is not null)
+             {
+                 _lastBackdrop = backdrop;
+             }
+             else
+             {
+                 backdrop = _lastBackdrop;
+             }
+             if (_barState is not null)
             {
                 return;
             }

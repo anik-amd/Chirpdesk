@@ -239,15 +239,33 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     public string? PageDarkMode => _instance.PageDarkMode;
 
     /// <summary>
-    /// Hides the page while the Command Bar is open without changing its layout bounds.
-    /// Collapsing would resize the WebView2 to zero and force the site to reflow; Hidden keeps
-    /// the page still, so the captured backdrop and the restored page are the same frame.
+    /// Hides the page while the Command Bar is open without changing its layout bounds or
+    /// resizing the WebView2. Collapsing would force a reflow; hiding the HWND keeps the page
+    /// still so the captured backdrop and the restored page are the same frame.
     /// </summary>
-    public void CollapseForCommandBar() => _view.Visibility = Visibility.Hidden;
+    public void CollapseForCommandBar()
+    {
+        if (_view.Handle != nint.Zero)
+        {
+            NativeMethods.ShowWindow(_view.Handle, NativeMethods.SwHide);
+        }
+        else
+        {
+            _view.Visibility = Visibility.Hidden;
+        }
+    }
 
     public void RestoreFromCommandBar()
     {
-        _view.Visibility = Visibility.Visible;
+        if (_view.Handle != nint.Zero)
+        {
+            NativeMethods.ShowWindow(_view.Handle, NativeMethods.SwShow);
+        }
+        else
+        {
+            _view.Visibility = Visibility.Visible;
+        }
+
         _host.UpdateLayout();
         FocusPage();
     }
@@ -430,6 +448,11 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     {
         _host.SetServiceContent(_view);
 
+        if (_view.Handle != nint.Zero)
+        {
+            NativeMethods.ShowWindow(_view.Handle, NativeMethods.SwShow);
+        }
+
         _view.Width = double.NaN;
         _view.Height = double.NaN;
         _view.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -470,6 +493,15 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _view.Width = double.NaN;
         _view.Height = double.NaN;
         _host.UpdateLayout();
+
+        if (_view.Handle != nint.Zero)
+        {
+            NativeMethods.RedrawWindow(
+                _view.Handle,
+                nint.Zero,
+                nint.Zero,
+                NativeMethods.RdwInvalidate | NativeMethods.RdwUpdatenow | NativeMethods.RdwNoerase);
+        }
 
         _log.Info($"webview '{_instance.InstanceId}' synced to {width:0}x{height:0}");
     }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -443,6 +444,7 @@ public partial class HostWindow : Window
     public void ShowCommandBar(System.Windows.Media.ImageSource? backdrop = null)
     {
         BarBackdrop.Source = backdrop;
+        BarBackdrop.UpdateLayout();
 
         BarLayer.Visibility = System.Windows.Visibility.Visible;
         UpdateBarLayout();
@@ -613,7 +615,6 @@ public partial class HostWindow : Window
     public void HideToBackground()
     {
         _railHoverTimer.Stop();
-        _boundsAnimation?.Stop();
 
         if (SystemParameters.ClientAreaAnimation && IsVisible)
         {
@@ -638,12 +639,6 @@ public partial class HostWindow : Window
 
         if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
         {
-            if (_isMaximized)
-            {
-                _isMaximized = false;
-                UpdateMaximizeGlyph();
-            }
-
             DragMove();
         }
     }
@@ -656,7 +651,7 @@ public partial class HostWindow : Window
             return;
         }
 
-        MinimizeToTaskbar();
+        WindowState = WindowState.Minimized;
     }
 
     private void OnMaximizeClick(object sender, RoutedEventArgs e) => ToggleMaximize();
@@ -669,44 +664,25 @@ public partial class HostWindow : Window
     /// still fixes OS maximize through WM_GETMINMAXINFO; this path keeps the title bar and its
     /// buttons inside the work area when the taskbar is at the top.
     /// </summary>
+    public void ToggleMaximizeForTest() => ToggleMaximize();
+
     private void ToggleMaximize()
     {
         if (WindowState == WindowState.Maximized)
         {
             WindowState = WindowState.Normal;
-            _isMaximized = false;
-            UpdateMaximizeGlyph();
             return;
         }
 
-        if (_isMaximized)
-        {
-            AnimateBounds(_restoreBounds);
-            _isMaximized = false;
-        }
-        else
-        {
-            _restoreBounds = new Rect(Left, Top, Width, Height);
-            AnimateBounds(SystemParameters.WorkArea);
-            _isMaximized = true;
-        }
-
-        UpdateMaximizeGlyph();
+        AnimateBounds(SystemParameters.WorkArea);
     }
 
     private void UpdateMaximizeGlyph() =>
-        MaximizeButton.Content = _isMaximized || WindowState == WindowState.Maximized
-            ? "\uE923"
-            : "\uE922";
-
-    private bool _isMaximized;
-    private Rect _restoreBounds;
+        MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
 
     /// <summary>Animates the four window bounds together; the content follows the real window.</summary>
     private void AnimateBounds(Rect target)
     {
-        _boundsAnimation?.Stop();
-
         if (!SystemParameters.ClientAreaAnimation)
         {
             ApplyBounds(target);
@@ -714,16 +690,12 @@ public partial class HostWindow : Window
         }
 
         var from = new Rect(Left, Top, Width, Height);
-        var dpi = VisualTreeHelper.GetDpi(this);
         var start = Stopwatch.StartNew();
-        var timer = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(16),
-        };
+        EventHandler? handler = null;
 
-        timer.Tick += (_, _) =>
+        handler = (_, _) =>
         {
-            var progress = Math.Min(1d, start.Elapsed.TotalMilliseconds / 220d);
+            var progress = Math.Min(1d, start.Elapsed.TotalMilliseconds / 260d);
             var eased = progress < 0.5
                 ? 2 * progress * progress
                 : 1 - Math.Pow(-2 * progress + 2, 2) / 2;
@@ -738,48 +710,42 @@ public partial class HostWindow : Window
 
             if (progress >= 1)
             {
-                timer.Stop();
-                _boundsAnimation = null;
+                CompositionTarget.Rendering -= handler;
                 ApplyBounds(target);
             }
         };
 
-        _boundsAnimation = timer;
-        timer.Start();
+        CompositionTarget.Rendering += handler;
     }
 
     private void ApplyBounds(Rect bounds)
     {
-        // SetWindowPos moves the real HWND, including the WebView2 surface, instead of
-        // waiting for WPF's layout engine to catch up.
         var dpi = VisualTreeHelper.GetDpi(this);
-        NativeMethods.SetWindowPos(
+        _ = NativeMethods.SetWindowPos(
             Handle,
             IntPtr.Zero,
             (int)Math.Round(bounds.Left * dpi.DpiScaleX),
             (int)Math.Round(bounds.Top * dpi.DpiScaleY),
             (int)Math.Round(bounds.Width * dpi.DpiScaleX),
             (int)Math.Round(bounds.Height * dpi.DpiScaleY),
-            NativeMethods.SwpNoZorder | NativeMethods.SwpNoActivate);
+            NativeMethods.SwpNoZorder | NativeMethods.SwpNoActivate | NativeMethods.SwpNoCopyBits);
 
         Left = bounds.Left;
         Top = bounds.Top;
         Width = bounds.Width;
         Height = bounds.Height;
-    }
+        UpdateLayout();
 
-    private DispatcherTimer? _boundsAnimation;
-
-    private void MinimizeToTaskbar()
-    {
-        if (SystemParameters.ClientAreaAnimation && IsVisible)
+        if (true)
         {
-            NativeMethods.AnimateWindow(Handle, 180, NativeMethods.AwBlend | NativeMethods.AwHide);
+            NativeMethods.RedrawWindow(
+                Handle,
+                nint.Zero,
+                nint.Zero,
+                NativeMethods.RdwInvalidate | NativeMethods.RdwUpdatenow | NativeMethods.RdwNoerase | NativeMethods.RdwAllchildren);
         }
 
-        WindowState = WindowState.Minimized;
-        BeginAnimation(OpacityProperty, null);
-        Opacity = 1;
+        _ = NativeMethods.DwmFlush();
     }
 
     private void FadeInFromTaskbar()
@@ -865,6 +831,13 @@ public partial class HostWindow : Window
                 Handle,
                 NativeMethods.DwmwaWindowCornerPreference,
                 ref preference,
+                sizeof(int));
+
+            var disabled = 0;
+            _ = NativeMethods.DwmSetWindowAttribute(
+                Handle,
+                NativeMethods.DwmwaTransitionsForcedDisabled,
+                ref disabled,
                 sizeof(int));
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
