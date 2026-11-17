@@ -32,8 +32,10 @@ internal sealed record StartupOptions(
         string? open = null;
         string? addSite = null;
 
-        foreach (var arg in args)
+        for (var i = 0; i < args.Length; i++)
         {
+            var arg = args[i];
+
             if (TryReadSeconds(arg, SoakPrefix, out var seconds))
             {
                 soak = TimeSpan.FromSeconds(seconds);
@@ -49,6 +51,13 @@ internal sealed record StartupOptions(
             if (arg.StartsWith(AddSitePrefix, StringComparison.OrdinalIgnoreCase))
             {
                 addSite = arg[AddSitePrefix.Length..].Trim();
+                continue;
+            }
+
+            // Also accept "--add-site <spec>", which is how PowerShell passes a quoted spec.
+            if (arg.Equals("--add-site", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                addSite = args[++i].Trim();
                 continue;
             }
 
