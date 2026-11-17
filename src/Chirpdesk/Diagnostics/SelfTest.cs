@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Definitions;
+using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Plugins;
@@ -294,8 +295,8 @@ internal sealed class SelfTest
                 "migration",
                 instance?.InstanceId == "legacy-chat"
                 && instance.Url == "https://legacy.example/"
-                && document.RootElement.GetProperty("schemaVersion").GetInt32() == 2,
-                "v1 fixture migrated to v2, instance preserved");
+                && document.RootElement.GetProperty("schemaVersion").GetInt32() == AppSettings.CurrentSchemaVersion,
+                $"v1 fixture migrated to v{AppSettings.CurrentSchemaVersion}, instance preserved");
         }
         catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
         {
@@ -357,8 +358,23 @@ internal sealed class SelfTest
 
             registry.Cycle(1);
             var cycleOk = registry.Active?.InstanceId == "registry-b";
-            ok = orderOk && aliveOk && cycleOk;
-            detail = $"mru={string.Join(',', registry.Order)} cycle={registry.Active?.InstanceId} bothAlive={aliveOk}";
+
+            var sleptA = await registry.SleepAsync("registry-a").ConfigureAwait(true)
+                && registry.StateOf("registry-a") == RuntimeState.Asleep
+                && registry.Find("registry-a") is null
+                && registry.Order.SequenceEqual(["registry-b"]);
+
+            var sleptB = await registry.SleepAsync("registry-b").ConfigureAwait(true)
+                && registry.StateOf("registry-b") == RuntimeState.Asleep
+                && registry.Active is null;
+
+            await registry.AddAsync(await CreateProbeRuntimeAsync("registry-a", "__registry-a")).ConfigureAwait(true);
+            var woke = registry.StateOf("registry-a") == RuntimeState.Warm
+                && registry.Activate("registry-a")
+                && registry.Active?.InstanceId == "registry-a";
+
+            ok = orderOk && aliveOk && cycleOk && sleptA && sleptB && woke;
+            detail = $"mru={string.Join(',', registry.Order)} cycleOk={cycleOk} sleepOk={sleptA && sleptB} wakeOk={woke}";
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {

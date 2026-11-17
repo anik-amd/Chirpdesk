@@ -28,6 +28,8 @@ Add only what the phase needs: `DndUntil` (nullable UTC timestamp), `Autostart` 
 
 ## Task 2: Sleep and wake runtimes (TDD)
 
+**Status:** complete (2026-11-17). `LifecycleTracker` in Core owns warm/asleep/cold; `ServiceRegistry.SleepAsync` disposes exactly once, removes the tab from MRU, tracks it as asleep, and hands over to the next warm tab (or none). Waking reuses the normal activation path, which creates the runtime and marks it warm. Selftest sleeps both test runtimes and re-adds/wakes one. Sleep/wake controls land in the settings window (Task 7); `warmAtBoot` is untouched by sleep.
+
 **Files:**
 - Modify: `src/Chirpdesk/Hosting/ServiceRegistry.cs`, `ServiceRuntime.cs`, `App.xaml.cs`
 - Create: `src/Chirpdesk.Core/Lifecycle/RuntimeState.cs` (or keep the enum in Core.Hosting-free form)

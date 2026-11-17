@@ -1,3 +1,4 @@
+using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Ordering;
 
@@ -13,10 +14,13 @@ internal sealed class ServiceRegistry
     private readonly ILog _log;
     private readonly Dictionary<string, ServiceRuntime> _warm = new(StringComparer.OrdinalIgnoreCase);
     private readonly MruList _mru = new();
+    private readonly LifecycleTracker _state = new();
 
     public ServiceRegistry(ILog log) => _log = log;
 
     public ServiceRuntime? Active { get; private set; }
+
+    public RuntimeState StateOf(string instanceId) => _state.StateOf(instanceId);
 
     /// <summary>Most-recently-used first.</summary>
     public IReadOnlyList<string> Order => _mru.Items;
@@ -42,6 +46,7 @@ internal sealed class ServiceRegistry
 
         _warm[runtime.InstanceId] = runtime;
         _mru.Activate(runtime.InstanceId);
+        _state.MarkWarm(runtime.InstanceId);
     }
 
     /// <summary>Parks the current service and activates the requested one. False when cold.</summary>
@@ -87,6 +92,7 @@ internal sealed class ServiceRegistry
         }
 
         await runtime.DisposeAsync();
+        _state.MarkCold(instanceId);
 
         if (wasActive && _mru.Items.Count > 0)
         {
@@ -94,6 +100,39 @@ internal sealed class ServiceRegistry
         }
 
         _log.Info($"closed service: {instanceId}");
+        return true;
+    }
+
+    /// <summary>
+    /// Disposes a runtime but keeps the instance addressable as asleep. The profile and session
+    /// stay on disk; the next activation wakes it through the normal create path. Sleeping the
+    /// active tab hands over to the first remaining MRU tab, or leaves no active page.
+    /// </summary>
+    public async Task<bool> SleepAsync(string instanceId)
+    {
+        if (!_warm.TryGetValue(instanceId, out var runtime))
+        {
+            return false;
+        }
+
+        _warm.Remove(instanceId);
+        _mru.Remove(instanceId);
+
+        var wasActive = ReferenceEquals(Active, runtime);
+        if (wasActive)
+        {
+            Active = null;
+        }
+
+        await runtime.DisposeAsync();
+        _state.MarkAsleep(instanceId);
+
+        if (wasActive && _mru.Items.Count > 0)
+        {
+            Activate(_mru.Items[0]);
+        }
+
+        _log.Info($"slept service: {instanceId}");
         return true;
     }
 
