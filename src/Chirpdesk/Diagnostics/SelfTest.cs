@@ -436,7 +436,7 @@ internal sealed class SelfTest
     /// <summary>The tray icon is a real Win32 icon; if the library cannot create one nothing else shows.</summary>
     private void CheckTray()
     {
-        var tray = TrayIconFactory.Create(open: static () => { }, hide: static () => { }, quit: static () => { });
+        var tray = TrayIconFactory.Create(open: static () => { }, hide: static () => { }, settings: static () => { }, quit: static () => { });
         try
         {
             Check("tray", tray.IconSource is not null, $"icon={tray.IconSource is not null} tooltip={tray.ToolTipText}");

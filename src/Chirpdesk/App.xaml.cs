@@ -18,6 +18,7 @@ using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
+using Chirpdesk.Settings;
 using Chirpdesk.Theming;
 using Hardcodet.Wpf.TaskbarNotification;
 
@@ -40,6 +41,7 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private ServiceRegistry? _registry;
     private ServiceCatalog? _catalog;
+    private SettingsWindow? _settingsWindow;
     private CommandBarView? _bar;
     private BarState? _barState;
     private ModifierWatcher? _barWatcher;
@@ -111,7 +113,7 @@ public partial class App : Application
             return;
         }
 
-        _tray = TrayIconFactory.Create(OpenHost, HideHost, Quit);
+        _tray = TrayIconFactory.Create(OpenHost, HideHost, OpenSettings, Quit);
         _host.Attach(_tray);
 
         _bar = new CommandBarView();
@@ -962,6 +964,7 @@ public partial class App : Application
     {
         var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
         _host?.SetDark(dark);
+        _settingsWindow?.SetDark(dark);
 
         var mode = ThemeDecision.ToStorageValue(_themeMode);
         var resolved = dark ? "dark" : "light";
@@ -1150,9 +1153,49 @@ public partial class App : Application
 
     private void OpenHost() => ShowHost();
 
+    private void OpenSettings()
+    {
+        if (_host is null || _registry is null || _log is null)
+        {
+            return;
+        }
+
+        if (_settingsWindow is { IsVisible: true })
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+
+        var window = new SettingsWindow(
+            new SettingsStore(AppPaths.SettingsFile, _log),
+            _catalog ?? new ServiceCatalog([]),
+            _registry,
+            _log,
+            instance => OpenInstanceAsync(instance, show: true, probe: false),
+            SleepFromSettingsAsync,
+            ApplyTheme,
+            _host.IsDark);
+
+        window.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow = window;
+        window.Show();
+        window.Activate();
+    }
+
+    private async Task SleepFromSettingsAsync(string instanceId)
+    {
+        if (_registry is not null)
+        {
+            await _registry.SleepAsync(instanceId);
+        }
+    }
+
     private void Terminate(int exitCode)
     {
         _quitting = true;
+
+        _settingsWindow?.Close();
+        _settingsWindow = null;
 
         _tray?.Dispose();
         _tray = null;

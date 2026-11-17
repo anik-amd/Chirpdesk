@@ -1,0 +1,76 @@
+<Window x:Class="Chirpdesk.Settings.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Chirpdesk Settings"
+        Width="720"
+        Height="600"
+        MinWidth="640"
+        MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        Background="#F6F5F3">
+    <Grid x:Name="Root" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="Settings" FontSize="20" FontWeight="SemiBold" />
+            <TextBlock Text="One window. Changes apply immediately; no restart."
+                       FontSize="12"
+                       Opacity="0.7"
+                       Margin="0,4,0,0" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Services" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <StackPanel x:Name="ServicesPanel" />
+
+                <Border Height="1" Opacity="0.15" Background="#333036" Margin="0,12" />
+
+                <TextBlock Text="Add a service" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <TextBlock Text="Pick an installed definition, then name the account. New instances start cold."
+                           FontSize="12" Opacity="0.7" Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox x:Name="DefinitionBox" Width="220" Margin="0,0,8,0" />
+                    <TextBox x:Name="NameBox" Width="240" Margin="0,0,8,0" />
+                    <Button x:Name="AddButton" Content="Add" Width="72" Click="OnAddService" />
+                </StackPanel>
+
+                <Border Height="1" Opacity="0.15" Background="#333036" Margin="0,12" />
+
+                <TextBlock Text="Application" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock Text="Theme" Width="140" VerticalAlignment="Center" />
+                    <ComboBox x:Name="ThemeBox" Width="160" SelectionChanged="OnThemeChanged" />
+                </StackPanel>
+                <CheckBox x:Name="AutostartBox" Content="Start Chirpdesk at login (20 s warm-up delay)"
+                          Margin="0,4,0,6" Checked="OnAutostartChanged" Unchecked="OnAutostartChanged" />
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="Do Not Disturb" Width="140" VerticalAlignment="Center" />
+                    <ComboBox x:Name="DndBox" Width="200" SelectionChanged="OnDndChanged" />
+                </StackPanel>
+
+                <Border Height="1" Opacity="0.15" Background="#333036" Margin="0,12" />
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Storage" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ReclaimedText" FontSize="12" Opacity="0.7" Margin="12,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock x:Name="StorageHint" FontSize="12" Opacity="0.7" Margin="0,4,0,8"
+                           Text="Data is the session and is never trimmed. Warm profiles are trimmed after they sleep." />
+                <StackPanel x:Name="StoragePanel" />
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
+                    <Button x:Name="TrimAllButton" Content="Trim caches" Width="110" Margin="0,0,8,0" Click="OnTrimAll" />
+                    <Button x:Name="ScanButton" Content="Scan for leftovers" Width="140" Click="OnScanOrphans" />
+                </StackPanel>
+                <StackPanel x:Name="OrphanPanel" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" Content="Close" Width="88" HorizontalAlignment="Right" Margin="0,10,0,0" Click="OnClose" />
+    </Grid>
+</Window>

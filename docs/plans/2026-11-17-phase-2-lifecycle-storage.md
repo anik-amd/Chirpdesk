@@ -97,6 +97,8 @@ Scan the fixed roots from PLAN §8.3 only: Chirpdesk profiles not referenced by 
 
 ## Task 6: Instance creation from installed definitions (TDD)
 
+**Status:** complete (2026-11-17). `InstanceFactory` derives a slugged unique id, sets `definitionId`, leaves the URL to the definition, starts cold, assigns the next order and gives the instance its own profile id. It is wired into Settings → Add a service; no URL entry exists. Two accounts of one definition are two instances.
+
 **Files:**
 - Create: `src/Chirpdesk.Core/Settings/InstanceFactory.cs`
 - Modify: `src/Chirpdesk/App.xaml.cs`, `SettingsStore`
@@ -111,6 +113,8 @@ ADR 0011 makes this the only way to add a site: pick an installed `service` defi
 ---
 
 ## Task 7: Settings window (UI)
+
+**Status:** complete (2026-11-17). One 720×600 window from the tray: service rows (state, warm at boot, mute, sleep/open, remove), add-from-definition, theme, autostart, DND, per-profile Data/Cache with Trim caches, and orphan scan with Recycle. Visual/layout checks are part of the phase gate; the window was smoke-opened and its controls enumerated through UI Automation.
 
 **Files:**
 - Create: `src/Chirpdesk/Settings/SettingsWindow.xaml(.cs)`, `SettingsViewModel.cs`
