@@ -1104,6 +1104,11 @@ public partial class App : Application
                         : ServiceIcons.Create(definitionId, name, accent, 22),
                 };
 
+                if (candidate?.State is "inactive" or "plugin off")
+                {
+                    icon.Opacity = 0.35;
+                }
+
                 return new BarRow(
                     id,
                     name,
