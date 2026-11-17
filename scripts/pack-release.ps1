@@ -31,11 +31,11 @@ $publish = Join-Path $dist 'publish'
 $project = Join-Path $repo 'src/Chirpdesk/Chirpdesk.csproj'
 
 function Resolve-Dotnet {
-    $onPath = Get-Command dotnet -ErrorAction SilentlyContinue
-    if ($onPath) { return $onPath.Source }
-
     $local = Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet\dotnet.exe'
     if (Test-Path -LiteralPath $local) { return $local }
+
+    $onPath = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
 
     throw 'dotnet not found. Install the .NET 8 SDK or put it on PATH.'
 }
