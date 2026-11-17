@@ -24,4 +24,9 @@ internal static class PluginCatalog
 
         return new ServiceCatalog(result.Definitions);
     }
+
+    public static IReadOnlyList<PanelDefinition> LoadPanels(ILog log) =>
+        PluginLoader.LoadPanels(
+            [new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true)],
+            log);
 }

@@ -9,6 +9,7 @@ using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Notifications;
+using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Theming;
 using Chirpdesk.Core.Time;
@@ -41,6 +42,7 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private ServiceRegistry? _registry;
     private ServiceCatalog? _catalog;
+    private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
     private SettingsWindow? _settingsWindow;
     private CommandBarView? _bar;
     private BarState? _barState;
@@ -58,6 +60,8 @@ public partial class App : Application
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
         _registry = new ServiceRegistry(_log);
         _catalog = PluginCatalog.Load(_log);
+        _panels = PluginCatalog.LoadPanels(_log);
+        _log.Info($"tool panels: {_panels.Count} loaded");
 
         // Windows starts this process to answer a toast click that has left the screen.
         // It is not the app: no tray, no webviews, one call, then exit.
@@ -1194,6 +1198,7 @@ public partial class App : Application
         var window = new SettingsWindow(
             new SettingsStore(AppPaths.SettingsFile, _log),
             _catalog ?? new ServiceCatalog([]),
+            _panels,
             _registry,
             _log,
             instance => OpenInstanceAsync(instance, show: true, probe: false),

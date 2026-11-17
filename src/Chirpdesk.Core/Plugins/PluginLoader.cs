@@ -127,6 +127,59 @@ public static partial class PluginLoader
         return new PluginLoadResult(definitions, errors, shadowed);
     }
 
+    /// <summary>
+    /// Loads bundled `tool` panels. User-installed tools are refused in v1 because a tool may
+    /// only surface host capability; the same validator still runs on the bundled panel.
+    /// </summary>
+    public static IReadOnlyList<PanelDefinition> LoadPanels(IEnumerable<PluginScanRoot> roots, ILog? log = null)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+
+        var panels = new List<PanelDefinition>();
+        var errors = new List<string>();
+
+        foreach (var root in roots)
+        {
+            foreach (var folder in EnumeratePluginFolders(root.Directory, errors))
+            {
+                var folderName = NameOf(folder);
+                var manifest = ReadManifest(folder, folderName, root.Bundled, errors);
+
+                if (manifest is null || !string.Equals(manifest.Kind, "tool", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!root.Bundled)
+                {
+                    errors.Add($"{folderName}: user-installed tools are bundled-only in v1");
+                    continue;
+                }
+
+                var panel = ReadJson<PanelDefinition>(folder, folderName, "panel.json", errors);
+                if (panel is null)
+                {
+                    continue;
+                }
+
+                panel.Id = manifest.Id;
+                errors.AddRange(PanelValidator.Validate(panel).Select(problem => $"{folderName}: {problem}"));
+
+                if (!string.IsNullOrWhiteSpace(panel.Title))
+                {
+                    panels.Add(panel);
+                }
+            }
+        }
+
+        foreach (var error in errors)
+        {
+            log?.Warn($"panel skipped: {error}");
+        }
+
+        return panels;
+    }
+
     private static List<string> EnumeratePluginFolders(string directory, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))

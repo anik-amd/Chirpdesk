@@ -146,6 +146,8 @@ Filter toasts, not events: a muted instance suppresses its toasts; global DND un
 
 ## Task 9: Bundled cleaner `tool` panel (TDD)
 
+**Status:** complete (2026-11-17). `plugins/tool-cleaner` ships a `plugin.json` + `panel.json`; `PluginLoader.LoadPanels` accepts bundled tools only, `PanelValidator` drops unknown sections/actions and rejects bad trim budgets or reveal roots while keeping the panel. Settings renders the title/subtitle/text and actions; actions map to the same trim, orphan scan and reveal-root primitives. User-installed tools are refused.
+
 **Files:**
 - Create: `plugins/tool-cleaner/plugin.json`, `panel.json`
 - Create: `src/Chirpdesk.Core/Plugins/PanelDefinition.cs`, `PanelValidator.cs`

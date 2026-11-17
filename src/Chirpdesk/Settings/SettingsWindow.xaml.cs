@@ -6,6 +6,7 @@ using System.Windows.Media;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Logging;
+using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Storage;
 using Chirpdesk.Hosting;
@@ -24,6 +25,7 @@ public partial class SettingsWindow : Window
 
     private readonly SettingsStore _store;
     private readonly ServiceCatalog _catalog;
+    private readonly IReadOnlyList<PanelDefinition> _panels;
     private readonly ServiceRegistry _registry;
     private readonly ILog _log;
     private readonly Func<ServiceInstance, Task> _open;
@@ -37,6 +39,7 @@ public partial class SettingsWindow : Window
     internal SettingsWindow(
         SettingsStore store,
         ServiceCatalog catalog,
+        IReadOnlyList<PanelDefinition> panels,
         ServiceRegistry registry,
         ILog log,
         Func<ServiceInstance, Task> open,
@@ -48,6 +51,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _store = store;
         _catalog = catalog;
+        _panels = panels;
         _registry = registry;
         _log = log;
         _open = open;
@@ -64,6 +68,7 @@ public partial class SettingsWindow : Window
         SetDark(dark);
         LoadControls();
         RefreshServices();
+        RenderToolPanel();
         RefreshStorage();
     }
 
@@ -477,6 +482,116 @@ public partial class SettingsWindow : Window
 
         _log.Info($"settings: orphan scan found {_orphans.Count} item(s)");
         RefreshOrphans();
+    }
+
+    private void RenderToolPanel()
+    {
+        PanelHost.Children.Clear();
+
+        var panel = _panels.Count > 0 ? _panels[0] : null;
+        if (panel is null)
+        {
+            return;
+        }
+
+        PanelHost.Children.Add(new TextBlock
+        {
+            Text = panel.Title,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 2),
+        });
+
+        if (!string.IsNullOrWhiteSpace(panel.Subtitle))
+        {
+            PanelHost.Children.Add(new TextBlock
+            {
+                Text = panel.Subtitle,
+                FontSize = 12,
+                Opacity = 0.7,
+                Margin = new Thickness(0, 0, 0, 6),
+            });
+        }
+
+        foreach (var section in panel.Sections.Where(section => section.Type == "text"))
+        {
+            PanelHost.Children.Add(new TextBlock
+            {
+                Text = section.Text,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Opacity = 0.8,
+                Margin = new Thickness(0, 2, 0, 6),
+            });
+        }
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+
+        foreach (var action in panel.Actions)
+        {
+            var button = new Button
+            {
+                Content = action.Label,
+                Width = 140,
+                Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = action.Confirm,
+            };
+
+            button.Click += (_, _) => ExecutePanelAction(action);
+            buttons.Children.Add(button);
+        }
+
+        PanelHost.Children.Add(buttons);
+    }
+
+    private void ExecutePanelAction(PanelAction action)
+    {
+        switch (action.Primitive)
+        {
+            case "storageReport":
+                RefreshStorage();
+                return;
+
+            case "trimCache":
+                OnTrimAll(this, new RoutedEventArgs());
+                return;
+
+            case "scanOrphans":
+                OnScanOrphans(this, new RoutedEventArgs());
+                return;
+
+            case "revealFolder":
+                RevealRoot(action.Args?.Root);
+                return;
+        }
+    }
+
+    private void RevealRoot(string? root)
+    {
+        var path = root switch
+        {
+            "profiles" => AppPaths.ProfilesRoot,
+            "plugins" => AppPaths.BundledPluginsDirectory,
+            "logs" => AppPaths.LogsRoot,
+            "data" => AppPaths.DataRoot,
+            _ => null,
+        };
+
+        if (path is null || !Directory.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{path}\"")
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            _log.Warn($"could not open the {root} folder: {ex.Message}");
+        }
     }
 
     private void Save()

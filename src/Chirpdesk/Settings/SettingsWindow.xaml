@@ -62,11 +62,8 @@
                 </StackPanel>
                 <TextBlock x:Name="StorageHint" FontSize="12" Opacity="0.7" Margin="0,4,0,8"
                            Text="Data is the session and is never trimmed. Warm profiles are trimmed after they sleep." />
+                <StackPanel x:Name="PanelHost" Margin="0,4,0,8" />
                 <StackPanel x:Name="StoragePanel" />
-                <StackPanel Orientation="Horizontal" Margin="0,8,0,8">
-                    <Button x:Name="TrimAllButton" Content="Trim caches" Width="110" Margin="0,0,8,0" Click="OnTrimAll" />
-                    <Button x:Name="ScanButton" Content="Scan for leftovers" Width="140" Click="OnScanOrphans" />
-                </StackPanel>
                 <StackPanel x:Name="OrphanPanel" />
             </StackPanel>
         </ScrollViewer>

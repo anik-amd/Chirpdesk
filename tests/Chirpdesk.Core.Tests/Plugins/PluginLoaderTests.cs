@@ -253,6 +253,39 @@ public sealed class PluginLoaderTests : IDisposable
         Assert.Empty(result.Errors);
     }
 
+    [Fact]
+    public void A_bundled_tool_panel_loads_and_a_user_tool_is_refused()
+    {
+        var bundled = Root("bundled-tools");
+        var user = Root("user-tools");
+        var panel = """
+            {
+              "title": "Disk cleaner",
+              "sections": [{ "type": "text", "text": "Sessions are never trimmed." }],
+              "actions": [
+                { "id": "trim", "label": "Trim", "primitive": "trimCache", "args": { "budgetMb": 60, "targets": "all" } }
+              ]
+            }
+            """;
+
+        WritePlugin(bundled, "tool-cleaner",
+            Manifest("tool-cleaner", kind: "tool", name: "Disk cleaner", permissions: """["tools"]"""),
+            serviceJson: null);
+        File.WriteAllText(Path.Combine(bundled, "tool-cleaner", "panel.json"), panel);
+
+        WritePlugin(user, "tool-cleaner",
+            Manifest("tool-cleaner", kind: "tool", name: "Disk cleaner", permissions: """["tools"]"""),
+            serviceJson: null);
+        File.WriteAllText(Path.Combine(user, "tool-cleaner", "panel.json"), panel);
+
+        var bundledPanels = PluginLoader.LoadPanels([Bundle(bundled)]);
+        var userPanels = PluginLoader.LoadPanels([User(user)]);
+
+        Assert.Single(bundledPanels);
+        Assert.Single(bundledPanels[0].Actions);
+        Assert.Empty(userPanels);
+    }
+
     private static PluginScanRoot Bundle(string directory) => new(directory, Bundled: true);
 
     private static PluginScanRoot User(string directory) => new(directory, Bundled: false);
