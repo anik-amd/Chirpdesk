@@ -24,6 +24,7 @@ public partial class SettingsPage : UserControl
     private static readonly string[] DndLabels = ["Off", "For 30 minutes", "For 1 hour", "Until tomorrow 08:00"];
 
     private readonly SettingsStore _store;
+    private readonly ServiceCatalog _catalog;
     private readonly IReadOnlyList<PanelDefinition> _panels;
     private readonly ServiceRegistry _registry;
     private readonly ILog _log;
@@ -37,6 +38,7 @@ public partial class SettingsPage : UserControl
 
     internal SettingsPage(
         SettingsStore store,
+        ServiceCatalog catalog,
         IReadOnlyList<PanelDefinition> panels,
         ServiceRegistry registry,
         ILog log,
@@ -46,6 +48,7 @@ public partial class SettingsPage : UserControl
     {
         InitializeComponent();
         _store = store;
+        _catalog = catalog;
         _panels = panels;
         _registry = registry;
         _log = log;
@@ -72,11 +75,16 @@ public partial class SettingsPage : UserControl
 
     public void SetDark(bool dark)
     {
-        // Settings is a document page: a light surface with dark text is readable in both
-        // palettes. A themed settings page waits for the phase-4 token pipeline.
-        Background = new SolidColorBrush(Color.FromRgb(0xF6, 0xF5, 0xF3));
-        TextElement.SetForeground(Root, new SolidColorBrush(Color.FromRgb(0x33, 0x30, 0x36)));
+        TextElement.SetForeground(Root, Token("CdText"));
+
+        if (IsLoaded)
+        {
+            Reload();
+        }
     }
+
+    private System.Windows.Media.Brush Token(string key) =>
+        TryFindResource(key) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Black;
 
     private void LoadControls()
     {
@@ -109,14 +117,28 @@ public partial class SettingsPage : UserControl
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            var label = new StackPanel { Orientation = Orientation.Vertical };
-            label.Children.Add(new TextBlock { Text = instance.Name, FontSize = 13 });
-            label.Children.Add(new TextBlock
+            var label = new Grid();
+            label.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            label.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var badge = ServiceIcons.Create(
+                instance.DefinitionId,
+                instance.Name,
+                _catalog?.Find(instance.DefinitionId)?.Accent);
+            Grid.SetColumn(badge, 0);
+            label.Children.Add(badge);
+
+            var names = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(10, 0, 0, 0) };
+            names.Children.Add(new TextBlock { Text = instance.Name, FontSize = 13 });
+            names.Children.Add(new TextBlock
             {
                 Text = $"{instance.DefinitionId ?? "legacy"} · {state.ToString().ToLowerInvariant()}",
                 FontSize = 11,
                 Opacity = 0.65,
             });
+            Grid.SetColumn(names, 1);
+            label.Children.Add(names);
+
             Grid.SetColumn(label, 0);
             row.Children.Add(label);
 
@@ -144,7 +166,7 @@ public partial class SettingsPage : UserControl
             Grid.SetColumn(mute, 2);
             row.Children.Add(mute);
 
-            var remove = new Button { Content = "Remove", Width = 76 };
+            var remove = new Button { Content = "Remove", Width = 76, Style = (Style)FindResource("GhostButton") };
             remove.Click += async (_, _) => await RemoveInstanceAsync(instance);
             Grid.SetColumn(remove, 3);
             row.Children.Add(remove);
@@ -154,7 +176,12 @@ public partial class SettingsPage : UserControl
 
         if (_settings.Services.Count == 0)
         {
-            ServicesPanel.Children.Add(new TextBlock { Text = "No services yet. Add one from a definition below.", Opacity = 0.7 });
+            ServicesPanel.Children.Add(new TextBlock
+            {
+                Text = "No services yet. Open Plugins & services from Ctrl+P and activate one.",
+                Opacity = 0.7,
+                TextWrapping = TextWrapping.Wrap,
+            });
         }
     }
 
@@ -482,6 +509,7 @@ public partial class SettingsPage : UserControl
                 Width = 140,
                 Margin = new Thickness(0, 0, 8, 0),
                 ToolTip = action.Confirm,
+                Style = (Style)FindResource(action.Style == "primary" ? "PillButton" : "GhostButton"),
             };
 
             button.Click += (_, _) => ExecutePanelAction(action);

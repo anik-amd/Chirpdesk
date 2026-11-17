@@ -62,48 +62,79 @@ public partial class PluginsPage : UserControl
             var enabled = instances.Any(instance => instance.Enabled);
             var active = instances.Count(instance => instance.Enabled);
 
-            var row = new Grid { Margin = new Thickness(0, 4, 0, 4) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var label = new StackPanel();
-            label.Children.Add(new TextBlock { Text = definition.Name, FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x30, 0x36)) });
-            label.Children.Add(new TextBlock
+            var card = new Border
             {
-                Text = string.IsNullOrWhiteSpace(definition.Description)
-                    ? "Turn on to add this service; add another account for a second login."
-                    : definition.Description,
-                FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x65, 0x60)),
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 420,
+                Style = (Style)FindResource("Card"),
+                Width = 320,
+                Margin = new Thickness(0, 0, 14, 14),
+                Padding = new Thickness(14),
+            };
+
+            var content = new StackPanel();
+
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var badge = ServiceIcons.Create(definition.Id, definition.Name, definition.Accent, 34);
+            badge.Opacity = enabled ? 1 : 0.45;
+            Grid.SetColumn(badge, 0);
+            header.Children.Add(badge);
+
+            var title = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
+            title.Children.Add(new TextBlock
+            {
+                Text = definition.Name,
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Token("CdText"),
             });
-            label.Children.Add(new TextBlock
+            title.Children.Add(new TextBlock
             {
                 Text = enabled ? $"Active · {active} account(s)" : "Inactive",
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x65, 0x60)),
+                Foreground = enabled ? Token("CdAccent") : Token("CdTextMuted"),
             });
-            Grid.SetColumn(label, 0);
-            row.Children.Add(label);
+            Grid.SetColumn(title, 1);
+            header.Children.Add(title);
+            content.Children.Add(header);
 
+            content.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(definition.Description)
+                    ? "Activate to add this service; add another account for a second login."
+                    : definition.Description,
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12),
+                MinHeight = 34,
+            });
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
             var primary = new Button
             {
                 Content = enabled ? "Add account" : "Activate",
-                Width = 110,
-                Margin = new Thickness(8, 0, 8, 0),
+                Width = 104,
+                Margin = new Thickness(0, 0, 8, 0),
+                Style = (Style)FindResource("PillButton"),
             };
             primary.Click += async (_, _) => await Run(enabled ? _addAccount : _enable, definition);
-            Grid.SetColumn(primary, 1);
-            row.Children.Add(primary);
+            actions.Children.Add(primary);
 
-            var off = new Button { Content = "Deactivate", Width = 86, IsEnabled = enabled };
+            var off = new Button
+            {
+                Content = "Deactivate",
+                Width = 86,
+                IsEnabled = enabled,
+                Style = (Style)FindResource("GhostButton"),
+            };
             off.Click += async (_, _) => await Run(_disable, definition);
-            Grid.SetColumn(off, 2);
-            row.Children.Add(off);
+            actions.Children.Add(off);
 
-            PluginsPanel.Children.Add(row);
+            content.Children.Add(actions);
+            card.Child = content;
+            PluginsPanel.Children.Add(card);
         }
     }
 
@@ -140,4 +171,7 @@ public partial class PluginsPage : UserControl
     }
 
     private void OnBack(object sender, RoutedEventArgs e) => _back();
+
+    private System.Windows.Media.Brush Token(string key) =>
+        TryFindResource(key) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Black;
 }

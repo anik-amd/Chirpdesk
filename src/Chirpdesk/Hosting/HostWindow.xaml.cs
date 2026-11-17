@@ -79,23 +79,16 @@ public partial class HostWindow : Window
     {
         IsDark = dark;
 
-        Background = new System.Windows.Media.SolidColorBrush(
-            dark
-                ? System.Windows.Media.Color.FromRgb(0x11, 0x12, 0x14)
-                : System.Windows.Media.Color.FromRgb(0xF6, 0xF5, 0xF3));
+        Background = (System.Windows.Media.Brush)FindResource("CdPalette");
 
-        var bar = dark
-            ? System.Windows.Media.Color.FromRgb(0x1A, 0x17, 0x1C)
-            : System.Windows.Media.Color.FromRgb(0xEA, 0xE7, 0xE3);
-        var text = dark
-            ? System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xCC)
-            : System.Windows.Media.Color.FromRgb(0x33, 0x30, 0x36);
+        var bar = (System.Windows.Media.Brush)FindResource("CdPaletteRaised");
+        var text = (System.Windows.Media.Brush)FindResource("CdPaletteText");
 
-        TitleBar.Background = new System.Windows.Media.SolidColorBrush(bar);
-        TitleText.Foreground = new System.Windows.Media.SolidColorBrush(text);
-        MinimizeButton.Foreground = new System.Windows.Media.SolidColorBrush(text);
-        MaximizeButton.Foreground = new System.Windows.Media.SolidColorBrush(text);
-        CloseButton.Foreground = new System.Windows.Media.SolidColorBrush(text);
+        TitleBar.Background = bar;
+        TitleText.Foreground = text;
+        MinimizeButton.Foreground = text;
+        MaximizeButton.Foreground = text;
+        CloseButton.Foreground = text;
     }
 
     /// <summary>

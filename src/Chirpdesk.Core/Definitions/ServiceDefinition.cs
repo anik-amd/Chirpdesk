@@ -21,6 +21,9 @@ public sealed class ServiceDefinition
     /// <summary>Short usage description shown in the plugins page; the manifest supplies it.</summary>
     public string? Description { get; set; }
 
+    /// <summary>Brand accent used by the service badge, e.g. <c>#25D366</c>.</summary>
+    public string? Accent { get; set; }
+
     public string Url { get; set; } = string.Empty;
 
     /// <summary>File name inside the plugin archive. Never a path.</summary>

@@ -324,6 +324,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     public int ReceivedNotifications => _bridge?.Received ?? 0;
 
+    /// <summary>Last parsed unread count; 0 when the title does not show one.</summary>
+    public int UnreadCount { get; private set; }
+
     public static async Task<ServiceRuntime> CreateAsync(
         HostWindow host,
         ServiceInstance instance,
@@ -602,6 +605,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
         var previous = _lastUnread;
         _lastUnread = count;
+        UnreadCount = count;
 
         if (count == previous)
         {

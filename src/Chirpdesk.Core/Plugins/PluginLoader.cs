@@ -255,6 +255,11 @@ public static partial class PluginLoader
             definition.Description = manifest.Description;
         }
 
+        if (string.IsNullOrWhiteSpace(definition.Accent))
+        {
+            definition.Accent = manifest.Accent;
+        }
+
         DefinitionValidator.Normalize(definition);
 
         var problems = DefinitionValidator.Validate(definition);

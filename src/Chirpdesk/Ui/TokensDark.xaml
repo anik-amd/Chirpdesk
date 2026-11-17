@@ -1,0 +1,21 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="CdCanvas" Color="#0D1417" />
+    <SolidColorBrush x:Key="CdSurface" Color="#141D21" />
+    <SolidColorBrush x:Key="CdSurfaceAlt" Color="#1A252A" />
+    <SolidColorBrush x:Key="CdText" Color="#E9E6DE" />
+    <SolidColorBrush x:Key="CdTextMuted" Color="#98A3A5" />
+    <SolidColorBrush x:Key="CdRule" Color="#2A363C" />
+    <SolidColorBrush x:Key="CdAccent" Color="#74B49F" />
+    <SolidColorBrush x:Key="CdAccentSoft" Color="#1E332E" />
+    <SolidColorBrush x:Key="CdDanger" Color="#E08072" />
+    <SolidColorBrush x:Key="CdOnAccent" Color="#0D1417" />
+
+    <SolidColorBrush x:Key="CdPalette" Color="#F510171A" />
+    <SolidColorBrush x:Key="CdPaletteRaised" Color="#1A242A" />
+    <SolidColorBrush x:Key="CdPaletteText" Color="#EDE9E0" />
+    <SolidColorBrush x:Key="CdPaletteMuted" Color="#9AA7AC" />
+    <SolidColorBrush x:Key="CdPaletteRule" Color="#2D3A40" />
+    <SolidColorBrush x:Key="CdPaletteSelection" Color="#26383C" />
+    <SolidColorBrush x:Key="CdPaletteAccent" Color="#D8A45A" />
+</ResourceDictionary>

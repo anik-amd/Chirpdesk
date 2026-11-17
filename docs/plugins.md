@@ -82,7 +82,8 @@ Every kind has one.
 | `apiVersion` | integer | yes | `1`; the host refuses a higher number |
 | `author` | string | no | shown in the manager |
 | `homepage` | string | no | absolute `https` |
-| `description` | string | no | one line, ≤ 160 chars; shown as the plugin's usage hint |
+| `description` | string | no | one line, ≤ 160 chars; shown as the plugin's usage hint on the Plugins page |
+| `accent` | string | no | brand hex colour used by the service icon and palette row |
 | `permissions` | string[] | no | empty when omitted; see §9 |
 | `assets` | string[] | no | relative file names only, no `..` |
 

@@ -4,8 +4,8 @@ Phase 1 and phase 2 automated gates are green. These need a human and a real des
 
 ## Settings and plugins pages
 
-- Open `Ctrl+P` → **Settings** and confirm it is a full page in the main window, light and readable at 100 % and 150 % scaling.
-- Open `Ctrl+P` → **Plugins & services**: each bundled plugin shows its own description and On/Off state.
+- Open `Ctrl+P` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
+- Open `Ctrl+P` → **Plugins & services**: plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state.
 - Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+P` afterwards.
 - Add a second account from the same plugin; both should appear in the palette with their own sessions.
 - Turn the plugin off: runtimes sleep, sessions are not signed out. Turn it on again: the session should still be there.
@@ -13,7 +13,9 @@ Phase 1 and phase 2 automated gates are green. These need a human and a real des
 
 ## Command palette
 
-- `Ctrl+P` lists enabled services (open/asleep/cold state where relevant) plus **Settings** and **Plugins & services**.
+- `Ctrl+P` opens the **Command palette**; its empty state lists your open tabs only. Type `settings` or `plugin` to reveal commands and installed-but-inactive plugins.
+- Type `plugin` to see installed-but-inactive plugins; activating one from the palette adds/opens its account.
+- Service icons are real brand glyphs from Simple Icons (CC0), not letter badges; unread counts show at the right of each tab row.
 - `Ctrl+Tab` still cycles only warm tabs; `Esc` closes the palette/page and is passed to the site when neither is open; `Ctrl+W` closes.
 - Selecting a cold/asleep service wakes it without re-pairing.
 

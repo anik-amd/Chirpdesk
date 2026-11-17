@@ -18,7 +18,10 @@ public sealed record SearchCandidate(
     SearchKind Kind,
     IReadOnlyList<string>? Aliases = null,
     string? Host = null,
-    string? State = null);
+    string? State = null,
+    string? Accent = null,
+    string? Initial = null,
+    string? DefinitionId = null);
 
 /// <summary>
 /// Ranking for the Command Bar: prefix beats substring, warm beats cold beats command at equal

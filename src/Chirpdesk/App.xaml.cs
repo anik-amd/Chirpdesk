@@ -21,6 +21,7 @@ using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
 using Chirpdesk.Settings;
 using Chirpdesk.Theming;
+using Chirpdesk.Ui;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Chirpdesk;
@@ -850,7 +851,10 @@ public partial class App : Application
                 SearchKind.Warm,
                 aliases,
                 HostOf(resolved?.Url),
-                State: "open"));
+                State: "open",
+                Accent: AccentOf(resolved?.DefinitionId),
+                Initial: InitialOf(resolved?.Name ?? _registry.Find(id)?.Name ?? id),
+                DefinitionId: resolved?.DefinitionId ?? _registry.Find(id)?.DefinitionId));
         }
 
         // Enabled instances that are not warm yet: asleep or cold.
@@ -878,7 +882,10 @@ public partial class App : Application
                 SearchKind.Cold,
                 aliases,
                 HostOf(resolved.Url),
-                State: state));
+                State: state,
+                Accent: AccentOf(resolved.DefinitionId),
+                Initial: InitialOf(resolved.Name),
+                DefinitionId: resolved.DefinitionId));
         }
 
         var definitions = _catalog is null
@@ -900,12 +907,19 @@ public partial class App : Application
                 $"plugin:{definition.Id}",
                 definition.Name,
                 SearchKind.Cold,
-                definition.Aliases,
-                State: "plugin off"));
+                (definition.Aliases ?? []).Append("plugin").ToList(),
+                State: "plugin off",
+                Accent: definition.Accent,
+                Initial: InitialOf(definition.Name),
+                DefinitionId: definition.Id));
         }
 
-        candidates.Add(new SearchCandidate("command:settings", "Settings", SearchKind.Command));
-        candidates.Add(new SearchCandidate("command:plugins", "Plugins & services", SearchKind.Command));
+        candidates.Add(new SearchCandidate(
+            "command:settings", "Settings", SearchKind.Command,
+            ["settings", "preferences"], State: null, Accent: "#5E5A60", Initial: "S"));
+        candidates.Add(new SearchCandidate(
+            "command:plugins", "Plugins & services", SearchKind.Command,
+            ["plugins", "plugin", "add", "services"], State: null, Accent: "#275949", Initial: "P"));
 
         return candidates;
     }
@@ -930,7 +944,9 @@ public partial class App : Application
             return;
         }
 
-        var ranked = SearchIndex.Rank(_barState.Query, _searchCandidates);
+        var ranked = string.IsNullOrWhiteSpace(_barState.Query)
+            ? SearchIndex.Rank("", _searchCandidates.Where(candidate => candidate.Kind == SearchKind.Warm && candidate.State == "open").ToList())
+            : SearchIndex.Rank(_barState.Query, _searchCandidates);
         _barState.ShowResults(ranked.Select(candidate => candidate.Id).ToList(), keepSelected);
         RenderCommandBar();
     }
@@ -1006,6 +1022,30 @@ public partial class App : Application
     private static string? HostOf(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : null;
 
+    private string? AccentOf(string? definitionId) =>
+        definitionId is null ? null : _catalog?.Find(definitionId)?.Accent;
+
+    private static string InitialOf(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "?" : char.ToUpperInvariant(name.TrimStart()[0]).ToString();
+
+    private static System.Windows.Media.SolidColorBrush BrushFor(string? accent)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(accent)
+                && System.Windows.Media.ColorConverter.ConvertFromString(accent) is System.Windows.Media.Color color)
+            {
+                return new System.Windows.Media.SolidColorBrush(color);
+            }
+        }
+        catch (FormatException)
+        {
+            // Fall through to the neutral badge.
+        }
+
+        return new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6C, 0x6B, 0x62));
+    }
+
     private void RenderCommandBar()
     {
         if (_bar is null || _barState is null || _host is null || _registry is null)
@@ -1020,15 +1060,28 @@ public partial class App : Application
         var rows = _barState.Entries
             .Select(id =>
             {
-                if (lookup.TryGetValue(id, out var candidate))
+                lookup.TryGetValue(id, out var candidate);
+                var runtime = _registry.Find(id);
+                var name = candidate?.Name ?? runtime?.Name ?? id;
+
+                if (!string.IsNullOrWhiteSpace(candidate?.State) && candidate.State != "open")
                 {
-                    var name = string.IsNullOrWhiteSpace(candidate.State) || candidate.State == "open"
-                        ? candidate.Name
-                        : $"{candidate.Name} · {candidate.State}";
-                    return new BarRow(id, name);
+                    name = $"{name} · {candidate.State}";
                 }
 
-                return new BarRow(id, _registry.Find(id)?.Name ?? id);
+                var accent = candidate?.Accent ?? AccentOf(runtime?.DefinitionId ?? candidate?.DefinitionId);
+                var initial = candidate?.Initial ?? InitialOf(name);
+                var unread = runtime?.UnreadCount ?? 0;
+                var definitionId = runtime?.DefinitionId ?? candidate?.DefinitionId;
+                var icon = definitionId is null
+                    ? ServiceBadge.Create(name, accent, 22)
+                    : ServiceIcons.Create(definitionId, name, accent, 22);
+
+                return new BarRow(
+                    id,
+                    name,
+                    icon,
+                    unread > 0 ? unread.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty);
             })
             .ToList();
 
@@ -1104,8 +1157,10 @@ public partial class App : Application
     private void ApplyTheme()
     {
         var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
+        UiTheme.Apply(dark);
         _host?.SetDark(dark);
         _settingsPage?.SetDark(dark);
+        _pluginsPage?.Reload();
 
         var mode = ThemeDecision.ToStorageValue(_themeMode);
         var resolved = dark ? "dark" : "light";
@@ -1336,6 +1391,7 @@ public partial class App : Application
         {
             _settingsPage = new SettingsPage(
                 new SettingsStore(AppPaths.SettingsFile, _log),
+                _catalog ?? new ServiceCatalog([]),
                 _panels,
                 _registry,
                 _log,

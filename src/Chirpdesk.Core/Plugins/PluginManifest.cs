@@ -22,6 +22,9 @@ public sealed class PluginManifest
 
     public string? Description { get; set; }
 
+    /// <summary>Brand accent for the service badge.</summary>
+    public string? Accent { get; set; }
+
     public List<string>? Permissions { get; set; } = [];
 
     public List<string>? Assets { get; set; } = [];
