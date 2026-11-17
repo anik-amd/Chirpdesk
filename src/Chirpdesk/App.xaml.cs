@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using Chirpdesk.CommandBar;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Definitions;
+using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Theming;
@@ -14,6 +15,7 @@ using Chirpdesk.Core.Time;
 using Chirpdesk.Definitions;
 using Chirpdesk.Diagnostics;
 using Chirpdesk.Hosting;
+using Chirpdesk.Interop;
 using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
 using Chirpdesk.Theming;
@@ -120,6 +122,7 @@ public partial class App : Application
         _host.PreviewTextInput += OnHostPreviewTextInput;
 
         InitializeTheme();
+        SyncAutostartMirror();
 
         _log.Info("started hidden");
 
@@ -130,6 +133,10 @@ public partial class App : Application
         else if (options.OpenService is not null)
         {
             _ = OpenServiceAsync(options.OpenService, show: !options.Hidden, probe: options.NotifyTest);
+        }
+        else
+        {
+            _ = WarmPinnedAtBootAsync(options.Autostart);
         }
 
         if (options.QuitAfter is { } delay)
@@ -287,6 +294,73 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or InvalidSettingsException or InvalidOperationException)
         {
             _log?.Error("could not warm all services", ex);
+        }
+    }
+
+    /// <summary>
+    /// Normal launch path: warm every instance pinned at boot, hidden, staggered. Autostart adds
+    /// one 20 s delay before the first webview so login is not competing with Chromium.
+    /// </summary>
+    private async Task WarmPinnedAtBootAsync(bool autostart)
+    {
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            var plan = BootPlan.Select(settings);
+
+            if (plan.Count == 0)
+            {
+                _log?.Info("boot: no services pinned warm");
+                return;
+            }
+
+            var initial = autostart ? TimeSpan.FromSeconds(20) : TimeSpan.Zero;
+            var started = DateTimeOffset.UtcNow;
+            _log?.Info($"boot: warming {plan.Count} pinned service(s), autostart={autostart}");
+
+            for (var index = 0; index < plan.Count; index++)
+            {
+                var wait = BootPlan.DelayFor(index, initial) - (DateTimeOffset.UtcNow - started);
+                if (wait > TimeSpan.Zero)
+                {
+                    await Task.Delay(wait);
+                }
+
+                await OpenInstanceAsync(plan[index], show: false, probe: false);
+            }
+
+            _log?.Info($"boot: warmed {plan.Count} pinned service(s)");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or InvalidOperationException)
+        {
+            _log?.Error("could not warm pinned services", ex);
+        }
+    }
+
+    /// <summary>Keeps the settings mirror honest with the HKCU entry; the OS is the source of truth.</summary>
+    private void SyncAutostartMirror()
+    {
+        var executable = Environment.ProcessPath;
+        if (executable is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+            var enabled = Autostart.IsEnabled(executable, _log!);
+
+            if (settings.Autostart != enabled)
+            {
+                settings.Autostart = enabled;
+                store.Save(settings);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not mirror the autostart state: {ex.Message}");
         }
     }
 

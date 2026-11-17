@@ -45,6 +45,8 @@ The registry currently knows warm and cold only. Add the three states from PLAN 
 
 ## Task 3: Boot warm-up and autostart (TDD)
 
+**Status:** complete (2026-11-17). `BootPlan` selects pinned instances in user order and staggers 1.5 s; a normal launch warms them hidden (verified live: `boot: warmed 2 pinned service(s)`, no `window shown`). `--autostart` adds a 20 s in-app delay; the HKCU Run value is written through `Interop.Autostart`, and startup mirrors its real state into settings. ADR 0012 records the choice over Task Scheduler.
+
 **Files:**
 - Create: `src/Chirpdesk.Core/Lifecycle/BootPlan.cs`, `src/Chirpdesk/Interop/Autostart.cs`
 - Modify: `src/Chirpdesk/App.xaml.cs`, `StartupOptions.cs`, `scripts/autostart.ps1`
