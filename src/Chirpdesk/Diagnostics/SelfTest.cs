@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Windows;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
@@ -9,6 +10,7 @@ using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Storage;
+using Chirpdesk.Core.Theming;
 using Chirpdesk.Core.Time;
 using Chirpdesk.Definitions;
 using Chirpdesk.Hosting;
@@ -48,6 +50,7 @@ internal sealed class SelfTest
 
         Guarded("settings", CheckSettings);
         Guarded("app-identity", CheckAppIdentity);
+        Guarded("contrast", CheckContrast);
         Guarded("tray", CheckTray);
         Guarded("window-hidden", CheckWindowIsHidden);
         Guarded("single-instance", CheckSingleInstance);
@@ -559,6 +562,83 @@ internal sealed class SelfTest
             File.Exists(shortcut) && available && string.Equals(processId, Aumid.AppId, StringComparison.Ordinal),
             $"shortcut={File.Exists(shortcut)} notifier={available} aumid={processId}");
     }
+
+    /// <summary>
+    /// Both token dictionaries are read from disk and the pairs that carry text are checked
+    /// against WCAG AA. A palette edit that lowers contrast fails the gate instead of shipping.
+    /// </summary>
+    private void CheckContrast()
+    {
+        var failures = new List<string>();
+
+        foreach (var name in new[] { "TokensLight", "TokensDark" })
+        {
+            var tokens = LoadTokens(name);
+            if (tokens is null)
+            {
+                failures.Add($"{name} missing");
+                continue;
+            }
+
+            foreach (var (foreground, background, minimum) in ContrastPairs)
+            {
+                if (ColorOf(tokens, foreground) is not { } fg || ColorOf(tokens, background) is not { } bg)
+                {
+                    failures.Add($"{name}:{foreground}/{background} missing");
+                    continue;
+                }
+
+                var ratio = Contrast.Ratio(fg, bg);
+                if (ratio < minimum)
+                {
+                    failures.Add($"{name} {foreground}/{background}={ratio:0.00}<{minimum:0.0}");
+                }
+            }
+        }
+
+        Check(
+            "contrast",
+            failures.Count == 0,
+            failures.Count == 0
+                ? "light and dark pass AA for text, muted text, accent, danger and palette pairs"
+                : string.Join("; ", failures));
+    }
+
+    private static readonly (string Foreground, string Background, double Minimum)[] ContrastPairs =
+    [
+        ("CdText", "CdSurface", 4.5),
+        ("CdText", "CdCanvas", 4.5),
+        ("CdText", "CdSurfaceAlt", 4.5),
+        ("CdTextMuted", "CdSurface", 4.5),
+        ("CdTextMuted", "CdCanvas", 4.5),
+        ("CdAccent", "CdSurface", 4.5),
+        ("CdOnAccent", "CdAccent", 4.5),
+        ("CdDanger", "CdSurface", 4.5),
+        ("CdPaletteText", "CdPaletteRaised", 4.5),
+        ("CdPaletteMuted", "CdPaletteRaised", 4.5),
+        ("CdPaletteAccent", "CdPaletteRaised", 4.5),
+    ];
+
+    private ResourceDictionary? LoadTokens(string name)
+    {
+        try
+        {
+            return new ResourceDictionary
+            {
+                Source = new Uri($"pack://application:,,,/Chirpdesk;component/Ui/{name}.xaml", UriKind.Absolute),
+            };
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _log.Warn($"could not load {name} for contrast validation: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static Rgb? ColorOf(ResourceDictionary tokens, string key) =>
+        tokens[key] is System.Windows.Media.SolidColorBrush brush
+            ? new Rgb(brush.Color.R, brush.Color.G, brush.Color.B)
+            : null;
 
     /// <summary>The tray icon is a real Win32 icon; if the library cannot create one nothing else shows.</summary>
     private void CheckTray()
