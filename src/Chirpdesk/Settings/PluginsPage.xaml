@@ -38,7 +38,7 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Installed" Style="{StaticResource Heading}" />
-                        <TextBlock Text="Service plugins are active in this build. Filter, theme and tool plugins arrive with the repository; the bundled cleaner is already installed."
+                        <TextBlock Text="Service plugins add their site; filter and theme plugins change how every tab behaves. Bundled plugins are active by default, and a plugin can be deactivated without signing out."
                                    Style="{StaticResource MutedText}"
                                    Margin="0,4,0,10"
                                    TextWrapping="Wrap" />

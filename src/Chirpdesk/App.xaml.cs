@@ -20,6 +20,7 @@ using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
+using Chirpdesk.Onboarding;
 using Chirpdesk.Settings;
 using Chirpdesk.Theming;
 using Chirpdesk.Ui;
@@ -49,6 +50,8 @@ public partial class App : Application
     private IReadOnlyList<FilterPack> _filterPacks = Array.Empty<FilterPack>();
     private SettingsPage? _settingsPage;
     private PluginsPage? _pluginsPage;
+    private OnboardingPage? _onboarding;
+    private bool _firstRun;
     private CommandBarView? _bar;
     private BarState? _barState;
     private ModifierWatcher? _barWatcher;
@@ -62,6 +65,13 @@ public partial class App : Application
         base.OnStartup(e);
 
         var options = StartupOptions.Parse(e.Args);
+        _firstRun = !File.Exists(AppPaths.SettingsFile)
+            && !options.Autostart
+            && !options.Hidden
+            && options.OpenService is null
+            && !options.WarmAll
+            && !options.SelfTest
+            && !options.TestToast;
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
         _registry = new ServiceRegistry(_log);
         _catalog = PluginCatalog.Load(_log);
@@ -152,6 +162,11 @@ public partial class App : Application
         else
         {
             _ = WarmPinnedAtBootAsync(options.Autostart);
+        }
+
+        if (_firstRun)
+        {
+            ShowOnboarding();
         }
 
         if (options.QuitAfter is { } delay)
@@ -452,7 +467,16 @@ public partial class App : Application
             if (e.Key == Key.Escape)
             {
                 e.Handled = true;
-                ClosePage();
+
+                if (_onboarding is not null)
+                {
+                    DismissOnboarding();
+                }
+                else
+                {
+                    ClosePage();
+                }
+
                 return;
             }
 
@@ -1463,6 +1487,70 @@ public partial class App : Application
 
     private void OpenHost() => ShowHost();
 
+    private void ShowOnboarding()
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        _onboarding = new OnboardingPage(
+            () =>
+            {
+                CompleteFirstRun();
+                OpenPlugins();
+            },
+            DismissOnboarding);
+
+        _log?.Info("first run: showing onboarding");
+        ShowPage(_onboarding);
+    }
+
+    /// <summary>
+    /// Closing the overlay on a fresh install must return to hidden-warm. There is no active tab
+    /// behind it, so leaving the window visible would be exactly the unprompted window the
+    /// product forbids.
+    /// </summary>
+    private void DismissOnboarding()
+    {
+        CompleteFirstRun();
+        ClosePage();
+
+        if (_registry?.Active is { } active)
+        {
+            active.FocusPage();
+        }
+        else
+        {
+            HideHost();
+        }
+    }
+
+    /// <summary>
+    /// Writing the default settings file is the durable "onboarding seen" marker. It keeps the
+    /// overlay off every later launch without adding a schema field that existing settings lack.
+    /// </summary>
+    private void CompleteFirstRun()
+    {
+        if (!_firstRun)
+        {
+            return;
+        }
+
+        _firstRun = false;
+
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            store.Save(store.Load());
+            _log?.Info("first run: onboarding dismissed");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not record the first run: {ex.Message}");
+        }
+    }
+
     private void OpenSettings()
     {
         if (_host is null || _registry is null || _log is null)
@@ -1525,6 +1613,11 @@ public partial class App : Application
             CloseCommandBar(restore: false);
         }
 
+        if (!ReferenceEquals(page, _onboarding))
+        {
+            _onboarding = null;
+        }
+
         _registry.Active?.CollapseForCommandBar();
         _host.ShowForUser();
 
@@ -1577,6 +1670,12 @@ public partial class App : Application
         if (_host is null)
         {
             return;
+        }
+
+        if (_onboarding is not null)
+        {
+            CompleteFirstRun();
+            _onboarding = null;
         }
 
         _host.HidePage();

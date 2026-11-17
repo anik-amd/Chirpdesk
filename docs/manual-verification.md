@@ -3,6 +3,12 @@
 Phase 1, phase 2 and the automated half of phase 3 are green. These need a human and a real
 desktop session.
 
+## First run
+
+- On a fresh profile (no `%APPDATA%\Chirpdesk\settings.json`), launch Chirpdesk: the onboarding page appears once with the three surfaces.
+- **Got it** and **Esc** both hide the window back to the tray; **Open plugins** opens the plugin page instead.
+- The next launch goes straight to hidden-warm, with no overlay.
+
 ## Settings and plugins pages
 
 - Open `Ctrl+P` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
