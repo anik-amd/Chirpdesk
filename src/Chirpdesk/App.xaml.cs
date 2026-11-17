@@ -194,16 +194,19 @@ public partial class App : Application
     /// <summary>Creates (or reuses) the runtime for one instance and optionally shows it.</summary>
     private async Task OpenInstanceAsync(ServiceInstance instance, bool show, bool probe)
     {
+        var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
+
         var service = await ServiceRuntime.CreateAsync(
             _host!,
             instance,
             _log!,
             SystemClock.Instance,
             new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            dark);
         _service = service;
 
-        await service.ApplyThemeAsync(ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight()));
+        await service.ApplyThemeAsync(dark);
 
         if (show)
         {
@@ -254,6 +257,10 @@ public partial class App : Application
                 Name = name,
                 Url = uri.ToString(),
                 WarmAtBoot = true,
+
+                // A site added by URL is assumed to have no built-in dark theme; a shipped
+                // definition says otherwise and wins once it exists.
+                PageDarkMode = "auto",
             };
 
             settings.Services.Add(instance);

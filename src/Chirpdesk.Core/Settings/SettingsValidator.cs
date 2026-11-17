@@ -28,6 +28,12 @@ internal static partial class SettingsValidator
             }
 
             instance.Blocking = string.IsNullOrWhiteSpace(instance.Blocking) ? "default" : instance.Blocking;
+
+            instance.PageDarkMode = instance.PageDarkMode?.Trim().ToLowerInvariant() switch
+            {
+                "auto" => "auto",
+                _ => "off",
+            };
         }
     }
 

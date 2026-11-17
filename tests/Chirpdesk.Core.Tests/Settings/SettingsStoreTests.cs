@@ -140,6 +140,29 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(File.Exists(SettingsPath + ".corrupt"));
     }
 
+    [Theory]
+    [InlineData("auto", "auto")]
+    [InlineData("AUTO", "auto")]
+    [InlineData("off", "off")]
+    [InlineData("nonsense", "off")]
+    [InlineData(null, "off")]
+    public void Page_dark_mode_is_normalised_and_fails_open(string? stored, string expected)
+    {
+        var store = CreateStore();
+        var settings = new AppSettings();
+        settings.Services.Add(new ServiceInstance
+        {
+            InstanceId = "site",
+            Name = "Site",
+            Url = "https://a.example/",
+            PageDarkMode = stored!,
+        });
+
+        store.Save(settings);
+
+        Assert.Equal(expected, Assert.Single(store.Load().Services).PageDarkMode);
+    }
+
     [Fact]
     public void Saving_twice_keeps_the_latest_state()
     {

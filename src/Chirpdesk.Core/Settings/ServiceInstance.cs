@@ -36,6 +36,14 @@ public sealed class ServiceInstance
     /// <summary><c>native</c>, <c>shim</c> or <c>title-only</c>; null means "ask the definition, then probe".</summary>
     public string? NotificationMode { get; set; }
 
+    /// <summary>
+    /// <c>off</c> (default) or <c>auto</c>. Auto applies the invert filter only when the page
+    /// still measures light after <c>prefers-color-scheme</c>, i.e. only to sites without a
+    /// built-in dark theme. A definition sets the default for its site, because the site —
+    /// not the user — knows whether it has one; the instance can override.
+    /// </summary>
+    public string PageDarkMode { get; set; } = "off";
+
     /// <summary>Instance id of the profile owner when this instance shares one; null when standalone.</summary>
     public string? ShareProfileWith { get; set; }
 

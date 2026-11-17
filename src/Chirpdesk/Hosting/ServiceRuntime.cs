@@ -103,7 +103,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         ILog log,
         IClock clock,
         IToastSink toast,
-        DateTimeOffset startedAt)
+        DateTimeOffset startedAt,
+        bool darkTheme)
     {
         _host = host;
         _instance = instance;
@@ -111,6 +112,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _clock = clock;
         _toast = toast;
         _startedAt = startedAt;
+        _darkTheme = darkTheme;
     }
 
     public string? NotificationMode { get; private set; }
@@ -125,9 +127,10 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         ILog log,
         IClock clock,
         IToastSink toast,
-        DateTimeOffset startedAt)
+        DateTimeOffset startedAt,
+        bool darkTheme)
     {
-        var runtime = new ServiceRuntime(host, instance, log, clock, toast, startedAt);
+        var runtime = new ServiceRuntime(host, instance, log, clock, toast, startedAt, darkTheme);
         await runtime.InitializeAsync();
         return runtime;
     }
@@ -218,6 +221,12 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
         if (!string.IsNullOrWhiteSpace(_instance.Url))
         {
+            // Before the first navigation, so the site's own prefers-color-scheme handling
+            // runs with the right answer instead of being corrected after it painted.
+            core.Profile.PreferredColorScheme = _darkTheme
+                ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
+                : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
+
             // Ask once, before the page loads: a site that checks Notification.permission
             // without calling requestPermission would otherwise never notify.
             await GrantNotificationsAsync(core);
@@ -350,13 +359,17 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
                 : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
 
-            var argument = dark ? "true" : "false";
+            var pageDark = dark
+                && string.Equals(_instance.PageDarkMode, "auto", StringComparison.OrdinalIgnoreCase);
+
+            var argument = pageDark ? "true" : "false";
             var script = "window.__chirpdeskTheme ? window.__chirpdeskTheme(" + argument + ") : ''";
             var result = await core.ExecuteScriptAsync(script);
 
             var mode = dark ? "dark" : "light";
+            var policy = pageDark ? "auto" : "off";
             var outcome = result.Trim('"');
-            _log.Info($"web theme for '{_instance.InstanceId}': mode={mode} result={outcome}");
+            _log.Info($"web theme for '{_instance.InstanceId}': mode={mode} pageDark={policy} result={outcome}");
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
         {

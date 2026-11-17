@@ -17,6 +17,13 @@ Page darkening uses two levers in this order:
 
 The decision is observable: the injected function returns the measured luminance and whether the class was applied, and the host logs it (`web theme: mode=dark result=dark:0.85`). A theme that silently did nothing would look identical to a site that chose white.
 
+Page darkening is a **per-site** policy, because the site knows whether it already has a dark theme and the user may not:
+
+- a service definition declares `pageDarkMode: off | auto`, and an instance may override it;
+- `off` is the default, and it is what WhatsApp uses — WhatsApp follows the system scheme itself, so the filter would only fight it;
+- `auto` means "darken only if the page still measures light after `prefers-color-scheme`", which is what `--add-site` sets for a site added by URL;
+- the app never guesses from the URL alone; the policy is explicit data.
+
 ## Consequences
 
 - Theme work is minutes, not a token pipeline; phase 4 keeps tokens, contrast validation and high-contrast fallback but loses families until after v1.
