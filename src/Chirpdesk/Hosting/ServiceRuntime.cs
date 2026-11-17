@@ -67,9 +67,18 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// profile's <c>prefers-color-scheme</c> (free and correct where the site supports it),
     /// then a filter on the root element for sites that do not. Images, video and canvases
     /// are inverted back so they keep their real colours.
+    /// <c>auto</c> only uses the second lever when the page still measures light: a site that
+    /// already follows <c>prefers-color-scheme</c> must not have its own dark theme inverted
+    /// back into a washed-out one (ADR 0010).
     /// </summary>
     private const string ThemeScript = """
         (function () {
+          var LIGHT_THRESHOLD = 0.5;
+          var SETTLE_MS = 250;
+          var SETTLE_CHECKS = 40;
+
+          var state = { dark: false, timer: 0, checks: 0 };
+
           function install() {
             if (!document.documentElement) { return false; }
             if (document.getElementById('cd-theme-style')) { return true; }
@@ -81,16 +90,77 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             (document.head || document.documentElement).appendChild(style);
             return true;
           }
+
+          // An early SPA paint can have a transparent body and report white while the site is
+          // still deciding its theme; an opaque background is the first trustworthy sample.
+          function measure() {
+            var roots = [document.body, document.documentElement];
+            for (var i = 0; i < roots.length; i++) {
+              var el = roots[i];
+              if (!el) { continue; }
+              var bg = getComputedStyle(el).backgroundColor;
+              var m = bg && bg.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+              if (!m) { continue; }
+              var alpha = m[4] === undefined ? 1 : parseFloat(m[4]);
+              if (alpha < 0.5) { continue; }
+              return {
+                opaque: true,
+                lum: (0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3]) / 255
+              };
+            }
+            return { opaque: false, lum: 1 };
+          }
+
+          function decide(final) {
+            var root = document.documentElement;
+
+            // Measure the page, not the filter we applied last time: the class overrides the
+            // root background, so leaving it on would report our own colour back to us.
+            root.classList.remove('cd-dark');
+
+            if (!state.dark) { return 'light'; }
+
+            var sample = measure();
+            if (!sample.opaque && !final) { return null; }
+            if (sample.opaque && sample.lum < LIGHT_THRESHOLD) {
+              return 'native-dark:' + sample.lum.toFixed(2);
+            }
+
+            root.classList.add('cd-dark');
+            return 'filtered:' + (sample.opaque ? sample.lum.toFixed(2) : 'transparent');
+          }
+
+          function tick() {
+            var final = state.checks <= 1;
+            decide(final);
+
+            if (final) {
+              state.timer = 0;
+              return;
+            }
+
+            state.checks--;
+            state.timer = setTimeout(tick, SETTLE_MS);
+          }
+
           window.__chirpdeskTheme = function (dark) {
             try {
               if (!install()) { return 'no-document'; }
-              var root = document.documentElement;
-              if (!dark) { root.classList.remove('cd-dark'); return 'light'; }
-              var bg = document.body ? getComputedStyle(document.body).backgroundColor : '';
-              var m = bg.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)/);
-              var lum = m ? (0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3]) / 255 : 1;
-              root.classList.add('cd-dark');
-              return 'dark:' + lum.toFixed(2);
+              if (state.timer) {
+                clearTimeout(state.timer);
+                state.timer = 0;
+              }
+
+              state.dark = !!dark;
+              if (!state.dark) { return decide(false); }
+
+              // Keep watching for a few seconds after the first answer: chat apps apply their
+              // own night theme after hydration, and the filter must yield to it.
+              state.checks = SETTLE_CHECKS;
+              state.timer = setTimeout(tick, SETTLE_MS);
+
+              var outcome = decide(false);
+              return outcome === null ? 'pending' : outcome;
             } catch (e) { return 'error:' + e; }
           };
           document.addEventListener('DOMContentLoaded', install);
