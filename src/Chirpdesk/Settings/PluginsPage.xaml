@@ -16,12 +16,15 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel>
-                <TextBlock Text="Plugins"
-                           FontFamily="Segoe UI Variable Display, Segoe UI"
-                           FontSize="28"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource CdText}" />
-                <TextBlock Text="One plugin is one site. Activate it once, then add as many accounts as you need."
+                <StackPanel Orientation="Horizontal">
+                    <ContentControl x:Name="PageIcon" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <TextBlock Text="Plugins"
+                               FontFamily="Segoe UI Variable Display, Segoe UI"
+                               FontSize="28"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource CdText}" />
+                </StackPanel>
+                <TextBlock Text="Plugins extend the desk: service definitions, filter packs, themes and bundled tools. Activate one to add what it provides."
                            Style="{StaticResource MutedText}"
                            Margin="0,5,0,0"
                            TextWrapping="Wrap" />
@@ -35,9 +38,10 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Installed" Style="{StaticResource Heading}" />
-                        <TextBlock Text="Bundled today. User plugins are read from the plugins folder."
+                        <TextBlock Text="Service plugins are active in this build. Filter, theme and tool plugins arrive with the repository; the bundled cleaner is already installed."
                                    Style="{StaticResource MutedText}"
-                                   Margin="0,4,0,10" />
+                                   Margin="0,4,0,10"
+                                   TextWrapping="Wrap" />
                         <WrapPanel x:Name="PluginsPanel" Orientation="Horizontal" />
                     </StackPanel>
                 </Border>
@@ -45,7 +49,7 @@
                 <Border Style="{StaticResource Card}" Margin="0,20,0,0">
                     <StackPanel>
                         <TextBlock Text="Browse" Style="{StaticResource Heading}" />
-                        <TextBlock Text="A signed repository with install, update and signatures arrives in phase 5. Until then plugins are bundled or dropped into the user folder."
+                        <TextBlock Text="A signed repository with install, update and signatures arrives in phase 5. It will carry service definitions, filter packs, themes and tools; user scripts are not part of v1."
                                    Style="{StaticResource MutedText}"
                                    TextWrapping="Wrap"
                                    Margin="0,4,0,12" />

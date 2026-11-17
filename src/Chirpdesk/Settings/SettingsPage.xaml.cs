@@ -12,6 +12,7 @@ using Chirpdesk.Core.Storage;
 using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Storage;
+using Chirpdesk.Ui;
 
 namespace Chirpdesk.Settings;
 
@@ -57,6 +58,7 @@ public partial class SettingsPage : UserControl
         _back = back;
         _settings = store.Load();
 
+        PageIcon.Content = UiIcons.Create("settings", Token("CdAccent"), 28);
         ThemeBox.ItemsSource = new[] { "system", "light", "dark" };
         DndBox.ItemsSource = DndLabels;
 

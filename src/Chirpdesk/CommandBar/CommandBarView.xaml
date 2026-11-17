@@ -47,6 +47,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <!-- The query line is the bar's one "terminal" flavour. -->
@@ -106,6 +107,14 @@
                        Foreground="#8F8894"
                        Visibility="Collapsed"
                        Text="No warm services." />
+
+            <TextBlock x:Name="Hint"
+                       Grid.Row="2"
+                       Margin="10,6,10,2"
+                       FontFamily="Cascadia Mono, Consolas"
+                       FontSize="10"
+                       Foreground="#7A858A"
+                       Text="Type inactive to see plugins" />
         </Grid>
     </Border>
 </UserControl>

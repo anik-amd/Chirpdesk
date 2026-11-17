@@ -17,11 +17,14 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel>
-                <TextBlock Text="Desk settings"
-                           FontFamily="Segoe UI Variable Display, Segoe UI"
-                           FontSize="28"
-                           FontWeight="SemiBold"
-                           Foreground="{DynamicResource CdText}" />
+                <StackPanel Orientation="Horizontal">
+                    <ContentControl x:Name="PageIcon" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <TextBlock Text="Desk settings"
+                               FontFamily="Segoe UI Variable Display, Segoe UI"
+                               FontSize="28"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource CdText}" />
+                </StackPanel>
                 <TextBlock Text="Services, what warms at login, and the space they keep."
                            Style="{StaticResource MutedText}"
                            Margin="0,5,0,0" />

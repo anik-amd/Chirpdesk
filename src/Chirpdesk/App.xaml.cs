@@ -898,8 +898,17 @@ public partial class App : Application
                 instance => instance.Enabled
                     && string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase));
 
-            if (hasEnabledInstance || string.IsNullOrWhiteSpace(definition.Id))
+            if (hasEnabledInstance)
             {
+                candidates.Add(new SearchCandidate(
+                    $"plugin-off:{definition.Id}",
+                    $"Deactivate {definition.Name}",
+                    SearchKind.Command,
+                    (definition.Aliases ?? []).Append("plugin").Append("deactivate").ToList(),
+                    State: "plugin on",
+                    Accent: definition.Accent,
+                    Initial: InitialOf(definition.Name),
+                    DefinitionId: definition.Id));
                 continue;
             }
 
@@ -907,7 +916,7 @@ public partial class App : Application
                 $"plugin:{definition.Id}",
                 definition.Name,
                 SearchKind.Cold,
-                (definition.Aliases ?? []).Append("plugin").ToList(),
+                (definition.Aliases ?? []).Append("plugin").Append("inactive").Append("off").ToList(),
                 State: "plugin off",
                 Accent: definition.Accent,
                 Initial: InitialOf(definition.Name),
@@ -1015,6 +1024,18 @@ public partial class App : Application
             return;
         }
 
+        if (selected.StartsWith("plugin-off:", StringComparison.Ordinal))
+        {
+            var definition = _catalog?.Find(selected["plugin-off:".Length..]);
+            if (definition is not null)
+            {
+                _log?.Info($"command bar deactivating plugin '{definition.Id}'");
+                _ = DisablePluginAsync(definition);
+            }
+
+            return;
+        }
+
         _ = ActivateServiceAsync(selected);
         _log?.Info($"command bar search committed '{selected}'");
     }
@@ -1073,9 +1094,15 @@ public partial class App : Application
                 var initial = candidate?.Initial ?? InitialOf(name);
                 var unread = runtime?.UnreadCount ?? 0;
                 var definitionId = runtime?.DefinitionId ?? candidate?.DefinitionId;
-                var icon = definitionId is null
-                    ? ServiceBadge.Create(name, accent, 22)
-                    : ServiceIcons.Create(definitionId, name, accent, 22);
+                var accentBrush = ServiceBadge.BrushFor(accent);
+                var icon = id switch
+                {
+                    "command:settings" => UiIcons.Create("settings", accentBrush, 22),
+                    "command:plugins" => UiIcons.Create("plugins", accentBrush, 22),
+                    _ => definitionId is null
+                        ? ServiceBadge.Create(name, accent, 22)
+                        : ServiceIcons.Create(definitionId, name, accent, 22),
+                };
 
                 return new BarRow(
                     id,

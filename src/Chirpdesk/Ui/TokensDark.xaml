@@ -18,4 +18,5 @@
     <SolidColorBrush x:Key="CdPaletteRule" Color="#2D3A40" />
     <SolidColorBrush x:Key="CdPaletteSelection" Color="#26383C" />
     <SolidColorBrush x:Key="CdPaletteAccent" Color="#D8A45A" />
+    <SolidColorBrush x:Key="CdScrollThumb" Color="#3A484E" />
 </ResourceDictionary>

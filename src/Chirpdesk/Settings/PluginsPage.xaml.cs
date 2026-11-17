@@ -6,6 +6,7 @@ using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Hosting;
+using Chirpdesk.Ui;
 
 namespace Chirpdesk.Settings;
 
@@ -46,6 +47,7 @@ public partial class PluginsPage : UserControl
         _disable = disable;
         _back = back;
         _settings = store.Load();
+        PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
     }
 
