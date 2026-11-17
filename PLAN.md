@@ -39,7 +39,7 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | R3 | Services not selected stay **cold** until invoked | Webview created on demand, spinner while loading |
 | R4 | Notifications = native Windows toasts, no backlog storm at login | `NotificationReceived` → toast, dedupe, warm-up suppression, capability probe per service |
 | R5 | **One** command surface for everything; no sidebar, tab strip or menu | Unified Command Bar, zero permanent chrome |
-| R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search/commands | Single overlay component, two entry modes, one global summon hotkey |
+| R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search | Single overlay component, two entry modes |
 | R7 | Add a **chat site by installing its definition plugin** | A `service` plugin is the only on-ramp; every site has a curated definition (ADR 0011) |
 | R8 | Isolated session per service (multiple accounts) | One `WebView2` profile per service **instance** |
 | R9 | Theme system: popular families, each with dark **and** light variants built in, live switch | Theme plugins with `variants[]`, token pipeline, instant `DynamicResource` swap |
@@ -244,11 +244,11 @@ Chirpdesk.exe (single instance, mutex-guarded)
 
 There is **one** window, not two. It is created with `ShowInTaskbar=true` — WPF gives a window with `ShowInTaskbar=false` a hidden owner, and toggling that property later recreates the HWND, which would destroy every webview in the tree. Instead, `WS_EX_TOOLWINDOW` is applied in `SourceInitialized` and the window is `Show()`n off-screen at `(-32000, -32000)`, 2×2 px, with `ShowActivated=false`. That keeps Chromium's composition target alive while the window stays out of the taskbar and Alt+Tab.
 
-When the user asks for a service (tray click, Command Bar commit, toast click, global hotkey), the **same HWND** moves on-screen at its last bounds, the active webview fills it, and `SetWindowLongPtr` clears `WS_EX_TOOLWINDOW` and sets `WS_EX_APPWINDOW`, so it behaves like a normal app window (taskbar button, Alt+Tab entry). `Ctrl+W`, the close button and losing the last service returns it off-screen and re-applies `WS_EX_TOOLWINDOW`. `ShowInTaskbar` is never touched after creation. No reparenting, no window recreation, no renderer restart. Warm webviews that are not active stay parked at 1×1.
+When the user asks for a service (tray click, Command Bar commit, toast click), the **same HWND** moves on-screen at its last bounds, the active webview fills it, and `SetWindowLongPtr` clears `WS_EX_TOOLWINDOW` and sets `WS_EX_APPWINDOW`, so it behaves like a normal app window (taskbar button, Alt+Tab entry). `Ctrl+W`, the close button and losing the last service returns it off-screen and re-applies `WS_EX_TOOLWINDOW`. `ShowInTaskbar` is never touched after creation. No reparenting, no window recreation, no renderer restart. Warm webviews that are not active stay parked at 1×1.
 
 This is why visibility is **not** a lifecycle workaround: showing the window is a user action, and hiding it never unloads a warm webview. Invariant 5 in `AGENTS.md` is written that way, not as "never show a window".
 
-**Summoning it while hidden.** A tray-only app cannot receive `Ctrl+Tab` when nothing has focus, so a single global hotkey — `Ctrl+Alt+Space` by default — opens the Command Bar in search mode via `RegisterHotKey`. Tray left-click opens the bar too. If registration fails (another app owns it), Settings says so and the tray remains the entry point; we never silently break the only summon path.
+**Summoning it while hidden.** A tray-only app cannot receive `Ctrl+Tab` when nothing has focus. A global `Ctrl+Alt+Space` summon was planned but is **deferred**; until it ships, tray left-click shows the window, after which `Ctrl+P` opens the bar. There is no silent broken summon path because there is no hotkey path yet.
 
 Chromium treats off-screen/occluded content as backgrounded, which throttles JS timers and therefore kills WebSocket heartbeats. Countermeasures (both mandatory):
 
@@ -462,7 +462,7 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 
 | Key | Action |
 |---|---|
-| `Ctrl+Alt+Space` (global) | summon the Command Bar in search mode, even when Chirpdesk has no focus |
+| `Ctrl+Alt+Space` (global) | **deferred** — not in v1; the tray icon shows the window when hidden |
 | `Ctrl+Tab` (hold) | cycle warm services |
 | `Tab` / `Shift+Tab` while held | move highlight |
 | `Up` / `Down` while the bar is open | move highlight |
@@ -476,7 +476,7 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 
 **Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; `Ctrl+W`, the close button and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text.
 
-**Interception:** `Ctrl+Tab`, `Ctrl+P` and `Ctrl+1..9` are handled in `AcceleratorKeyPressed` while the page has focus; once the bar opens it takes focus and handles keys itself. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global hotkey is `RegisterHotKey`; if it fails, Settings reports the conflict.
+**Interception:** `Ctrl+Tab` and `Ctrl+P` are handled by a WebView2 message hook while the page has focus; once the bar opens it takes focus and handles `Tab`, arrows, `Ctrl+1..9`, `Ctrl+W`, `Esc` and text itself. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global hotkey is deferred.
 
 **Airspace:** WPF cannot paint over a WebView2 HWND. Opening the bar captures the last frame, collapses the active webview, and paints the frozen frame behind the bar's scrim; closing restores the live view. The control is not disposed, so scroll position and half-typed page text survive, and the renderer keeps its state. A second top-level overlay window was rejected: it adds focus, DPI and always-on-top failure modes for the same result.
 
@@ -669,12 +669,12 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 | Phase | Scope | Done when |
 |---|---|---|
 | **0 — Spine** | SDK install, project skeleton, hidden host + one-shot visible login path, one service (WhatsApp), toast pipeline + AUMID, notification capability probe, single instance | Log in once, hide, 3 h tray-hidden, inbound message toasts with correct text and icon; toast click shows WhatsApp in the window; window never appears unprompted; Alt+Tab clean while hidden |
-| **1 — Command Bar** | plugin loader + manifest validation (service definitions and themes), definition/instance settings model, multi-service hosting, per-profile environments, Command Bar (one palette: cycle + Ctrl+P search over open tabs), global hotkey, show/hide window styles, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services in the palette; `Ctrl+P` lists open tabs only and `type tel → Enter` focuses Telegram; cold services and commands are not in the palette yet; half-typed text survives switching; two instances of one definition keep separate sessions |
+| **1 - Command Bar** | plugin loader + manifest validation (service definitions and themes), definition/instance settings model, multi-service hosting, per-profile environments, Command Bar (one palette: cycle + Ctrl+P search over open tabs), show/hide window styles, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services in the palette; `Ctrl+P` lists open tabs only and `type tel → Enter` focuses Telegram; cold services and commands are not in the palette yet; half-typed text survives switching; two instances of one definition keep separate sessions |
 | **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, instance creation from installed definitions, per-instance regex, storage scan/trim/orphan primitives, cleaner `tool` panel | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 200 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
 | **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
 | **4 — Design** | one baseline palette with dark and light ends (ADR 0010), token pipeline, system light/dark following, live preview, contrast validator, high-contrast fallback | Theme switch is instant; every variant passes AA; dark reaches the hosted page only where the definition opts in (`pageDarkMode: auto`), never on a site with its own theme. Colour families and theme plugins are deferred until after v1. |
 | **5 — Plugin ecosystem** | catalogue expansion: 10 theme families, extra service definitions and filter packs; plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
-| **6 — Ship** | Inno Setup installer with .NET 8 Desktop + WebView2 runtime checks, portable zip, self-updater with ECDSA verification and downgrade refusal, first-run overlay teaching the global hotkey/`Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine with neither runtime: setup detects both, explains or installs them with consent, then the app runs; install a definition plugin, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered or older manifest |
+| **6 - Ship** | Inno Setup installer with .NET 8 Desktop + WebView2 runtime checks, portable zip, self-updater with ECDSA verification and downgrade refusal, first-run overlay teaching the tray/`Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine with neither runtime: setup detects both, explains or installs them with consent, then the app runs; install a definition plugin, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered or older manifest |
 | **7 — Optional** | ABP list import (tier 3), out-of-process integration plugin host (TDLib as first integration), live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
 
 Each phase ends with a build you can actually run.
@@ -705,7 +705,7 @@ Each phase ends with a build you can actually run.
 | Meta changes the web client / sniffs the UA | Service breaks | Stock Edge UA like Meta's own Windows app; per-service UA override |
 | Google sign-in refuses embedded browsers | Some services unusable | Detect + explain; open-in-browser escape hatch |
 | Service-worker notifications differ from page notifications | Missed toasts | Phase 0 capability probe per service; `native` → `shim` → `title-only` fallback; mode visible in Settings |
-| Global hotkey already taken | No way to summon the bar without the tray | `RegisterHotKey` failure reported in Settings; tray left-click always works; hotkey later configurable |
+| Global hotkey deferred | no summon while another app has focus | users ask for it often enough that the tray becomes friction; then `RegisterHotKey` + failure reporting returns |
 | Toast clicked while the app is closed | Cold start without deep link | v1 is autostart-resident; click launches the app and shows the service, but deep-link activation is a later COM activator |
 | Windows 10 has no WebView2 Runtime | App cannot start | Installer installs the Evergreen bootstrapper; portable zip documents the requirement |
 | Trimming under a running webview | Cache/profile corruption | Trim only disposed profiles; warm services trim at next sleep or boot; never on a timer |
@@ -761,8 +761,8 @@ Decided:
 - One Command Bar for navigation, commands and theme switching.
 - **Plugin-shaped architecture**: shipped service **definitions**, themes (with dark+light variants), filter packs and bundled tool panels are plugins with one manifest; data-only in v1; code only out-of-process, phase 7. **A site exists only as a service plugin; running it is an instance in `settings.json` (ADR 0011).**
 - **Shell first**: v1 ships the loader, Command Bar, host, notifications and storage primitives, with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
-- **Visibility is user-requested**: one window, hidden at boot, shown on tray/hotkey/Command Bar/toast, never shown to fix a lifecycle problem.
-- **Global summon hotkey** `Ctrl+Alt+Space`; tray left-click is the fallback when registration fails.
+- **Visibility is user-requested**: one window, hidden at boot, shown on tray/Command Bar/toast, never shown to fix a lifecycle problem.
+- **Global summon hotkey deferred**; tray left-click is the entry while hidden.
 - Adblock packs ship as `filter` plugins, maintained in the repo's `plugins/` + `registry/`, installable from the official repo or any user-added repo.
 - **Updates and repo indexes sign with ECDSA P-256 + SHA-256** because .NET has no Ed25519 implementation; no extra crypto package.
 - `Ctrl+Tab` cycles, `Ctrl+P` searches; `Ctrl+K` removed.
@@ -797,7 +797,7 @@ Every entry is a cost we are knowingly paying. If the revisit trigger fires, the
 | Cosmetic filtering with CSS selectors | selectors rot when sites redesign | more than one breakage per month per service |
 | No auto-update in v1 → signed self-update after | users on old builds for longer | v1 sees daily use, or a security fix needs shipping fast |
 | Custom WPF chrome instead of native title bar | DPI and window-chrome edge cases are ours to handle | visible chrome glitches on multi-monitor or fractional scaling |
-| Command Bar as sole navigation | discoverability depends on the first-run overlay and the global hotkey | a user cannot find settings after the overlay is dismissed |
+| Command Bar as sole navigation | discoverability depends on the first-run overlay and the tray | a user cannot find settings after the overlay is dismissed |
 | One shared cookie jar *within* a service instance | two logins for the same site need two entries | users routinely need more than two accounts per site |
 | MIT, private repo, solo maintenance | no external contributors during v1 | v1 ships and is public — then CONTRIBUTING and issue templates get added |
 | Plugin manifest is a published schema | compatibility burden on every field | a second consumer of the schema appears (mobile, web) or community plugins break on a minor bump |

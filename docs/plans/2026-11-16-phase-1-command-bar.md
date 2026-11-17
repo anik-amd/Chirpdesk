@@ -153,20 +153,20 @@ WPF cannot paint over a WebView2 HWND (PLAN §16). While the bar is open, the ac
 
 ---
 
-## Task 8: Global hotkey and reserved keys
+## Task 8: Reserved keys (global hotkey deferred)
+
+**Status:** complete (2026-11-17). Global `Ctrl+Alt+Space` was deferred by the product owner: the tray icon is the entry point when the window is hidden. Reserved keys while the bar is open are implemented through pure `BarKeys`.
 
 **Files:**
-- Create: `src/Chirpdesk/Interop/HotKey.cs`
-- Modify: `src/Chirpdesk/App.xaml.cs`, `CommandBarWindow.xaml.cs`
+- Create: `src/Chirpdesk.Core/CommandBar/BarKeys.cs`
+- Modify: `src/Chirpdesk/App.xaml.cs`
 - Test: `tests/Chirpdesk.Core.Tests/CommandBar/BarKeyTests.cs`
 
-`Ctrl+Alt+Space` via `RegisterHotKey` on the hidden window; `WM_HOTKEY` opens the bar in search mode. Registration failure is logged and surfaced (tray tooltip for now, Settings in phase 2), never silent.
+Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible list, `Ctrl+W` hides the window without closing the service, `Esc` closes the bar. `Up`/`Down` move the highlight like `Tab`/`Shift+Tab`.
 
-Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible list, `Ctrl+W` hides the window without closing the service, `Esc` closes the bar.
+**Tests:** key handling is a pure state machine, so every combination above is unit-tested; WPF only maps keys in and executes the returned action.
 
-**Tests:** key handling is a pure state machine, so every combination above is unit-tested; the P/Invoke is one method.
-
-**Commit:** `feat(app): global hotkey and reserved keys`.
+**Commit:** `feat(app): palette reserved keys`.
 
 ---
 
@@ -180,8 +180,7 @@ Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible
 | catalog | instance overrides resolve; definition fallback resolves; unknown id is a clear failure |
 | migration | v1 fixture migrates to v2 without inventing or losing an instance |
 | registry | two warm services park/activate without disposing; shared profile reuses one environment; MRU order after three switches |
-| bar state | cycle wrap, cancel, Ctrl+P switch to search keeping the highlight, and search filtering, all from the pure state machine |
-| hotkey | registration succeeds, or the failure is reported (soft, because another app may own the combo) |
+| bar state | cycle wrap, cancel, Ctrl+P switch to search keeping the highlight, search filtering, and reserved `Ctrl+1..9` / `Ctrl+W`, all from the pure state machine |
 
 `scripts/gate.ps1` runs all of it.
 

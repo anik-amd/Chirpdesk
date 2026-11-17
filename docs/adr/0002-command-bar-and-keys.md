@@ -1,6 +1,6 @@
 # ADR 0002 — One Command Bar, `Ctrl+Tab` cycles and `Ctrl+P` searches
 
-**Status:** accepted (2026-11-16), revised 2026-11-17: the printable-key latch from cycle into search was removed; cycle is a pure switcher and `Ctrl+P` is the only search entry
+**Status:** accepted (2026-11-16), revised 2026-11-17: the printable-key latch from cycle into search was removed; cycle is a pure switcher and `Ctrl+P` is the only search entry. The global `Ctrl+Alt+Space` summon is deferred; the tray icon is the entry when the window is hidden.
 
 ## Context
 
@@ -16,15 +16,15 @@ One overlay component with two entry modes:
 
 There is deliberately no "second `Tab`" latch: with `Ctrl` still held, another `Tab` produces the same `Ctrl+Tab` event as the first (and as auto-repeat), so it cannot be distinguished.
 
-Because a tray-only app has no focus, `Ctrl+Tab` cannot be the only entry: `Ctrl+Alt+Space` is a global `RegisterHotKey` summon into search mode, with tray left-click as the fallback when registration fails.
+Because a tray-only app has no focus, `Ctrl+Tab` cannot be the only entry. A global `Ctrl+Alt+Space` summon was planned but is **deferred**; until it ships, the tray icon shows the window, and `Ctrl+P` works once the window has focus.
 
 `Ctrl+K` and the `@` scope are rejected. `Ctrl+Shift+P` is passed to the page.
 
 ## Consequences
 
 - One row template, one focus model, one place to theme; the bar is the whole UI.
-- Discoverability depends on the first-run overlay and the tray tooltip; the global hotkey is partly a mitigation.
-- The global hotkey can collide with another app. Registration failure is surfaced in Settings, never silent, and the tray remains a complete entry point.
+- Discoverability depends on the first-run overlay and the tray tooltip; without a global hotkey the tray is the only entry while the window is hidden.
+- The global hotkey is deferred. When it returns it can collide with another app; registration failure must be surfaced in Settings, never silent, with the tray as the fallback.
 - `Ctrl+P` collides with the sites' print shortcut; accepted, with `Ctrl+Shift+P` as the documented escape hatch.
 - Commit-on-release cannot rely on WebView2 delivering modifier key-up, so it is polled via `GetAsyncKeyState` at 30 ms. This is a deliberate impurity in a hot path, isolated in one class.
 - WPF cannot paint over a WebView2 HWND, so opening the bar collapses the active webview and closing restores it. The control is not disposed; scroll and page input state survive. Before collapsing, the host captures the last frame and paints it behind the bar's scrim, so the palette reads as an overlay over the site rather than a blank pane. A separate overlay window was rejected as more focus/DPI failure modes for the same behaviour.

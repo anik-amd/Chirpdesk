@@ -404,64 +404,103 @@ public partial class App : Application
             return;
         }
 
+        var action = BarKeys.Decide(_barState, ToBarKey(e.Key), ToBarModifiers());
+
+        switch (action.Kind)
+        {
+            case BarKeyActionKind.Move:
+                e.Handled = true;
+                if (_barState.Move(action.Value))
+                {
+                    RenderCommandBar();
+                }
+
+                return;
+
+            case BarKeyActionKind.Backspace:
+                e.Handled = true;
+                _barState.Backspace();
+                UpdateSearchResults(keepSelected: null);
+                return;
+
+            case BarKeyActionKind.Commit:
+                e.Handled = true;
+                CommitSearchSelection();
+                return;
+
+            case BarKeyActionKind.Cancel:
+                e.Handled = true;
+                CloseCommandBar(restore: true);
+                return;
+
+            case BarKeyActionKind.Hide:
+                e.Handled = true;
+                HideHost();
+                return;
+
+            case BarKeyActionKind.SelectIndex:
+                e.Handled = true;
+                CommitBarIndex(action.Value);
+                return;
+        }
+
         // Ctrl+P leaves Ctrl down; support typing the query until it is released. Once released,
-        // TextInput handles the rest.
+        // TextInput handles the rest. Digits are reserved for Ctrl+1..9.
         if (_barState.Mode == BarMode.Search
             && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+            && !IsDigitKey(e.Key)
             && TryMapText(e.Key, out var typed))
         {
             e.Handled = true;
             _barState.Append(typed);
             UpdateSearchResults(keepSelected: null);
-            return;
-        }
-
-        switch (e.Key)
-        {
-            case Key.Escape:
-                e.Handled = true;
-                CloseCommandBar(restore: true);
-                return;
-
-            case Key.Tab:
-                e.Handled = true;
-                if (_barState.Move((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1))
-                {
-                    RenderCommandBar();
-                }
-
-                return;
-
-            case Key.Up:
-                e.Handled = true;
-                if (_barState.Move(-1))
-                {
-                    RenderCommandBar();
-                }
-
-                return;
-
-            case Key.Down:
-                e.Handled = true;
-                if (_barState.Move(1))
-                {
-                    RenderCommandBar();
-                }
-
-                return;
-
-            case Key.Enter when _barState.Mode == BarMode.Search:
-                e.Handled = true;
-                CommitSearchSelection();
-                return;
-
-            case Key.Back when _barState.Mode == BarMode.Search:
-                e.Handled = true;
-                _barState.Backspace();
-                UpdateSearchResults(keepSelected: null);
-                return;
         }
     }
+
+    private static BarKey ToBarKey(Key key) => key switch
+    {
+        Key.Tab => BarKey.Tab,
+        Key.Up => BarKey.Up,
+        Key.Down => BarKey.Down,
+        Key.Escape => BarKey.Escape,
+        Key.Enter => BarKey.Enter,
+        Key.Back => BarKey.Backspace,
+        Key.W => BarKey.W,
+        Key.D1 => BarKey.Digit1,
+        Key.D2 => BarKey.Digit2,
+        Key.D3 => BarKey.Digit3,
+        Key.D4 => BarKey.Digit4,
+        Key.D5 => BarKey.Digit5,
+        Key.D6 => BarKey.Digit6,
+        Key.D7 => BarKey.Digit7,
+        Key.D8 => BarKey.Digit8,
+        Key.D9 => BarKey.Digit9,
+        _ => BarKey.None,
+    };
+
+    private static BarModifiers ToBarModifiers()
+    {
+        var modifiers = BarModifiers.None;
+
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            modifiers |= BarModifiers.Control;
+        }
+
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+        {
+            modifiers |= BarModifiers.Shift;
+        }
+
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0)
+        {
+            modifiers |= BarModifiers.Alt;
+        }
+
+        return modifiers;
+    }
+
+    private static bool IsDigitKey(Key key) => key is >= Key.D1 and <= Key.D9 or >= Key.NumPad1 and <= Key.NumPad9;
 
     private static bool TryMapText(Key key, out string text)
     {
@@ -700,9 +739,33 @@ public partial class App : Application
         RenderCommandBar();
     }
 
-    private void CommitSearchSelection()
+    private void CommitBarIndex(int index)
     {
-        if (_barState is null)
+        if (_barState is null || index < 0 || index >= _barState.Entries.Count)
+        {
+            return;
+        }
+
+        var id = _barState.Entries[index];
+        var mode = _barState.Mode;
+
+        _barState.Commit();
+        CloseCommandBar(restore: true);
+
+        if (mode == BarMode.Search)
+        {
+            _ = ActivateServiceAsync(id);
+            _log?.Info($"command bar search committed '{id}' via Ctrl+{index + 1}");
+            return;
+        }
+
+        var switched = _registry?.Activate(id) == true;
+        _registry?.Active?.FocusPage();
+        _log?.Info($"command bar committed '{id}' via Ctrl+{index + 1}: switched={switched}");
+    }
+
+    private void CommitSearchSelection()
+    {        if (_barState is null)
         {
             return;
         }

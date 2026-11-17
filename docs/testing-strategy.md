@@ -82,7 +82,7 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 12 | Theme variants | `> theme catppuccin` follows dark/light as Windows flips; every variant readable; deleting all theme plugins renders the baseline and says so |
 | 13 | Definition plugin | install a `service` plugin → its site appears, creating an instance gives it its own profile and it stays cold; a second instance of the same definition keeps a separate session; no URL-only add path exists |
 | 14 | Notification capability | each bundled service reports its mode (`native`/`shim`/`title-only`); a background message produces a toast in that mode and the mode is shown in Settings |
-| 15 | Global summon | `Ctrl+Alt+Space` opens the bar in search mode while another app has focus; a deliberately conflicting hotkey shows a Settings warning and the tray still works |
+| 15 | Tray entry | tray click shows the window when hidden, then `Ctrl+P` opens the palette; no global hotkey in v1 |
 | 16 | Tool panel | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
 | 17 | Multiple accounts | one definition, two instances: both warm with separate unread counts and toasts, signing one out leaves the other signed in; Messenger and Facebook are separate definitions and open their own sites |
 
