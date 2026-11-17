@@ -17,8 +17,15 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\chirpdesk.ico" />
+    <Resource Include="Assets\chirpdesk-tray.ico" />
+    <Resource Include="Assets\chirpdesk-tray-unread.ico" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>Assets\chirpdesk.ico</ApplicationIcon>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

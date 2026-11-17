@@ -1,11 +1,12 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Chirpdesk.Hosting;
 
-/// <summary>Tray icon and its menu. Icons are drawn, not shipped as assets.</summary>
+/// <summary>Tray icon and its menu. The brand mark ships as a multi-size ICO asset.</summary>
 internal static class TrayIconFactory
 {
     public static TaskbarIcon Create(Action open, Action hide, Action settings, Action quit)
@@ -43,23 +44,18 @@ internal static class TrayIconFactory
 
     public static ImageSource CreateIcon(bool unread)
     {
-        var group = new DrawingGroup();
+        var name = unread ? "chirpdesk-tray-unread.ico" : "chirpdesk-tray.ico";
+        var uri = new Uri(
+            $"pack://application:,,,/Chirpdesk;component/Assets/{name}",
+            UriKind.Absolute);
+        var decoder = BitmapDecoder.Create(
+            uri,
+            BitmapCreateOptions.None,
+            BitmapCacheOption.OnLoad);
 
-        using (var context = group.Open())
-        {
-            var body = new SolidColorBrush(Color.FromRgb(0xE8, 0xE4, 0xDC));
-            context.DrawGeometry(body, null, new EllipseGeometry(new Point(8, 8), 6.5, 6.5));
-
-            if (unread)
-            {
-                var dot = new SolidColorBrush(Color.FromRgb(0xF2, 0x5C, 0x4B));
-                context.DrawGeometry(dot, null, new EllipseGeometry(new Point(12.5, 3.5), 3, 3));
-            }
-        }
-
-        group.Freeze();
-        var image = new DrawingImage(group);
-        image.Freeze();
-        return image;
+        // The largest frame scales cleanly to the 16-32 px tray at every DPI.
+        var frame = decoder.Frames.OrderByDescending(item => item.PixelWidth).First();
+        frame.Freeze();
+        return frame;
     }
 }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.Definitions;
@@ -52,6 +53,7 @@ internal sealed class SelfTest
 
         Guarded("settings", CheckSettings);
         Guarded("app-identity", CheckAppIdentity);
+        Guarded("app-icon", CheckAppIcon);
         Guarded("contrast", CheckContrast);
         Guarded("tray", CheckTray);
         Guarded("window-hidden", CheckWindowIsHidden);
@@ -567,8 +569,8 @@ internal sealed class SelfTest
     }
 
     /// <summary>
-    /// Both token dictionaries are read from disk and the pairs that carry text are checked
-    /// against WCAG AA. A palette edit that lowers contrast fails the gate instead of shipping.
+    /// Exercises the same decisions as the release verifier without a network or installer:
+    /// a signed newer manifest is accepted; tampering, replay and a wrong key are refused.
     /// </summary>
     private void CheckUpdatePolicy()
     {
@@ -623,6 +625,39 @@ internal sealed class SelfTest
             HashAlgorithmName.SHA256,
             DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
 
+    /// <summary>
+    /// The exe, window and tray must all resolve the shipped mark. A missing resource is a
+    /// blank taskbar icon, which is easy to miss until the app is running from an installer.
+    /// </summary>
+    private void CheckAppIcon()
+    {
+        var app = LoadIcon("chirpdesk.ico");
+        var tray = TrayIconFactory.CreateIcon(unread: false) as BitmapSource;
+        var unread = TrayIconFactory.CreateIcon(unread: true) as BitmapSource;
+
+        var sizes = app.Frames.Select(frame => frame.PixelWidth).ToArray();
+        var ok = _host.Icon is not null
+            && sizes.Contains(16)
+            && sizes.Contains(256)
+            && tray is { PixelWidth: >= 16 }
+            && unread is { PixelWidth: >= 16 };
+
+        Check(
+            "app-icon",
+            ok,
+            $"window={_host.Icon is not null} frames={string.Join(',', sizes)} tray={tray?.PixelWidth} unread={unread?.PixelWidth}");
+    }
+
+    private static BitmapDecoder LoadIcon(string name) =>
+        BitmapDecoder.Create(
+            new Uri($"pack://application:,,,/Chirpdesk;component/Assets/{name}", UriKind.Absolute),
+            BitmapCreateOptions.None,
+            BitmapCacheOption.OnLoad);
+
+    /// <summary>
+    /// Both token dictionaries are read from disk and the pairs that carry text are checked
+    /// against WCAG AA. A palette edit that lowers contrast fails the gate instead of shipping.
+    /// </summary>
     private void CheckContrast()
     {
         var failures = new List<string>();

@@ -9,6 +9,11 @@ desktop session.
 - **Got it** and **Esc** both hide the window back to the tray; **Open plugins** opens the plugin page instead.
 - The next launch goes straight to hidden-warm, with no overlay.
 
+## Icons
+
+- Taskbar, Alt+Tab, the window title bar and the tray all show the paper-bubble mark; the tray glyph stays readable on a light and a dark taskbar.
+- At 100 % and 150 % scaling, the 16 px frame still reads as a bubble with the amber pin, not a blurry square.
+
 ## Settings and plugins pages
 
 - Open `Ctrl+P` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.

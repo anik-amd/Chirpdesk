@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Chirpdesk"
+        Icon="pack://application:,,,/Chirpdesk;component/Assets/chirpdesk.ico"
         WindowStyle="None"
         WindowStartupLocation="Manual"
         ShowInTaskbar="True"
