@@ -79,7 +79,7 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 9 | Storage | trim reclaims > 0 bytes, session still valid afterwards |
 | 10 | Orphan scan | finds a seeded fake leftover, Recycle Bin restore works |
 | 11 | Change | settings dialogs apply without restart |
-| 12 | Theme variants | `> theme catppuccin` follows dark/light as Windows flips; every variant readable; deleting all theme plugins renders the baseline and says so |
+| 12 | Theme and contrast | light/dark/system switches instantly; both ends readable at 100 % and 150 %; a Windows contrast theme repaints with system colours and restoring it repaints again |
 | 13 | Definition plugin | install a `service` plugin → its site appears, creating an instance gives it its own profile and it stays cold; a second instance of the same definition keeps a separate session; no URL-only add path exists |
 | 14 | Notification capability | each bundled service reports its mode (`native`/`shim`/`title-only`); a background message produces a toast in that mode and the mode is shown in Settings |
 | 15 | Tray entry | tray click shows the window when hidden, then `Ctrl+P` opens the palette; no global hotkey in v1 |

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Windows;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Blocking;
@@ -12,6 +13,7 @@ using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Storage;
 using Chirpdesk.Core.Theming;
 using Chirpdesk.Core.Time;
+using Chirpdesk.Core.Updates;
 using Chirpdesk.Definitions;
 using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
@@ -57,6 +59,7 @@ internal sealed class SelfTest
         Guarded("definitions", CheckDefinitions);
         Guarded("catalog", CheckCatalog);
         Guarded("blocking", CheckBlocking);
+        Guarded("update-policy", CheckUpdatePolicy);
         Guarded("migration", CheckMigration);
         Guarded("bar-state", CheckBarState);
         Guarded("storage", CheckStorage);
@@ -567,6 +570,59 @@ internal sealed class SelfTest
     /// Both token dictionaries are read from disk and the pairs that carry text are checked
     /// against WCAG AA. A palette edit that lowers contrast fails the gate instead of shipping.
     /// </summary>
+    private void CheckUpdatePolicy()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        using var other = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        var manifest = new UpdateManifest
+        {
+            Version = "9.9.9",
+            Channel = "stable",
+            Url = "https://example.org/Chirpdesk-Setup.exe",
+            Size = 3,
+            Sha256 = new string('a', 64),
+        };
+
+        manifest.Signature = Sign(key, manifest);
+        var pem = key.ExportSubjectPublicKeyInfoPem();
+
+        var acceptsSigned = UpdateVerifier.IsAcceptable(manifest, pem, new Version(1, 0, 0, 0), out _);
+
+        var tampered = With(manifest, url: "https://example.org/Other.exe");
+        var refusesTamper = !UpdateVerifier.IsAcceptable(tampered, pem, new Version(1, 0, 0, 0), out _);
+
+        var replay = With(manifest, version: "0.0.1");
+        replay.Signature = Sign(key, replay);
+        var refusesReplay = !UpdateVerifier.IsAcceptable(replay, pem, new Version(2, 0, 0, 0), out _);
+
+        var refusesWrongKey = !UpdateVerifier.IsAcceptable(
+            manifest, other.ExportSubjectPublicKeyInfoPem(), new Version(1, 0, 0, 0), out _);
+
+        var policy = acceptsSigned && refusesTamper && refusesReplay && refusesWrongKey;
+
+        Check(
+            "update-policy",
+            policy,
+            $"signed={acceptsSigned} tamper={refusesTamper} replay={refusesReplay} wrong-key={refusesWrongKey}");
+    }
+
+    private static UpdateManifest With(UpdateManifest source, string? version = null, string? url = null) => new()
+    {
+        Version = version ?? source.Version,
+        Channel = source.Channel,
+        Url = url ?? source.Url,
+        Size = source.Size,
+        Sha256 = source.Sha256,
+        Signature = source.Signature,
+    };
+
+    private static string Sign(ECDsa key, UpdateManifest manifest) =>
+        Convert.ToBase64String(key.SignData(
+            UpdateManifestCodec.CanonicalBytes(manifest),
+            HashAlgorithmName.SHA256,
+            DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
+
     private void CheckContrast()
     {
         var failures = new List<string>();
