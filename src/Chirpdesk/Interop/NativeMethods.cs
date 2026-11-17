@@ -10,6 +10,7 @@ internal static class NativeMethods
     internal const long WsExAppWindow = 0x0004_0000L;
 
     private const int VkControl = 0x11;
+    private const int VkShift = 0x10;
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern nint GetWindowLongPtr64(nint hWnd, int nIndex);
@@ -44,11 +45,18 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int virtualKey);
 
+    [DllImport("user32.dll")]
+    internal static extern nint SetFocus(nint hWnd);
+
     /// <summary>
     /// Used by the Command Bar to commit on Ctrl release; WebView2 never delivers that key-up
     /// (ADR 0002). Polled, not hooked, so no input goes through the app.
     /// </summary>
-    internal static bool IsControlDown() => (GetAsyncKeyState(VkControl) & 0x8000) != 0;
+    internal static bool IsControlDown() => IsKeyDown(VkControl);
+
+    internal static bool IsShiftDown() => IsKeyDown(VkShift);
+
+    internal static bool IsKeyDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct WindowRect

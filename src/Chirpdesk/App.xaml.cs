@@ -243,6 +243,8 @@ public partial class App : Application
             DateTimeOffset.UtcNow,
             dark);
 
+        service.ShortcutRequested += OnServiceShortcutRequested;
+
         await service.ApplyThemeAsync(dark);
         await _registry!.AddAsync(service);
         _registry.Activate(service.InstanceId);
@@ -505,7 +507,28 @@ public partial class App : Application
 
         CloseCommandBar(restore: true);
         var switched = _registry?.Activate(committed) == true;
+        _registry?.Active?.FocusPage();
         _log?.Info($"command bar committed '{committed}': switched={switched}");
+    }
+
+    private void OnServiceShortcutRequested(object? sender, ServiceShortcutEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (_barState is not null)
+            {
+                return;
+            }
+
+            if (e.Search)
+            {
+                OpenSearchBar();
+            }
+            else
+            {
+                OpenCommandBar(e.Direction);
+            }
+        });
     }
 
     private void OpenCommandBar(int direction)
@@ -834,6 +857,7 @@ public partial class App : Application
         var wasVisible = _host.IsVisible;
         _registry?.Active?.Activate();
         var foreground = _host.ShowForUser();
+        _registry?.Active?.FocusPage();
 
         _log?.Info($"window shown: wasVisible={wasVisible} foreground={foreground} visible={_host.IsVisible}");
     }

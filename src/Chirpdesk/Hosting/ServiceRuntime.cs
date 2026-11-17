@@ -4,10 +4,27 @@ using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Time;
+using Chirpdesk.Interop;
 using Chirpdesk.Notifications;
 using Microsoft.Web.WebView2.Wpf;
 
 namespace Chirpdesk.Hosting;
+
+/// <summary>A shortcut pressed inside the page that the host should handle instead.</summary>
+public sealed class ServiceShortcutEventArgs : EventArgs
+{
+    public ServiceShortcutEventArgs(bool search, int direction)
+    {
+        Search = search;
+        Direction = direction;
+    }
+
+    /// <summary>True for Ctrl+P; false for the cycle shortcut.</summary>
+    public bool Search { get; }
+
+    /// <summary>+1 for forward cycling, -1 for Shift+Tab.</summary>
+    public int Direction { get; }
+}
 
 /// <summary>
 /// One running service: its profile, its webview, its notification policy.
@@ -183,7 +200,14 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _toast = toast;
         _startedAt = startedAt;
         _darkTheme = darkTheme;
+        _view.MessageHook += OnMessageHook;
     }
+
+    /// <summary>
+    /// Raised when the page has focus and the user presses Ctrl+Tab or Ctrl+P, which the page
+    /// would otherwise swallow as a browser shortcut. The app opens the one Command Bar.
+    /// </summary>
+    public event EventHandler<ServiceShortcutEventArgs>? ShortcutRequested;
 
     public string? NotificationMode { get; private set; }
 
@@ -198,6 +222,54 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     {
         _view.Visibility = Visibility.Visible;
         _host.UpdateLayout();
+        FocusPage();
+    }
+
+    /// <summary>Puts keyboard focus back into the page without reloading it.</summary>
+    public void FocusPage()
+    {
+        if (_view.Visibility != Visibility.Visible || !_host.IsVisible)
+        {
+            return;
+        }
+
+        _view.Focus();
+
+        var handle = _view.Handle;
+        if (handle != nint.Zero)
+        {
+            _ = NativeMethods.SetFocus(handle);
+        }
+    }
+
+    private nint OnMessageHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        const int WmKeyDown = 0x0100;
+        const int WmSysKeyDown = 0x0104;
+        const int VkTab = 0x09;
+        const int VkP = 0x50;
+
+        if ((msg != WmKeyDown && msg != WmSysKeyDown) || !NativeMethods.IsControlDown())
+        {
+            return nint.Zero;
+        }
+
+        var key = wParam.ToInt32();
+
+        if (key == VkTab)
+        {
+            handled = true;
+            ShortcutRequested?.Invoke(
+                this,
+                new ServiceShortcutEventArgs(search: false, NativeMethods.IsShiftDown() ? -1 : 1));
+        }
+        else if (key == VkP && !NativeMethods.IsShiftDown())
+        {
+            handled = true;
+            ShortcutRequested?.Invoke(this, new ServiceShortcutEventArgs(search: true, direction: 1));
+        }
+
+        return nint.Zero;
     }
 
     /// <summary>Reloads the page without touching the profile or the notification pipeline.</summary>
@@ -267,6 +339,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         }
 
         _host.RemoveServiceContent(_view);
+        _view.MessageHook -= OnMessageHook;
         _view.Dispose();
 
         await Task.CompletedTask;
