@@ -473,13 +473,6 @@ public partial class App : Application
             return;
         }
 
-        if (e.Key == Key.Escape)
-        {
-            e.Handled = true;
-            HideHost();
-            return;
-        }
-
         if (e.Key == Key.W && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             e.Handled = true;
@@ -542,9 +535,9 @@ public partial class App : Application
                 CommitSearchSelection();
                 return;
 
-            case BarKeyActionKind.Hide:
+            case BarKeyActionKind.Cancel:
                 e.Handled = true;
-                HideHost();
+                CloseCommandBar(restore: true);
                 return;
 
             case BarKeyActionKind.CloseTab:

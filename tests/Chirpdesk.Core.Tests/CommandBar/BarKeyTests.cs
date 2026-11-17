@@ -16,10 +16,10 @@ public class BarKeyTests
     }
 
     [Fact]
-    public void Escape_hides_the_window()
+    public void Escape_closes_the_palette_without_hiding_the_window()
     {
-        Assert.Equal(BarKeyActionKind.Hide, BarKeys.Decide(Cycle(), BarKey.Escape, BarModifiers.None).Kind);
-        Assert.Equal(BarKeyActionKind.Hide, BarKeys.Decide(Search(), BarKey.Escape, BarModifiers.None).Kind);
+        Assert.Equal(BarKeyActionKind.Cancel, BarKeys.Decide(Cycle(), BarKey.Escape, BarModifiers.None).Kind);
+        Assert.Equal(BarKeyActionKind.Cancel, BarKeys.Decide(Search(), BarKey.Escape, BarModifiers.None).Kind);
     }
 
     [Fact]

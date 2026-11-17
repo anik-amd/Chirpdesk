@@ -37,7 +37,7 @@ public enum BarKeyActionKind
     Move,
     Backspace,
     Commit,
-    Hide,
+    Cancel,
     CloseTab,
     SelectIndex,
 }
@@ -68,7 +68,7 @@ public static class BarKeys
 
         if (key == BarKey.Escape)
         {
-            return new BarKeyAction(BarKeyActionKind.Hide);
+            return new BarKeyAction(BarKeyActionKind.Cancel);
         }
 
         if (control && key == BarKey.W)

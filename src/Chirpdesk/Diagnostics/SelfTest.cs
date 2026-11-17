@@ -321,7 +321,7 @@ internal sealed class SelfTest
         cycle.Move(1);
         cycle.Move(1);
         var wraps = cycle.Selected == "a";
-        var escHides = BarKeys.Decide(cycle, BarKey.Escape, BarModifiers.None).Kind == BarKeyActionKind.Hide;
+        var escCancels = BarKeys.Decide(cycle, BarKey.Escape, BarModifiers.None).Kind == BarKeyActionKind.Cancel;
         var ctrlWCloses = BarKeys.Decide(cycle, BarKey.W, BarModifiers.Control).Kind == BarKeyActionKind.CloseTab;
 
         var search = BarState.ForSearch();
@@ -337,8 +337,8 @@ internal sealed class SelfTest
 
         Check(
             "bar-state",
-            startsNext && wraps && escHides && ctrlWCloses && digitsSelect && ranked[0].Id == "telegram",
-            "cycle wraps, Esc hides, Ctrl+W closes, Ctrl+2 selects, prefix ranking");
+            startsNext && wraps && escCancels && ctrlWCloses && digitsSelect && ranked[0].Id == "telegram",
+            "cycle wraps, Esc cancels the palette, Ctrl+W closes, Ctrl+2 selects, prefix ranking");
     }
 
     private async Task CheckRegistryAsync()

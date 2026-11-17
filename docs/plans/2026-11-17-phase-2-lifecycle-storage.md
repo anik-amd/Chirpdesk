@@ -4,7 +4,7 @@
 
 Continues `docs/plans/2026-11-16-phase-1-command-bar.md`. Read before writing code: `PLAN.md` §5.3–5.4, §8, §11, §13, §15; ADR 0005 (per-profile environments), ADR 0011 (sites are plugins; instances are settings), ADR 0002 (one palette, reserved keys), and `docs/testing-strategy.md` §5.
 
-**Carry-over from phase 1:** one window, hidden-warm; the palette; service registry with warm/cold switch and tab close; plugin-backed definitions; `Ctrl+W` closes a tab; `Esc` hides. Phase 2 adds the missing lifecycle and storage layers, not a second shell.
+**Carry-over from phase 1:** one window, hidden-warm; the palette; service registry with warm/cold switch and tab close; plugin-backed definitions; `Ctrl+W` closes a tab; `Esc` closes the palette/page and is never a global hide. Phase 2 adds the missing lifecycle and storage layers, not a second shell.
 
 **Measured constraint:** two warm services (WhatsApp + Telegram) cost **1387.6 MB** and 389.7 MB on disk (`docs/measurements.md`, 2026-11-17). The phase-2 gate asks for three warm + one cold; take the next measurement before recommending three defaults and revisit ADR 0005 if four warm exceed ~1.6 GB.
 

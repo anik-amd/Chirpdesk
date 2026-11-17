@@ -442,8 +442,8 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, 
 
 | Entry | Mode | Behaviour |
 |---|---|---|
-| `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` hides the window. Query line hidden. |
-| `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: enabled services (open/asleep/cold) in MRU order, then **Settings** and **Plugins & services** commands. Fuzzy filter as you type. `Enter` activates, `Esc` hides. |
+| `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` closes the palette. Query line hidden. |
+| `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: enabled services (open/asleep/cold) in MRU order, then **Settings** and **Plugins & services** commands. Fuzzy filter as you type. `Enter` activates, `Esc` closes the palette. |
 | `Ctrl+P` while cycling | **Search** | The same open bar switches to search with the highlighted tab still selected (unified palette, one focus model). There is no "second `Tab`" gesture: with `Ctrl` still down another `Tab` is indistinguishable from the first `Ctrl+Tab` and from key auto-repeat. |
 
 Rows are rendered by one template in both modes: icon · name · state badge (`open` / `asleep` / `cold`) · current-highlight.
@@ -472,9 +472,9 @@ Ordering: open services first, then asleep/cold, then commands; prefix beats sub
 | `Ctrl+Shift+P` | passed through to the page (site print shortcut) |
 | `Ctrl+1..9` | direct jump, settings order (power path, no UI) |
 | `Ctrl+W` | close the highlighted tab in the palette, otherwise the active tab; last tab hides the window |
-| `Esc` | hide the window |
+| `Esc` | close the palette or page; otherwise passed through to the site |
 
-**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; the close button, `Esc` and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text. `Ctrl+W` closes a tab; deactivating a plugin sleeps its service instead.
+**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; the close button and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text. `Ctrl+W` closes a tab; deactivating a plugin sleeps its service instead. `Esc` never hides the window: inside the palette/page it goes back, and inside a site it stays the site's key.
 
 **Settings and plugins interface.** Settings is a **page in the main window**, opened from the command palette or the tray; there is no separate settings window. The Plugins page lists installed service plugins with their own usage description and Active/Inactive state: **Activate** creates the first account and opens it, **Add account** creates another instance, **Deactivate** sleeps the runtimes without signing out. Browse/install UI is a placeholder until the signed repository lands in phase 5. Installed-but-inactive plugins also appear in the command palette and can be activated from there.
 

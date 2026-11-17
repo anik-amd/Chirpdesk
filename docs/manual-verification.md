@@ -14,7 +14,7 @@ Phase 1 and phase 2 automated gates are green. These need a human and a real des
 ## Command palette
 
 - `Ctrl+P` lists enabled services (open/asleep/cold state where relevant) plus **Settings** and **Plugins & services**.
-- `Ctrl+Tab` still cycles only warm tabs; `Esc` hides; `Ctrl+W` closes.
+- `Ctrl+Tab` still cycles only warm tabs; `Esc` closes the palette/page and is passed to the site when neither is open; `Ctrl+W` closes.
 - Selecting a cold/asleep service wakes it without re-pairing.
 
 ## Autostart

@@ -12,7 +12,7 @@ One overlay component with two entry modes:
 
 - `Ctrl+Tab` (hold) → **cycle** mode: MRU list of warm services, commit on `Ctrl` release.
 - `Ctrl+P` → **search** mode: sticky input, **open (warm) tabs only** in MRU order. Typing during cycle does **not** open search; cycle stays a pure switcher. Cold services and commands stay out of the palette until their own tasks.
-- The bar takes focus when it opens, so it receives those keys; reserved accelerators (`Ctrl+W` closes a tab, `Ctrl+1..9`, `Esc` hides the window) keep their meaning.
+- The bar takes focus when it opens, so it receives those keys; reserved accelerators (`Ctrl+W` closes a tab, `Ctrl+1..9`, `Esc` closes the palette or page) keep their meaning. `Esc` is never a global hide: sites use it to leave a conversation.
 
 There is deliberately no "second `Tab`" latch: with `Ctrl` still held, another `Tab` produces the same `Ctrl+Tab` event as the first (and as auto-repeat), so it cannot be distinguished.
 
