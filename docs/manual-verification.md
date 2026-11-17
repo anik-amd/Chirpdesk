@@ -13,9 +13,9 @@ Phase 1 and phase 2 automated gates are green. These need a human and a real des
 
 ## Command palette
 
-- `Ctrl+P` opens the **Command palette**; its empty state lists your open tabs only. Type `settings` or `plugin` to reveal commands and installed-but-inactive plugins.
-- Type `plugin` to see plugin actions: inactive plugins appear with a dimmed icon and activate on Enter; active plugins show `Deactivate …`. Type `inactive` for only the inactive ones.
-- `Ctrl+Tab` still cycles only warm tabs; `Esc` closes the palette/page and is passed to the site when neither is open; `Ctrl+W` closes.
+- `Ctrl+P` opens the **Command palette**; the empty state lists open tabs plus inactive service plugins (dimmed icons). Type `settings` or `plugin` to reveal commands.
+- Type `plugin` to see plugin actions: inactive plugins activate on Enter; active plugins show `Deactivate …`.
+- Service icons are real brand glyphs from Simple Icons (CC0); unread counts show at the right of each tab row.
 - Selecting a cold/asleep service wakes it without re-pairing.
 
 ## Autostart

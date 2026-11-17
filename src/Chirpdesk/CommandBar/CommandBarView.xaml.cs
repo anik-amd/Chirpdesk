@@ -28,7 +28,7 @@ public partial class CommandBarView : UserControl
             ? (string.IsNullOrEmpty(query) ? "Command palette" : query)
             : "Switch service";
         Hint.Text = mode == BarMode.Search
-            ? (string.IsNullOrEmpty(query) ? "Type inactive to see plugins" : "Enter to run · Esc back")
+            ? "Enter to run · Esc back"
             : "Tab to move · release Ctrl to switch";
         Hint.Foreground = Token("CdPaletteMuted");
         Rows.ItemsSource = rows;

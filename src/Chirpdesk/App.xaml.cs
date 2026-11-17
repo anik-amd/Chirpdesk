@@ -916,7 +916,7 @@ public partial class App : Application
                 $"plugin:{definition.Id}",
                 definition.Name,
                 SearchKind.Cold,
-                (definition.Aliases ?? []).Append("plugin").Append("inactive").Append("off").ToList(),
+                (definition.Aliases ?? []).Append("plugin").Append("off").ToList(),
                 State: "inactive",
                 Accent: definition.Accent,
                 Initial: InitialOf(definition.Name),
@@ -954,7 +954,13 @@ public partial class App : Application
         }
 
         var ranked = string.IsNullOrWhiteSpace(_barState.Query)
-            ? SearchIndex.Rank("", _searchCandidates.Where(candidate => candidate.Kind == SearchKind.Warm && candidate.State == "open").ToList())
+            ? SearchIndex.Rank(
+                "",
+                _searchCandidates
+                    .Where(candidate =>
+                        (candidate.Kind == SearchKind.Warm && candidate.State == "open")
+                        || candidate.State == "inactive")
+                    .ToList())
             : SearchIndex.Rank(_barState.Query, _searchCandidates);
         _barState.ShowResults(ranked.Select(candidate => candidate.Id).ToList(), keepSelected);
         RenderCommandBar();
