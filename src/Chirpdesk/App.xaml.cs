@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Chirpdesk.CommandBar;
 using Chirpdesk.Core.CommandBar;
@@ -41,6 +42,7 @@ public partial class App : Application
     private BarState? _barState;
     private ModifierWatcher? _barWatcher;
     private IReadOnlyList<SearchCandidate> _searchCandidates = Array.Empty<SearchCandidate>();
+    private bool _barOpening;
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
 
@@ -360,7 +362,7 @@ public partial class App : Application
             && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
         {
             e.Handled = true;
-            OpenSearchBar();
+            _ = OpenSearchBarAsync();
             return;
         }
 
@@ -378,7 +380,7 @@ public partial class App : Application
         {
             e.Handled = true;
             var direction = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1;
-            OpenCommandBar(direction);
+            _ = OpenCommandBarAsync(direction);
         }
     }
 
@@ -424,6 +426,24 @@ public partial class App : Application
             case Key.Tab:
                 e.Handled = true;
                 if (_barState.Move((Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1))
+                {
+                    RenderCommandBar();
+                }
+
+                return;
+
+            case Key.Up:
+                e.Handled = true;
+                if (_barState.Move(-1))
+                {
+                    RenderCommandBar();
+                }
+
+                return;
+
+            case Key.Down:
+                e.Handled = true;
+                if (_barState.Move(1))
                 {
                     RenderCommandBar();
                 }
@@ -523,18 +543,18 @@ public partial class App : Application
 
             if (e.Search)
             {
-                OpenSearchBar();
+                _ = OpenSearchBarAsync();
             }
             else
             {
-                OpenCommandBar(e.Direction);
+                _ = OpenCommandBarAsync(e.Direction);
             }
         });
     }
 
-    private void OpenCommandBar(int direction)
+    private async Task OpenCommandBarAsync(int direction)
     {
-        if (_host is null || _bar is null || _registry is null)
+        if (_host is null || _bar is null || _registry is null || _barState is not null || _barOpening)
         {
             return;
         }
@@ -545,40 +565,78 @@ public partial class App : Application
             return;
         }
 
-        _barState = BarState.ForCycle(order, _registry.Active?.InstanceId, direction);
-        RenderCommandBar();
+        _barOpening = true;
 
-        // The webview is an HWND and would paint over the bar until it is collapsed.
-        _registry.Active?.CollapseForCommandBar();
-        _host.ShowCommandBar();
-        _host.Focus();
-        _barWatcher?.Start();
+        try
+        {
+            var backdrop = await CaptureActiveAsync();
+            if (_barState is not null)
+            {
+                return;
+            }
 
-        _log?.Info($"command bar opened: {order.Count} warm service(s)");
+            _barState = BarState.ForCycle(order, _registry.Active?.InstanceId, direction);
+            RenderCommandBar();
+
+            // The webview is an HWND and would paint over the bar until it is collapsed; the
+            // captured frame keeps the site visible behind the scrim.
+            _registry.Active?.CollapseForCommandBar();
+            _host.ShowCommandBar(backdrop);
+            _host.Focus();
+            _barWatcher?.Start();
+
+            _log?.Info($"command bar opened: {order.Count} warm service(s)");
+        }
+        finally
+        {
+            _barOpening = false;
+        }
     }
 
-    private void OpenSearchBar()
+    private async Task OpenSearchBarAsync()
     {
-        if (_host is null || _bar is null || _registry is null || _barState is not null)
+        if (_host is null || _bar is null || _registry is null || _barState is not null || _barOpening)
         {
             return;
         }
 
-        _searchCandidates = BuildSearchCandidates();
-        if (_searchCandidates.Count == 0)
+        _barOpening = true;
+
+        try
         {
-            return;
+            var backdrop = await CaptureActiveAsync();
+            if (_barState is not null)
+            {
+                return;
+            }
+
+            _searchCandidates = BuildSearchCandidates();
+            if (_searchCandidates.Count == 0)
+            {
+                return;
+            }
+
+            _barState = BarState.ForSearch();
+            UpdateSearchResults(keepSelected: null);
+
+            // Same airspace rule as cycle mode: the webview would paint over the bar.
+            _registry.Active?.CollapseForCommandBar();
+            _host.ShowCommandBar(backdrop);
+            _host.Focus();
+
+            _log?.Info(
+                $"command bar opened in search mode: {_searchCandidates.Count} tab(s), backdrop={backdrop?.PixelWidth ?? 0}x{backdrop?.PixelHeight ?? 0}");
         }
+        finally
+        {
+            _barOpening = false;
+        }
+    }
 
-        _barState = BarState.ForSearch();
-        UpdateSearchResults(keepSelected: null);
-
-        // Same airspace rule as cycle mode: the webview would paint over the bar.
-        _registry.Active?.CollapseForCommandBar();
-        _host.ShowCommandBar();
-        _host.Focus();
-
-        _log?.Info($"command bar opened in search mode: {_searchCandidates.Count} tab(s)");
+    private async Task<BitmapSource?> CaptureActiveAsync()
+    {
+        var active = _registry?.Active;
+        return active is null ? null : await active.CapturePreviewAsync();
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
@@ -243,6 +244,39 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         if (handle != nint.Zero)
         {
             _ = NativeMethods.SetFocus(handle);
+        }
+    }
+
+    /// <summary>
+    /// Last frame of the page, used as the palette's backdrop after the HWND is collapsed.
+    /// JPEG because it only sits behind a scrim and the capture is on the open path.
+    /// </summary>
+    public async Task<BitmapSource?> CapturePreviewAsync()
+    {
+        var core = _view.CoreWebView2;
+        if (core is null || _view.Visibility != Visibility.Visible)
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream();
+            await core.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Jpeg, stream);
+            stream.Position = 0;
+
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException or ObjectDisposedException)
+        {
+            _log.Warn($"could not capture the page for the command bar: {ex.Message}");
+            return null;
         }
     }
 

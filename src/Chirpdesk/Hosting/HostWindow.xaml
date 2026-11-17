@@ -89,14 +89,17 @@
             <!-- The active service webview. Empty while everything is parked. -->
             <Grid x:Name="ServiceLayer" />
 
-            <!-- Command Bar overlay. It can only be seen because the webview is collapsed first
-                 (WPF cannot paint over a WebView2 HWND). -->
-            <Grid x:Name="BarLayer" Background="#66000000" Visibility="Collapsed">
-                <ContentControl x:Name="BarHost"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Top"
-                                Width="560"
-                                MaxHeight="420" />
+            <!-- Command Bar overlay. The webview HWND is collapsed first, so the last captured
+                 frame sits here as the backdrop and the bar still reads as an overlay. -->
+            <Grid x:Name="BarLayer" Visibility="Collapsed">
+                <Image x:Name="BarBackdrop" Stretch="Fill" />
+                <Grid Background="#66000000">
+                    <ContentControl x:Name="BarHost"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Top"
+                                    Width="560"
+                                    MaxHeight="420" />
+                </Grid>
             </Grid>
 
             <!-- Non-visual framework elements (the tray icon) need a parent to get Loaded. -->

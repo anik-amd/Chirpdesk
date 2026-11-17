@@ -45,14 +45,20 @@ public partial class HostWindow : Window
     public bool IsCommandBarOpen => BarLayer.Visibility == System.Windows.Visibility.Visible;
 
     /// <summary>Shows the overlay at 12 % from the top, horizontally centred (§12 budget).</summary>
-    public void ShowCommandBar()
+    public void ShowCommandBar(System.Windows.Media.ImageSource? backdrop = null)
     {
+        BarBackdrop.Source = backdrop;
+
         var height = ActualHeight > 0 ? ActualHeight : Height;
         BarHost.Margin = new Thickness(0, Math.Max(24, height * 0.12), 0, 0);
         BarLayer.Visibility = System.Windows.Visibility.Visible;
     }
 
-    public void HideCommandBar() => BarLayer.Visibility = System.Windows.Visibility.Collapsed;
+    public void HideCommandBar()
+    {
+        BarLayer.Visibility = System.Windows.Visibility.Collapsed;
+        BarBackdrop.Source = null;
+    }
 
     public bool IsDark { get; private set; }
 

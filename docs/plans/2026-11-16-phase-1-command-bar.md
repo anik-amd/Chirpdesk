@@ -140,7 +140,7 @@ Palette rows: **open (warm) tabs only**, in MRU order. Matching: prefix beats su
 
 ## Task 7: Collapse the page under the bar
 
-**Status:** complete (2026-11-17). Collapse/restore lives in `ServiceRuntime`; closing puts keyboard focus back into the page via the WebView2 HWND. Verified with CDP on a live WhatsApp scroller: `scrollTop` stayed at 300 while the bar was open and after it closed, and the DOM stayed connected. Page focus after close needs one human check because the automation session cannot own the foreground.
+**Status:** complete (2026-11-17). Collapse/restore lives in `ServiceRuntime`; closing puts keyboard focus back into the page via the WebView2 HWND. The last frame is captured before collapsing and shown behind the scrim, so the bar reads as an overlay over the site. Verified with CDP on a live WhatsApp scroller: `scrollTop` stayed at 300 while the bar was open and after it closed, and the DOM stayed connected. Page focus after close needs one human check because the automation session cannot own the foreground.
 
 **Files:**
 - Modify: `src/Chirpdesk/Hosting/ServiceRuntime.cs`, `HostWindow.xaml.cs`

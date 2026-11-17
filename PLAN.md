@@ -465,6 +465,7 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 | `Ctrl+Alt+Space` (global) | summon the Command Bar in search mode, even when Chirpdesk has no focus |
 | `Ctrl+Tab` (hold) | cycle warm services |
 | `Tab` / `Shift+Tab` while held | move highlight |
+| `Up` / `Down` while the bar is open | move highlight |
 | `Ctrl+P` while cycling | switch the same bar to search, keeping the highlighted tab |
 | release `Ctrl` | commit the cycle |
 | `Ctrl+P` | search mode |
@@ -477,7 +478,7 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 
 **Interception:** `Ctrl+Tab`, `Ctrl+P` and `Ctrl+1..9` are handled in `AcceleratorKeyPressed` while the page has focus; once the bar opens it takes focus and handles keys itself. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global hotkey is `RegisterHotKey`; if it fails, Settings reports the conflict.
 
-**Airspace:** WPF cannot paint over a WebView2 HWND. Opening the bar collapses the active webview (`Visibility=Collapsed`) and closing restores it; the control is not disposed, so scroll position and half-typed page text survive, and the renderer keeps its state. The scrim and bar then render on the host's own background. A second top-level overlay window was rejected: it adds focus, DPI and always-on-top failure modes for the same result.
+**Airspace:** WPF cannot paint over a WebView2 HWND. Opening the bar captures the last frame, collapses the active webview, and paints the frozen frame behind the bar's scrim; closing restores the live view. The control is not disposed, so scroll position and half-typed page text survive, and the renderer keeps its state. A second top-level overlay window was rejected: it adds focus, DPI and always-on-top failure modes for the same result.
 
 ### 10.4 Settings is a destination, not navigation
 

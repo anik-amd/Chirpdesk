@@ -27,5 +27,5 @@ Because a tray-only app has no focus, `Ctrl+Tab` cannot be the only entry: `Ctrl
 - The global hotkey can collide with another app. Registration failure is surfaced in Settings, never silent, and the tray remains a complete entry point.
 - `Ctrl+P` collides with the sites' print shortcut; accepted, with `Ctrl+Shift+P` as the documented escape hatch.
 - Commit-on-release cannot rely on WebView2 delivering modifier key-up, so it is polled via `GetAsyncKeyState` at 30 ms. This is a deliberate impurity in a hot path, isolated in one class.
-- WPF cannot paint over a WebView2 HWND, so opening the bar collapses the active webview and closing restores it. The control is not disposed; scroll and page input state survive. A separate overlay window was rejected as more focus/DPI failure modes for the same behaviour.
+- WPF cannot paint over a WebView2 HWND, so opening the bar collapses the active webview and closing restores it. The control is not disposed; scroll and page input state survive. Before collapsing, the host captures the last frame and paints it behind the bar's scrim, so the palette reads as an overlay over the site rather than a blank pane. A separate overlay window was rejected as more focus/DPI failure modes for the same behaviour.
 - Revisit if users ask for a persistent surface (then the answer is probably a hover-revealed strip, not a sidebar).
