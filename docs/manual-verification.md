@@ -14,7 +14,7 @@ Phase 1 and phase 2 automated gates are green. These need a human and a real des
 ## Command palette
 
 - `Ctrl+P` opens the **Command palette**; its empty state lists your open tabs only. Type `settings` or `plugin` to reveal commands and installed-but-inactive plugins.
-- Type `plugin` to see plugin actions: inactive plugins show as `inactive` and activate on Enter; active plugins show `Deactivate …`. Type `inactive` for only the inactive ones.
+- Type `plugin` to see plugin actions: inactive plugins appear with a dimmed icon and activate on Enter; active plugins show `Deactivate …`. Type `inactive` for only the inactive ones.
 - `Ctrl+Tab` still cycles only warm tabs; `Esc` closes the palette/page and is passed to the site when neither is open; `Ctrl+W` closes.
 - Selecting a cold/asleep service wakes it without re-pairing.
 

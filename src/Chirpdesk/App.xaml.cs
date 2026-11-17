@@ -1085,7 +1085,8 @@ public partial class App : Application
                 var runtime = _registry.Find(id);
                 var name = candidate?.Name ?? runtime?.Name ?? id;
 
-                if (!string.IsNullOrWhiteSpace(candidate?.State) && candidate.State != "open")
+                if (!string.IsNullOrWhiteSpace(candidate?.State)
+                    && candidate.State is not ("open" or "inactive" or "active"))
                 {
                     name = $"{name} · {candidate.State}";
                 }
