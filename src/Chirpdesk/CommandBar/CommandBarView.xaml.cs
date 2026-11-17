@@ -20,7 +20,9 @@ public partial class CommandBarView : UserControl
     {
         ApplyPalette(dark);
 
-        Header.Text = mode == BarMode.Search ? "> " + query : "Switch service";
+        Header.Text = mode == BarMode.Search
+            ? (string.IsNullOrEmpty(query) ? "Search tabs" : query)
+            : "Switch service";
         Rows.ItemsSource = rows;
         Rows.SelectedIndex = highlight >= 0 && highlight < rows.Count ? highlight : -1;
         EmptyText.Text = mode == BarMode.Search ? "No matches." : "No warm services.";
