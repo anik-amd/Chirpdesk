@@ -66,6 +66,15 @@ public sealed class BarState
 
     public string Query { get; private set; } = string.Empty;
 
+    /// <summary>Search text comes from the real text field, not from synthetic key handling.</summary>
+    public void SetQuery(string text)
+    {
+        if (Mode == BarMode.Search)
+        {
+            Query = text ?? string.Empty;
+        }
+    }
+
     public bool IsOpen => Mode != BarMode.Closed;
 
     /// <summary>Moves the highlight by one row, wrapping. Returns false when there is no row.</summary>

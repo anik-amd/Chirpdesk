@@ -51,12 +51,27 @@
             </Grid.RowDefinitions>
 
             <!-- The query line is the bar's one "terminal" flavour. -->
-            <TextBlock x:Name="Header"
-                       Margin="10,8,10,6"
-                       FontFamily="Cascadia Mono, Consolas"
-                       FontSize="13"
-                       Foreground="#8F8894"
-                       Text="Switch service" />
+            <StackPanel Grid.Row="0" Margin="10,7,10,4">
+                <TextBlock x:Name="Header"
+                           FontFamily="Cascadia Mono, Consolas"
+                           FontSize="10"
+                           Foreground="#8F8894"
+                           Text="Command palette" />
+                <TextBox x:Name="QueryBox"
+                         Margin="0,2,0,0"
+                         Visibility="Collapsed"
+                         Height="Auto"
+                         Padding="0"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         FontFamily="Cascadia Mono, Consolas"
+                         FontSize="14"
+                         Foreground="#EDE9E0"
+                         CaretBrush="#D8A45A"
+                         SelectionBrush="#26383C"
+                         FocusVisualStyle="{x:Null}"
+                         TextChanged="OnQueryChanged" />
+            </StackPanel>
 
             <ListBox x:Name="Rows"
                      Grid.Row="1"

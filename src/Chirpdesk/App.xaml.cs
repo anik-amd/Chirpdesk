@@ -125,10 +125,10 @@ public partial class App : Application
 
         _bar = new CommandBarView();
         _host.SetCommandBar(_bar);
+        _bar.QueryChanged += OnBarQueryChanged;
         _barWatcher = new ModifierWatcher(Dispatcher);
         _barWatcher.ControlReleased += OnControlReleased;
         _host.PreviewKeyDown += OnHostPreviewKeyDown;
-        _host.PreviewTextInput += OnHostPreviewTextInput;
 
         InitializeTheme();
         SyncAutostartMirror();
@@ -492,6 +492,17 @@ public partial class App : Application
         }
     }
 
+    private void OnBarQueryChanged(object? sender, string query)
+    {
+        if (_barState?.Mode != BarMode.Search)
+        {
+            return;
+        }
+
+        _barState.SetQuery(query);
+        UpdateSearchResults(keepSelected: null);
+    }
+
     private void OnHostPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (_barState is null)
@@ -526,9 +537,7 @@ public partial class App : Application
                 return;
 
             case BarKeyActionKind.Backspace:
-                e.Handled = true;
-                _barState.Backspace();
-                UpdateSearchResults(keepSelected: null);
+                // The query line is a real TextBox; let it handle editing and clipboard.
                 return;
 
             case BarKeyActionKind.Commit:
@@ -550,18 +559,6 @@ public partial class App : Application
                 e.Handled = true;
                 CommitBarIndex(action.Value);
                 return;
-        }
-
-        // Ctrl+P leaves Ctrl down; support typing the query until it is released. Once released,
-        // TextInput handles the rest. Digits are reserved for Ctrl+1..9.
-        if (_barState.Mode == BarMode.Search
-            && (Keyboard.Modifiers & ModifierKeys.Control) != 0
-            && !IsDigitKey(e.Key)
-            && TryMapText(e.Key, out var typed))
-        {
-            e.Handled = true;
-            _barState.Append(typed);
-            UpdateSearchResults(keepSelected: null);
         }
     }
 
@@ -606,44 +603,6 @@ public partial class App : Application
         }
 
         return modifiers;
-    }
-
-    private static bool IsDigitKey(Key key) => key is >= Key.D1 and <= Key.D9 or >= Key.NumPad1 and <= Key.NumPad9;
-
-    private static bool TryMapText(Key key, out string text)
-    {
-        if (key is >= Key.A and <= Key.Z)
-        {
-            text = ((char)('a' + ((int)key - (int)Key.A))).ToString();
-            return true;
-        }
-
-        if (key is >= Key.D0 and <= Key.D9)
-        {
-            text = ((char)('0' + ((int)key - (int)Key.D0))).ToString();
-            return true;
-        }
-
-        if (key is >= Key.NumPad0 and <= Key.NumPad9)
-        {
-            text = ((char)('0' + ((int)key - (int)Key.NumPad0))).ToString();
-            return true;
-        }
-
-        text = string.Empty;
-        return false;
-    }
-
-    private void OnHostPreviewTextInput(object sender, TextCompositionEventArgs e)
-    {
-        if (_barState is not { Mode: BarMode.Search } || string.IsNullOrEmpty(e.Text))
-        {
-            return;
-        }
-
-        e.Handled = true;
-        _barState.Append(e.Text);
-        UpdateSearchResults(keepSelected: null);
     }
 
     /// <summary>
@@ -776,6 +735,7 @@ public partial class App : Application
             _registry.Active?.CollapseForCommandBar();
             _host.ShowCommandBar(backdrop);
             _host.Focus();
+            _bar.FocusQuery();
 
             _log?.Info(
                 $"command bar opened in search mode: {_searchCandidates.Count} tab(s), backdrop={backdrop?.PixelWidth ?? 0}x{backdrop?.PixelHeight ?? 0}");
@@ -809,6 +769,7 @@ public partial class App : Application
         _barState = BarState.ForSearch();
         _searchCandidates = BuildSearchCandidates();
         UpdateSearchResults(keepSelected: keep);
+        _bar?.FocusQuery();
 
         _log?.Info("command bar switched to search mode");
     }

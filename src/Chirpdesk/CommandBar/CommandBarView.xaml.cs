@@ -18,19 +18,57 @@ public sealed record BarRow(
 /// </summary>
 public partial class CommandBarView : UserControl
 {
+    private bool _syncing;
+
     public CommandBarView() => InitializeComponent();
+
+    public event EventHandler<string>? QueryChanged;
+
+    public void FocusQuery()
+    {
+        if (QueryBox.Visibility == Visibility.Visible)
+        {
+            QueryBox.Focus();
+            QueryBox.CaretIndex = QueryBox.Text.Length;
+        }
+    }
+
+    private void OnQueryChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_syncing)
+        {
+            QueryChanged?.Invoke(this, QueryBox.Text);
+        }
+    }
 
     public void Render(IReadOnlyList<BarRow> rows, int highlight, BarMode mode, string query, bool dark)
     {
         ApplyPalette(dark);
 
-        Header.Text = mode == BarMode.Search
-            ? (string.IsNullOrEmpty(query) ? "Command palette" : query)
-            : "Switch service";
+        if (mode == BarMode.Search)
+        {
+            Header.Text = "Command palette";
+            QueryBox.Visibility = Visibility.Visible;
+
+            if (!string.Equals(QueryBox.Text, query, StringComparison.Ordinal))
+            {
+                _syncing = true;
+                QueryBox.Text = query;
+                _syncing = false;
+                QueryBox.CaretIndex = QueryBox.Text.Length;
+            }
+        }
+        else
+        {
+            Header.Text = "Switch service";
+            QueryBox.Visibility = Visibility.Collapsed;
+        }
+
         Hint.Text = mode == BarMode.Search
             ? "Enter to run · Esc back"
             : "Tab to move · release Ctrl to switch";
         Hint.Foreground = Token("CdPaletteMuted");
+
         Rows.ItemsSource = rows;
         Rows.SelectedIndex = highlight >= 0 && highlight < rows.Count ? highlight : -1;
         EmptyText.Text = mode == BarMode.Search ? "No matches." : "No warm services.";
@@ -42,6 +80,9 @@ public partial class CommandBarView : UserControl
         Root.Background = Token("CdPalette");
         Root.BorderBrush = Token("CdPaletteRule");
         Header.Foreground = Token("CdPaletteMuted");
+        QueryBox.Foreground = Token("CdPaletteText");
+        QueryBox.CaretBrush = Token("CdPaletteAccent");
+        QueryBox.SelectionBrush = Token("CdPaletteSelection");
         EmptyText.Foreground = Token("CdPaletteMuted");
         Rows.Foreground = Token("CdPaletteText");
     }
