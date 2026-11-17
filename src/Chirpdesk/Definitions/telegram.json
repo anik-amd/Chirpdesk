@@ -1,0 +1,9 @@
+{
+  "id": "telegram",
+  "name": "Telegram",
+  "url": "https://web.telegram.org/k/",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

@@ -1,0 +1,10 @@
+{
+  "id": "whatsapp",
+  "name": "WhatsApp",
+  "url": "https://web.whatsapp.com/",
+  "notificationMode": "native",
+  "pageDarkMode": "off",
+  "unreadRegex": "\\((\\d+)\\)",
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

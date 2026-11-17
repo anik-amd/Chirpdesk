@@ -1,6 +1,6 @@
 # Phase 1 — Command Bar, definitions, multi-service
 
-**Status:** Tasks 1–2 complete (2026-11-17, `2d705c9`). Next: Task 3, shipped definitions and the catalog. Tasks 4+ need the app running for verification.
+**Status:** Tasks 1–3 complete (2026-11-17). Definitions validate, settings are v2, and the catalog loads four shipped definitions (4 loaded, 0 skipped). Next: Task 4, the service registry and warm/cold switching.
 
 Continues `docs/plans/2026-11-16-phase-0-spine.md`. Do not start until phase 0's soak, reboot row and toast-click row are ticked: this phase multiplies every one of those behaviours by the number of services.
 
@@ -58,6 +58,8 @@ Embedded resources, not loose files, so a portable copy cannot lose them. The ca
 Only WhatsApp's `notificationMode` is measured (`native`, phase 0). The others ship as `null` meaning "probe at first run and record", which is already what `ServiceRuntime` does.
 
 **Tests:** instance overrides definition; definition supplies the URL when the instance has none; unknown definition id yields a clear failure and no crash; a definition with a bad icon still resolves.
+
+Shipped and loaded as four embedded JSON documents (`Definitions/*.json`, embedded so a portable copy cannot lose them). WhatsApp is `native`/`pageDarkMode: off` because phase 0 measured it. Messenger, Telegram and Instagram ship with the default `native` and `auto`: **unmeasured**, and phase 1 must either probe each one or record them as assumed, not claim verification.
 
 **Commit:** `feat(app): ship WhatsApp, Messenger, Telegram and Instagram definitions`.
 

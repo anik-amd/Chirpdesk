@@ -1,0 +1,9 @@
+{
+  "id": "messenger",
+  "name": "Messenger",
+  "url": "https://www.messenger.com/",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

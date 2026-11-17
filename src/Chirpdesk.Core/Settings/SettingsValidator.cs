@@ -31,7 +31,9 @@ internal static partial class SettingsValidator
 
             instance.PageDarkMode = instance.PageDarkMode?.Trim().ToLowerInvariant() switch
             {
+                null or "" => null,
                 "auto" => "auto",
+                "off" => "off",
                 _ => "off",
             };
         }

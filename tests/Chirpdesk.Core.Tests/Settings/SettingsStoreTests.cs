@@ -145,8 +145,9 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("AUTO", "auto")]
     [InlineData("off", "off")]
     [InlineData("nonsense", "off")]
-    [InlineData(null, "off")]
-    public void Page_dark_mode_is_normalised_and_fails_open(string? stored, string expected)
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    public void Page_dark_mode_is_normalised_and_nulls_inherit(string? stored, string? expected)
     {
         var store = CreateStore();
         var settings = new AppSettings();

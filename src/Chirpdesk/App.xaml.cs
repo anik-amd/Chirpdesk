@@ -7,6 +7,7 @@ using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Theming;
 using Chirpdesk.Core.Time;
+using Chirpdesk.Definitions;
 using Chirpdesk.Diagnostics;
 using Chirpdesk.Hosting;
 using Chirpdesk.Logging;
@@ -41,6 +42,7 @@ public partial class App : Application
 
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
+        ShippedDefinitions.Load(_log);
 
         // Windows starts this process to answer a toast click that has left the screen.
         // It is not the app: no tray, no webviews, one call, then exit.

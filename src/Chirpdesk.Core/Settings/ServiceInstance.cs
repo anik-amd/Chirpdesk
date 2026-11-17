@@ -37,12 +37,10 @@ public sealed class ServiceInstance
     public string? NotificationMode { get; set; }
 
     /// <summary>
-    /// <c>off</c> (default) or <c>auto</c>. Auto applies the invert filter only when the page
-    /// still measures light after <c>prefers-color-scheme</c>, i.e. only to sites without a
-    /// built-in dark theme. A definition sets the default for its site, because the site —
-    /// not the user — knows whether it has one; the instance can override.
+    /// <c>auto</c>, <c>off</c>, or null to inherit the definition's choice. Null and "off" are
+    /// different: null means "whatever the site says", "off" means "the user said no".
     /// </summary>
-    public string PageDarkMode { get; set; } = "off";
+    public string? PageDarkMode { get; set; }
 
     /// <summary>Instance id of the profile owner when this instance shares one; null when standalone.</summary>
     public string? ShareProfileWith { get; set; }
