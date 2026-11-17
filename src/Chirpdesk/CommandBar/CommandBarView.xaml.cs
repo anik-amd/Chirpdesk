@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Chirpdesk.Core.CommandBar;
+using Chirpdesk.Ui;
 
 namespace Chirpdesk.CommandBar;
 
@@ -20,7 +21,11 @@ public partial class CommandBarView : UserControl
 {
     private bool _syncing;
 
-    public CommandBarView() => InitializeComponent();
+    public CommandBarView()
+    {
+        InitializeComponent();
+        SearchIcon.Content = UiIcons.Create("search", Token("CdPaletteMuted"), 18);
+    }
 
     public event EventHandler<string>? QueryChanged;
 
@@ -47,7 +52,8 @@ public partial class CommandBarView : UserControl
 
         if (mode == BarMode.Search)
         {
-            Header.Text = "Command palette";
+            Header.Text = "Search tabs, plugins, commands…";
+            Header.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
             QueryBox.Visibility = Visibility.Visible;
 
             if (!string.Equals(QueryBox.Text, query, StringComparison.Ordinal))
@@ -61,6 +67,7 @@ public partial class CommandBarView : UserControl
         else
         {
             Header.Text = "Switch service";
+            Header.Visibility = Visibility.Visible;
             QueryBox.Visibility = Visibility.Collapsed;
         }
 

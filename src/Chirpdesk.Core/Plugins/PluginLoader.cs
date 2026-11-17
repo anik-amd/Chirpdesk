@@ -6,8 +6,16 @@ using Chirpdesk.Core.Logging;
 
 namespace Chirpdesk.Core.Plugins;
 
-/// <summary>One directory scanned for plugins. Bundled folders may use bundled-only permissions.</summary>
 public sealed record PluginScanRoot(string Directory, bool Bundled);
+
+/// <summary>An installed plugin of any kind. Only <c>service</c> plugins produce palette rows.</summary>
+public sealed record InstalledPlugin(
+    string Id,
+    string Kind,
+    string Name,
+    string? Description,
+    string? Accent,
+    bool Bundled);
 
 /// <summary>What one scan produced. Errors are per plugin, never fatal (invariant 8).</summary>
 public sealed record PluginLoadResult(
@@ -125,6 +133,57 @@ public static partial class PluginLoader
             .ToList();
 
         return new PluginLoadResult(definitions, errors, shadowed);
+    }
+
+    /// <summary>Lists every valid installed plugin, regardless of kind, for the plugin browser.</summary>
+    public static IReadOnlyList<InstalledPlugin> LoadInstalledPlugins(
+        IEnumerable<PluginScanRoot> roots,
+        ILog? log = null)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+
+        var installed = new Dictionary<string, InstalledPlugin>(StringComparer.Ordinal);
+        var errors = new List<string>();
+
+        foreach (var root in roots)
+        {
+            foreach (var folder in EnumeratePluginFolders(root.Directory, errors))
+            {
+                var folderName = NameOf(folder);
+                var manifest = ReadManifest(folder, folderName, root.Bundled, errors);
+                if (manifest is null)
+                {
+                    continue;
+                }
+
+                var plugin = new InstalledPlugin(
+                    manifest.Id,
+                    manifest.Kind,
+                    manifest.Name,
+                    manifest.Description,
+                    manifest.Accent,
+                    root.Bundled);
+
+                if (installed.TryGetValue(manifest.Id, out var existing) && existing.Bundled && !root.Bundled)
+                {
+                    installed[manifest.Id] = plugin;
+                }
+                else if (!installed.ContainsKey(manifest.Id))
+                {
+                    installed[manifest.Id] = plugin;
+                }
+            }
+        }
+
+        foreach (var error in errors)
+        {
+            log?.Warn($"plugin inventory skipped: {error}");
+        }
+
+        return installed.Values
+            .OrderBy(plugin => plugin.Kind, StringComparer.Ordinal)
+            .ThenBy(plugin => plugin.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     /// <summary>

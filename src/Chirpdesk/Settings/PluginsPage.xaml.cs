@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
+using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Hosting;
 using Chirpdesk.Ui;
@@ -18,6 +19,7 @@ namespace Chirpdesk.Settings;
 public partial class PluginsPage : UserControl
 {
     private readonly ServiceCatalog _catalog;
+    private readonly IReadOnlyList<InstalledPlugin> _inventory;
     private readonly SettingsStore _store;
     private readonly ServiceRegistry _registry;
     private readonly ILog _log;
@@ -29,6 +31,7 @@ public partial class PluginsPage : UserControl
 
     internal PluginsPage(
         ServiceCatalog catalog,
+        IReadOnlyList<InstalledPlugin> inventory,
         SettingsStore store,
         ServiceRegistry registry,
         ILog log,
@@ -39,6 +42,7 @@ public partial class PluginsPage : UserControl
     {
         InitializeComponent();
         _catalog = catalog;
+        _inventory = inventory;
         _store = store;
         _registry = registry;
         _log = log;
@@ -135,6 +139,55 @@ public partial class PluginsPage : UserControl
             actions.Children.Add(off);
 
             content.Children.Add(actions);
+            card.Child = content;
+            PluginsPanel.Children.Add(card);
+        }
+
+        foreach (var plugin in _inventory.Where(item => !string.Equals(item.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal)))
+        {
+            var card = new Border
+            {
+                Style = (Style)FindResource("Card"),
+                Width = 320,
+                Margin = new Thickness(0, 0, 14, 14),
+                Padding = new Thickness(14),
+            };
+
+            var content = new StackPanel();
+
+            var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            header.Children.Add(UiIcons.Create("plugins", Token("CdAccent"), 28));
+
+            var title = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
+            title.Children.Add(new TextBlock
+            {
+                Text = plugin.Name,
+                FontSize = 15,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Token("CdText"),
+            });
+            title.Children.Add(new TextBlock
+            {
+                Text = string.Equals(plugin.Kind, "tool", StringComparison.Ordinal)
+                    ? "Active · bundled tool"
+                    : $"Installed · {plugin.Kind}",
+                FontSize = 11,
+                Foreground = Token("CdTextMuted"),
+            });
+            header.Children.Add(title);
+            content.Children.Add(header);
+
+            content.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(plugin.Description)
+                    ? "Installed plugin."
+                    : plugin.Description,
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                MinHeight = 34,
+            });
+
             card.Child = content;
             PluginsPanel.Children.Add(card);
         }

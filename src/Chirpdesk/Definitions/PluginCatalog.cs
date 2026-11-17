@@ -29,4 +29,12 @@ internal static class PluginCatalog
         PluginLoader.LoadPanels(
             [new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true)],
             log);
+
+    public static IReadOnlyList<InstalledPlugin> LoadInstalled(ILog log) =>
+        PluginLoader.LoadInstalledPlugins(
+            [
+                new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true),
+                new PluginScanRoot(AppPaths.UserPluginsDirectory, Bundled: false),
+            ],
+            log);
 }

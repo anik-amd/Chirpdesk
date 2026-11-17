@@ -44,6 +44,7 @@ public partial class App : Application
     private ServiceRegistry? _registry;
     private ServiceCatalog? _catalog;
     private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
+    private IReadOnlyList<InstalledPlugin> _installedPlugins = Array.Empty<InstalledPlugin>();
     private SettingsPage? _settingsPage;
     private PluginsPage? _pluginsPage;
     private CommandBarView? _bar;
@@ -63,7 +64,8 @@ public partial class App : Application
         _registry = new ServiceRegistry(_log);
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
-        _log.Info($"tool panels: {_panels.Count} loaded");
+        _installedPlugins = PluginCatalog.LoadInstalled(_log);
+        _log.Info($"tool panels: {_panels.Count} loaded; plugins: {_installedPlugins.Count} installed");
         LinkLegacyInstances();
 
         // Windows starts this process to answer a toast click that has left the screen.
@@ -853,7 +855,12 @@ public partial class App : Application
             ? Array.Empty<ServiceDefinition>()
             : _catalog.Definitions.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToArray();
 
-        foreach (var definition in definitions)
+        var servicePlugins = _installedPlugins
+            .Where(plugin => string.Equals(plugin.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal))
+            .Select(plugin => plugin.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var definition in definitions.Where(definition => servicePlugins.Contains(definition.Id)))
         {
             var hasEnabledInstance = settings.Services.Any(
                 instance => instance.Enabled
@@ -1415,6 +1422,7 @@ public partial class App : Application
         {
             _pluginsPage = new PluginsPage(
                 _catalog,
+                _installedPlugins,
                 new SettingsStore(AppPaths.SettingsFile, _log),
                 _registry,
                 _log,
