@@ -269,9 +269,21 @@ public partial class HostWindow : Window
             return;
         }
 
+        System.Windows.Point origin;
+        double bottom;
+
+        try
+        {
+            origin = PointToScreen(new System.Windows.Point(0, 0));
+            bottom = PointToScreen(new System.Windows.Point(0, ActualHeight)).Y;
+        }
+        catch (InvalidOperationException)
+        {
+            _railHoverTimer.Stop();
+            return;
+        }
+
         var dpi = VisualTreeHelper.GetDpi(this);
-        var origin = PointToScreen(new Point(0, 0));
-        var bottom = PointToScreen(new Point(0, ActualHeight)).Y;
         var left = origin.X;
         var insideVertical = cursor.Y >= origin.Y && cursor.Y <= bottom;
 
