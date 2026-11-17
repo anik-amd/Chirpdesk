@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Theming;
@@ -33,6 +34,7 @@ public partial class App : Application
     private HostWindow? _host;
     private TaskbarIcon? _tray;
     private ServiceRegistry? _registry;
+    private ServiceCatalog? _catalog;
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
 
@@ -43,7 +45,7 @@ public partial class App : Application
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
         _registry = new ServiceRegistry(_log);
-        ShippedDefinitions.Load(_log);
+        _catalog = ShippedDefinitions.Load(_log);
 
         // Windows starts this process to answer a toast click that has left the screen.
         // It is not the app: no tray, no webviews, one call, then exit.
@@ -197,16 +199,36 @@ public partial class App : Application
     /// <summary>Creates (or reuses) the runtime for one instance and optionally shows it.</summary>
     private async Task OpenInstanceAsync(ServiceInstance instance, bool show, bool probe)
     {
+        var resolved = _catalog?.Resolve(instance);
+        if (resolved is null)
+        {
+            _log?.Warn($"'{instance.InstanceId}' has no url and no known definition; not opening it");
+            return;
+        }
+
+        // The runtime consumes resolved values: definition defaults are already filled in.
+        var effective = new ServiceInstance
+        {
+            InstanceId = resolved.InstanceId,
+            Name = resolved.Name,
+            Url = resolved.Url,
+            UnreadRegex = resolved.UnreadRegex,
+            NotificationMode = resolved.NotificationMode,
+            PageDarkMode = resolved.PageDarkMode,
+            ProfileId = instance.ProfileId ?? resolved.InstanceId,
+        };
+
         var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
 
         var service = await ServiceRuntime.CreateAsync(
             _host!,
-            instance,
+            effective,
             _log!,
             SystemClock.Instance,
             new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
             DateTimeOffset.UtcNow,
             dark);
+
         await service.ApplyThemeAsync(dark);
         await _registry!.AddAsync(service);
         _registry.Activate(service.InstanceId);
@@ -223,6 +245,42 @@ public partial class App : Application
         }
 
         _log?.Info($"opened '{instance.InstanceId}'{(show ? " for the user" : " parked")}");
+    }
+
+    /// <summary>
+    /// The one entry point for every user request that names a service: warm switch, or cold
+    /// start from the catalog. A toast click, a Command Bar commit and the tray all land here.
+    /// </summary>
+    private async Task<bool> ActivateServiceAsync(string instanceId)
+    {
+        if (_registry?.Activate(instanceId) == true)
+        {
+            _log?.Info($"activation for '{instanceId}'");
+            ShowHost();
+            return true;
+        }
+
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            var instance = settings.Services.FirstOrDefault(
+                s => string.Equals(s.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+
+            if (instance is null)
+            {
+                _log?.Warn($"activation for unknown service '{instanceId}'");
+                return false;
+            }
+
+            _log?.Info($"cold start for '{instanceId}'");
+            await OpenInstanceAsync(instance, show: true, probe: false);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException)
+        {
+            _log?.Error($"could not activate '{instanceId}'", ex);
+            return false;
+        }
     }
 
     /// <summary>
@@ -430,9 +488,9 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Shows the window for the service a toast came from. The registry switches to it when it
-    /// is warm; a cold one is logged rather than silently replaced by whatever happens to be
-    /// active, and the Command Bar will start it rather than show the wrong page.
+    /// Shows the window for the service a toast came from. Warm switches in place; cold starts
+    /// it from settings instead of showing the wrong page. Fire-and-forget because the caller
+    /// is a WinRT event or a COM callback, neither of which can await.
     /// </summary>
     private void ShowHostFor(string? serviceId)
     {
@@ -444,16 +502,7 @@ public partial class App : Application
             return;
         }
 
-        if (_registry?.Activate(id) == true)
-        {
-            _log?.Info($"activation for '{id}'");
-        }
-        else
-        {
-            _log?.Info($"activation for '{id}', which is not warm; showing the active service");
-        }
-
-        ShowHost();
+        _ = ActivateServiceAsync(id);
     }
 
     private void HideHost()
