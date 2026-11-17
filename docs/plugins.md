@@ -1,31 +1,58 @@
-# Plugin format
+# Plugin format and authoring guide
 
-Every **distributable content pack** is a plugin: a folder containing `plugin.json` plus its payload. Service **instances** — the sites you add — are settings, not plugins. See `PLAN.md` §4.1 and `docs/adr/0007-plugin-architecture.md`.
+Every **distributable content pack** is a plugin: a folder containing `plugin.json` plus its payload. A **site** is a `service` plugin (a definition); running it is a settings **instance**. There is no URL add flow — plugins are the only way a site enters the app (ADR 0011).
 
-## 1. Kinds
+This document is the authoring contract for humans and AI agents. It describes v1, which is **data only**: no plugin executes code in the app process.
 
-| `kind` | Payload file | Contains code | Trust tier |
+> **Implementation status (2026-11-17).** The five bundled definitions are still compiled into the app as embedded JSON and there is no plugin folder loader yet. The JSON shape below is the contract the loader will consume, and `DefinitionValidator` is the source of truth for service definitions today. Write to this contract; a plugin that validates today will load unchanged when the loader lands.
+
+## 1. Model: plugin vs instance
+
+| Thing | Lives in | Shared? | Created by |
 |---|---|---|---|
-| `service` | `service.json` (definition: url, icon, regex, CSS, filter ref) | no | bundled / repo |
-| `theme` | `theme.json` with `variants[]` (+ `preview.png`) | no | bundled / repo |
-| `filter` | `filters.json` | no | bundled / repo |
-| `tool` | `panel.json` (declarative, host-rendered) | no | **bundled only in v1** |
-| `integration` | executable + `integration.json` | **yes** | user only, explicit consent, out-of-process |
+| Definition (site behaviour) | `plugins/<id>/` (bundled or user) | yes, versioned | plugin install |
+| Instance (one account) | `settings.json` | no | selecting an installed definition |
 
-v1 ships `service`, `theme`, `filter` and `tool`. `integration` exists in the schema from day one so the manifest does not have to change later, but nothing loads it until phase 7.
+- A definition knows the site: URL, unread regex, notification mode, whether the page has its own dark theme.
+- An instance is one profile, one unread count, one warm/cold state. Two accounts of one site are two instances of one definition.
+- A row with `"definitionId": null` and an inline `url` is **legacy**: it still resolves, but nothing creates new ones.
+- Bundled plugins live in `<install>\plugins\`; user plugins in `%APPDATA%\Chirpdesk\plugins\<id>\`. Both are scanned identically; a user plugin with the same `id` shadows the bundled one.
+- Invalid plugins are skipped and logged, never fatal (invariant 8).
 
-**Instances are not plugins.** A service you add by URL lives in `settings.json` as `{instanceId, definitionId|null, url, name, …}` with a `profileId` that defaults to the instance id. `definitionId: null` means a custom site; no folder is written, and the plugin loader is not involved. This is why "add any site" is a built-in flow rather than a template plugin.
+### 1.1 Multiple accounts and sibling sites
 
-## 2. Folder layout
+Multiple accounts are a first-class case, not a workaround:
+
+- Install one definition once; create **one instance per account**. Each instance gets its own `instanceId`, its own profile directory and therefore its own cookies, session, unread count and warm/cold state. Two WhatsApp accounts never see each other's data.
+- Instances share the definition, so a definition update (a fixed regex, a dark-mode correction) reaches every account without duplicating plugin folders.
+- Profiles are per **instance**, not per browser: signing into a second account does not disturb the first one's socket.
+
+**Sibling sites are separate definitions.** Messenger and Facebook belong to the same vendor but are different entry points, so they ship as `messenger` (`https://www.messenger.com/`) and `facebook` (`https://www.facebook.com/`) — never one plugin with a "mode". Opening Messenger opens the messenger client; opening Facebook opens the Facebook client. Each supports multiple accounts the same way, because accounts are instances of the definition.
+
+Current bundled service plugins: `whatsapp`, `messenger`, `telegram`, `facebook`, `instagram`.
+
+> Creating instances is still a settings/Command Bar action to be built in phase 2. Until then, instances exist as rows in `settings.json`; a definition alone never creates one.
+
+## 2. Kinds
+
+| `kind` | Payload file | Code | Trust tier | v1 |
+|---|---|---|---|---|
+| `service` | `service.json` (definition) | no | bundled / repo | yes |
+| `theme` | `theme.json` with `variants[]` (+ `preview.png`) | no | bundled / repo | after v1 (ADR 0010) |
+| `filter` | `filters.json` | no | bundled / repo | phase 3 |
+| `tool` | `panel.json` (host-rendered primitives) | no | **bundled only** | phase 2 |
+| `integration` | executable + `integration.json` | **yes** | explicit consent, out-of-process | phase 7, never in-process |
+
+## 3. Folder layout
 
 ```
-plugins/whatsapp/
+plugins/example-chat/
 ├─ plugin.json
 ├─ service.json
-├─ icon.svg
-└─ skin.css            # optional
+├─ icon.svg            # optional, file name only
+└─ README.md           # optional, shown in the manager
 
-plugins/theme-catppuccin/     # ONE folder per family, all variants inside
+plugins/theme-catppuccin/     # one folder per family, all variants inside
 ├─ plugin.json
 ├─ theme.json
 └─ preview.png
@@ -40,61 +67,165 @@ plugins/tool-cleaner/
 └─ icon.svg
 ```
 
-Bundled: `<install>\plugins\`. User: `%APPDATA%\Chirpdesk\plugins\`. Both scanned identically; user plugins override a bundled plugin with the same `id` (and the manager says so).
+No absolute paths, no `..`, no path separators in asset fields. A plugin folder is flat unless `assets` names a relative file in it.
 
-## 3. `plugin.json`
+## 4. `plugin.json` (manifest)
 
-| Field | Type | Required | Notes |
+Every kind has one.
+
+| Field | Type | Required | Rules |
 |---|---|---|---|
-| `id` | string | yes | `^[a-z0-9][a-z0-9-]{1,31}$`, unique, immutable across versions |
+| `id` | string | yes | `^[a-z0-9][a-z0-9-]{0,31}$`; unique; immutable across versions; equals `service.json.id` |
 | `kind` | enum | yes | `service` \| `theme` \| `filter` \| `tool` \| `integration` |
 | `name` | string | yes | display name, 1–40 chars |
-| `version` | semver | yes | plugin's own version |
-| `apiVersion` | integer | yes | `1` for this document |
+| `version` | semver | yes | the plugin's own version, e.g. `1.0.0` |
+| `apiVersion` | integer | yes | `1`; the host refuses a higher number |
 | `author` | string | no | shown in the manager |
-| `homepage` | string | no | https only |
-| `description` | string | no | one line, 1–160 chars |
-| `permissions` | string[] | yes | see §6; empty array allowed |
-| `assets` | string[] | no | relative paths only, no `..`, no absolute |
+| `homepage` | string | no | absolute `https` |
+| `description` | string | no | one line, ≤ 160 chars |
+| `permissions` | string[] | yes | see §9; `[]` is normal for a service |
+| `assets` | string[] | no | relative file names only, no `..` |
 
 ```json
 {
-  "id": "theme-catppuccin",
-  "kind": "theme",
-  "name": "Catppuccin",
+  "id": "example-chat",
+  "kind": "service",
+  "name": "Example Chat",
   "version": "1.0.0",
   "apiVersion": 1,
-  "author": "community",
-  "description": "Soothing pastel themes for the high-spirited.",
-  "permissions": [],
-  "assets": ["preview.png"]
+  "author": "you",
+  "description": "Example Chat web client.",
+  "permissions": []
 }
 ```
 
-## 4. Payloads
+## 5. `service.json` — the site definition
 
-### `service.json` (definition)
+This is the file to write when adding a site. Field names are camelCase; JSON comments and trailing commas are tolerated by the loader, but ship plain JSON.
 
 ```json
 {
-  "url": "https://web.whatsapp.com/",
+  "id": "example-chat",
+  "name": "Example Chat",
+  "url": "https://chat.example.com/",
   "icon": "icon.svg",
-  "accent": "#25D366",
   "unreadRegex": "\\((\\d+)\\)",
   "notificationMode": "native",
-  "skin": "skin.css",
-  "filter": "filters-meta",
-  "defaultWarmAtBoot": true
+  "pageDarkMode": "auto",
+  "apiVersion": 1,
+  "minApiVersion": 1
 }
 ```
 
-`url` must be `https`. `unreadRegex` must have exactly one capture group; validated by running it against the service's own name as a smoke test. `filter` refers to a `filter` plugin id, not a path. `notificationMode` is `native` \| `shim` \| `title-only` (see `PLAN.md` §6); a definition may omit it and the host probes at first load.
+| Field | Required | Rules | Applied today |
+|---|---|---|---|
+| `id` | yes | `^[a-z0-9][a-z0-9-]{0,31}$`; must equal the manifest id | yes |
+| `name` | yes | non-empty display name | yes |
+| `url` | yes | absolute `https`, no credentials (`user:pass@`) | yes |
+| `icon` | no | bare file name; no `/`, `\` or `..` | validated, not rendered yet |
+| `unreadRegex` | no | valid .NET regex; first capture group is the count; default `\((\d+)\)` | yes |
+| `notificationMode` | no | `native` \| `shim` \| `title-only`; see §5.2 | yes |
+| `pageDarkMode` | no | `off` \| `auto`; see §5.1 | yes |
+| `userAgent` | no | user-agent override string | accepted, not applied yet |
+| `activation` | no | notification click routing, see §5.3 | validated, routing later |
+| `apiVersion` | no | must be `1` | yes |
+| `minApiVersion` | no | `1` … `apiVersion` | yes |
 
-A definition is shared; an instance overrides `url`, `name`, `iconUri`, `accent`, `unreadRegex`, `userAgent`, `injectCss`, `warmAtBoot`, `mute`, `blocking`, `notificationMode` and `shareProfileWith`. A custom site has `definitionId: null` and no plugin at all.
+**Typos fail open, silently.** `notificationMode` and `pageDarkMode` are lower-cased and an unknown value is normalised to the default (`native`, `off`) before validation. If your setting "did nothing", check spelling first.
 
-### `theme.json`
+`unreadRegex` is compiled with a 100 ms timeout; a regex that does not compile rejects the whole definition. There is no group-count check, so a pattern with no capture group simply yields 0.
 
-One file holds **every variant of a family**. Dark and light are variants, never separate plugins.
+### 5.1 Page dark mode (definitions own this)
+
+The app sets the profile's `prefers-color-scheme` to match the app theme before navigation. On top of that, the definition chooses whether the host may darken a page that ignores it:
+
+- `off` — never touch the page. Use this when the site has its own dark theme (WhatsApp, Telegram). The site reacts to `prefers-color-scheme` itself.
+- `auto` — let the host measure the rendered page and apply an inverting filter **only if it is still light**. The measurement waits for an opaque background, re-checks for ~10 s, and yields to a theme that arrives after hydration.
+
+Do not set `auto` for a site known to follow the OS scheme: the host would only be second-guessing it. Never try to express dark mode as JavaScript; page-context JS is not a plugin permission (§9).
+
+The app never guesses from a URL: `pageDarkMode` is explicit data, and the user may override it per instance.
+
+### 5.2 Notification mode
+
+| Mode | What it means |
+|---|---|
+| `native` | the page's `new Notification()` reaches WebView2's `NotificationReceived` |
+| `shim` | host script routes `ServiceWorkerRegistration.showNotification` through the page's `Notification` constructor |
+| `title-only` | no page notification is expected; the unread title regex raises a generic toast |
+
+Omit it ⇒ `native`. The runtime also logs a capability probe (`permission=… serviceWorker=…`) and always keeps the unread-title fallback as a safety net. Do not invent other values; an unknown one becomes `native`.
+
+### 5.3 Notification activation (optional)
+
+```json
+{
+  "activation": {
+    "urlTemplate": "https://chat.example.com/dm/{tag}",
+    "tagPattern": "^[a-z0-9_-]{1,64}$"
+  }
+}
+```
+
+- `urlTemplate` must be absolute `https` and contain exactly the `{tag}` placeholder.
+- `tagPattern`, when present, must be a valid regex; a notification tag that does not match opens the site without routing.
+- The host substitutes only the tag, never arbitrary notification text. This is what stops a hostile page from steering the resulting URL.
+
+### 5.4 Complete minimal plugin (copy this)
+
+`plugins/example-chat/plugin.json`:
+
+```json
+{
+  "id": "example-chat",
+  "kind": "service",
+  "name": "Example Chat",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "permissions": []
+}
+```
+
+`plugins/example-chat/service.json`:
+
+```json
+{
+  "id": "example-chat",
+  "name": "Example Chat",
+  "url": "https://chat.example.com/",
+  "unreadRegex": "\\((\\d+)\\)",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "apiVersion": 1,
+  "minApiVersion": 1
+}
+```
+
+That is a complete site plugin. No code, no assets required.
+
+### 5.5 Authoring checklist — for humans and AI agents
+
+1. **Pick an id** matching `^[a-z0-9][a-z0-9-]{0,31}$`. Use it unchanged in `plugin.json` and `service.json`.
+2. **URL**: absolute `https`, no credentials. No `http`, `file:`, `javascript:` or relative paths.
+3. **Unread regex**: find the pattern the site puts in the document title, e.g. `(3) Telegram`. Default `\((\d+)\)` is correct for most sites; write a different one only with evidence, and keep the count in the first group.
+4. **Notification mode**: `native` unless you know the site notifies from a service worker (`shim`) or you cannot observe page notifications (`title-only`).
+5. **Dark mode**: `off` if the site has its own dark theme (test it: set Windows to dark and look). Otherwise `auto`.
+6. **Assets**: bare file names only. Do not reference `../`, a drive letter or a URL.
+7. **Validate the JSON** (no comments, no trailing commas is safest) and check every field against §5.
+8. **Expect fail-open**: an invalid plugin is skipped and logged (`definition skipped: …`), the app starts, and existing instances keep their profiles.
+
+**Never** in a plugin: executable code, page-context JavaScript, filesystem paths, host-action names you did not find in §8, or changes to the auth/WebSocket allowlist. There is no permission that grants any of these in v1.
+
+**Done means**: both files parse; the definition id is unique; URL is https; the regex compiles; and a site with its own dark theme is `off`. A useful sanity check before submitting:
+
+```powershell
+$json = Get-Content plugins/example-chat/service.json -Raw | ConvertFrom-Json
+[regex]::Matches('(3) Example Chat', $json.unreadRegex) | ForEach-Object { $_.Groups[1].Value }
+```
+
+## 6. `theme.json`
+
+Theme plugins are deferred until after v1 (ADR 0010); the format is kept here so the schema stays stable. One plugin per family; dark and light are variants of the same plugin.
 
 ```json
 {
@@ -106,42 +237,30 @@ One file holds **every variant of a family**. Dark and light are variants, never
       "name": "Mocha",
       "mode": "dark",
       "tokens": {
-        "bg.window":   "#1e1e2e",
-        "bg.surface":  "#181825",
+        "bg.window": "#1e1e2e",
+        "bg.surface": "#181825",
         "bg.elevated": "#313244",
-        "bg.scrim":    "#000000B3",
+        "bg.scrim": "#000000B3",
         "border.default": "#45475a",
-        "border.focus":   "#cba6f7",
-        "text.primary":   "#cdd6f4",
+        "border.focus": "#cba6f7",
+        "text.primary": "#cdd6f4",
         "text.secondary": "#bac2de",
-        "text.muted":     "#7f849c",
+        "text.muted": "#7f849c",
         "accent.default": "#cba6f7",
-        "accent.fg":      "#1e1e2e",
-        "state.danger":   "#f38ba8",
-        "state.success":  "#a6e3a1",
-        "state.warning":  "#f9e2af",
+        "accent.fg": "#1e1e2e",
+        "state.danger": "#f38ba8",
+        "state.success": "#a6e3a1",
+        "state.warning": "#f9e2af",
         "shadow.overlay": "#00000066"
       }
-    },
-    {
-      "id": "latte",
-      "name": "Latte",
-      "mode": "light",
-      "tokens": { "bg.window": "#eff1f5", "text.primary": "#4c4f69", "...": "..." }
     }
   ]
 }
 ```
 
-Validation rules:
+Validation: variant ids `^[a-z0-9-]{1,24}$`, unique; `mode` is `dark` or `light`; every token in `PLAN.md` §12.1 is present; `defaults.*` reference an existing variant of that mode. Contrast failures are nudged toward AA and reported, not rejected. A broken theme falls back to the compiled baseline.
 
-- `id` per variant: `^[a-z0-9-]{1,24}$`, unique within the plugin.
-- `mode`: `dark` or `light`. Every token in `PLAN.md` §12.1 is required in every variant.
-- `defaults.dark` / `defaults.light` must reference a variant of that mode. A family with only dark variants may omit `defaults.light`.
-- Contrast is validated at load (WCAG AA); failures are nudged by the minimum passing amount and reported, not rejected, so a badly-tuned community theme still works. The nudge loop is capped at 20 iterations.
-- A theme plugin that fails validation is disabled; the shell falls back to its compiled **baseline theme**, which is not a plugin and cannot be removed.
-
-### `filters.json`
+## 7. `filters.json`
 
 ```json
 {
@@ -152,33 +271,29 @@ Validation rules:
 }
 ```
 
-`blockHosts` and `allowHosts` are host patterns only; paths belong in `blockPaths`. `allowHosts` in a plugin can only ever add to the global auth allowlist, never remove an entry, and the service's own origin is allowlisted by the host regardless of any pack.
+`blockHosts` / `allowHosts` are host patterns; paths belong in `blockPaths`. A pack may only **add** to the auth/WebSocket allowlist, never remove from it, and the service's own origin is allowlisted by the host regardless.
 
-### `panel.json` — the `tool` kind
+## 8. `panel.json` — the `tool` kind
 
-Tools are how a bundled panel such as the desk cleaner is data instead of XAML. They are **bundled only in v1**; a user-installed tool cannot add capability, so it is not offered. A tool declares a panel; the **host** renders it from a fixed primitive vocabulary and executes a fixed action vocabulary. There is no XAML, no script, no file paths, and no arbitrary command.
+Tools are bundled only in v1 and cannot add capability. The host renders a closed set of primitives and executes a closed set of actions; there is no XAML, script, path or arbitrary command.
+
+**Panel primitives:** `list`, `table`, `text`, `progress`, `button`, `separator`.
+
+**Action primitives:** `storageReport`, `trimCache`, `scanOrphans`, `deleteOrphan`, `revealFolder`, `openSettings`.
 
 ```json
 {
   "title": "Disk cleaner",
-  "subtitle": "Reclaim space used by your chat apps.",
-  "permissions": ["read-storage", "trim-cache"],
   "sections": [
     {
       "type": "table",
       "id": "usage",
       "columns": [
         { "key": "service", "label": "Service", "width": "star" },
-        { "key": "data",    "label": "Data",    "width": "auto" },
-        { "key": "cache",   "label": "Cache",   "width": "auto" }
+        { "key": "cache", "label": "Cache", "width": "auto" }
       ],
       "source": { "action": "storageReport" },
       "emptyText": "No services yet."
-    },
-    {
-      "type": "text",
-      "id": "note",
-      "value": "Cookies, Local Storage, IndexedDB and Service Worker are never touched by a trim."
     }
   ],
   "actions": [
@@ -189,114 +304,62 @@ Tools are how a bundled panel such as the desk cleaner is data instead of XAML. 
       "style": "primary",
       "args": { "budgetMb": 60, "targets": "selected" },
       "confirm": "Trim caches for the selected services? You stay signed in."
-    },
-    {
-      "id": "scan",
-      "label": "Scan for leftovers",
-      "primitive": "scanOrphans",
-      "style": "secondary"
-    },
-    {
-      "id": "reveal",
-      "label": "Open folder",
-      "primitive": "revealFolder",
-      "style": "ghost",
-      "args": { "root": "profiles" }
     }
   ]
 }
 ```
 
-**Panel primitives** (v1, closed set): `list`, `table`, `text`, `progress`, `button`, `separator`.
+Argument rules: `trimCache` takes `budgetMb` 1–2000 and `targets` = `selected` \| `all` \| instance id; `deleteOrphan` only accepts an id from the latest scan; `revealFolder` takes `root` ∈ {`profiles`, `plugins`, `logs`, `data`}, never a path. A plugin never supplies a filesystem path (invariant 2). An unknown primitive or bad argument disables that action, not the panel.
 
-**Action primitives** (v1, closed set — the host implements each one, the plugin only picks and parameterises):
+Plugin management is built-in shell UI, never a tool action.
 
-| Primitive | Effect | Argument validation |
-|---|---|---|
-| `storageReport` | returns per-service data/cache sizes (no separate "media" total — that lives inside IndexedDB) | none |
-| `trimCache` | trims cache only, never session data, only for disposed profiles | `budgetMb` 1–2000, `targets` = `selected` \| `all` \| one instance id |
-| `scanOrphans` | scans allowlisted roots for leftover profiles | none |
-| `deleteOrphan` | moves a scanned orphan to the Recycle Bin | `orphanId` must come from the latest scan result |
-| `revealFolder` | opens Explorer at a known root | `root` ∈ {`profiles`, `plugins`, `logs`, `data`} — never a path |
-| `openSettings` | navigates to a settings section | `section` from a fixed enum |
-
-Plugin management (`enablePlugin`, `syncRepo`) is **not** a tool action: the plugin manager is built-in shell UI and a plugin cannot manage the system that loaded it.
-
-Rules:
-
-- A plugin never supplies a filesystem path. It names a **root**; the host resolves it from its own allowlist. This is what keeps invariant 2 ("never delete outside the allowlisted roots") true even for third-party tools.
-- An unknown primitive or an argument that fails validation disables the **action**, logs it, and renders the button disabled with the reason — the panel still opens. Fail open, per invariant 8.
-- `deleteOrphan` can only delete an id produced by a scan in this session; ids are not persisted or guessable.
-- Actions run through the same permission check as the rest of the plugin system (§6); a missing permission greys the button and says which permission is needed.
-
-## 5. Validation and failure behaviour
-
-1. Parse JSON; schema errors → plugin disabled, reason logged, row flagged in the manager.
-2. `apiVersion` higher than supported → disabled with "requires a newer Chirpdesk".
-3. Unknown fields → ignored (forward compatibility).
-4. Missing required token, bad colour, bad regex, `..` in an asset path, duplicate variant id, `defaults` pointing at a missing variant → plugin disabled.
-5. `tool`: unknown primitive or an unvalidatable argument disables that action only, not the panel (§4). A user-installed `tool` is refused in v1 with "bundled tools only".
-6. A disabled plugin never deletes data, never blocks startup, and never takes other plugins with it.
-7. `FileSystemWatcher` on the plugin folders triggers a debounced rescan (500 ms); enabling/disabling is instant.
-
-## 6. Permissions
+## 9. Permissions
 
 | Permission | Grants | v1 |
 |---|---|---|
 | `css` | inject a stylesheet into the plugin's own service | yes |
 | `notifications` | receive the service's notification events | yes |
 | `filters` | contribute host rules | yes |
-| `tools` | declare a `panel.json` and its primitives | bundle-only |
+| `tools` | declare a `panel.json` | bundle-only |
 | `read-storage` | read per-service size reports | bundle-only |
-| `trim-cache` | request cache trims through `trimCache` | bundle-only |
+| `trim-cache` | request cache trims | bundle-only |
 | `storage` | own a profile directory | bundle-only |
-| `inject-js` | run JavaScript in the page origin | **declared only, not offered** — see below |
+| `inject-js` | run JavaScript in the page origin | **declared, never granted** |
 | `process` | start a helper executable | integration only, phase 7 |
 
-**`inject-js` is not available in v1.** Page-context JavaScript has access to the authenticated session of that service, so a "plugin" with it is a credential-stealer by construction. It stays in the schema for planning, unimplemented, and the loader refuses to load any plugin that requires an unimplemented permission. The built-in notification shim and title capture are host code, not a plugin permission.
+`inject-js` is not available in v1: page JS can read the authenticated session. The built-in notification shim and theme script are host code, not a plugin permission.
 
-## 7. Security rules
+## 10. Validation, lifecycle and failure
 
-- Data plugins cannot execute code. There is no reflection, no script host, no expression evaluator.
-- `skin.css` and cosmetic CSS are sanitised: `@import` removed, remote `url()` removed, only local `assets` may be referenced. This prevents a theme/plugin from beaconing to a third party.
-- Integrations (phase 7) run as separate processes, launched with an explicit manifest-declared command, JSON-RPC over a named pipe, per-call timeout, killed on exit or unresponsiveness. They never get a webview handle or the settings store.
+1. Parse JSON; a schema error disables the plugin, logs the reason and flags it in the manager.
+2. `apiVersion` above the host's is disabled with "requires a newer Chirpdesk".
+3. Unknown fields are ignored (forward compatibility).
+4. Bad required field, bad colour, bad regex, `..` in an asset path, duplicate variant id, or a `defaults` entry pointing at a missing variant disables the plugin.
+5. A disabled plugin never deletes data, never blocks startup and never takes other plugins with it.
+6. Folders are watched; changes trigger a debounced (500 ms) rescan. Enable/disable is instant.
+7. Disabling a service definition leaves existing instances and profiles on disk; they report a missing definition until it is re-enabled.
+
+## 11. Security rules
+
+- Data plugins cannot execute code. No reflection, no script host, no expression evaluator.
+- `skin.css` and cosmetic CSS are sanitised: `@import` removed, remote `url()` removed, only local `assets` may be referenced.
+- Integrations (phase 7) run as separate processes, JSON-RPC over a named pipe, with a timeout/`kill`, and never get a webview handle or the settings store.
 - A plugin id may not shadow a reserved id (`core`, `settings`, `command-bar`).
 
-## 8. Versioning
+## 12. Versioning
 
 - `apiVersion` is an integer, bumped only for breaking changes.
-- Within an `apiVersion`, changes are additive; unknown fields are ignored.
-- `schemas/*.schema.json` is the source of truth and is what the loader validates against; the docs follow the schema, not the other way round.
+- Within an `apiVersion`, changes are additive and unknown fields are ignored.
+- In v1 the C# validators (`DefinitionValidator` and the loader that follows) are authoritative. JSON Schema files under `schemas/` ship together with the loader; the docs follow the validator until then.
 
-## 9. Plugin repositories
+## 13. Plugin repositories
 
-A repo is a static HTTPS directory. Ours is `registry/` in this repository; a community repo is the same two files anywhere on the web.
+A repo is a static HTTPS directory with `index.json` and `index.json.sig` (ECDSA P-256 over the exact bytes). Each entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`.
 
-```
-registry/
-├─ index.json          # schema:1, name, generated, keyFingerprint, plugins[]
-└─ index.json.sig      # ECDSA P-256 signature over the exact bytes of index.json
-```
+Install order, aborting on any failure: fetch index + signature → verify against the pinned repo key → skip incompatible entries → download archive, verify `sha256` **from the signed index** and `size` → unpack rejecting absolute paths, `..`, reparse points and zip-slip → validate `plugin.json` + payload → move into `%APPDATA%\Chirpdesk\plugins\<id>\` → enable only if the user asked.
 
-Each `plugins[]` entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`. The archive at `url` is a zip of one plugin folder.
+TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. Limits: ≤ 5 MB / ≤ 200 files, no executables. Installed plugins work offline; the index is cached for 24 h. Two repos offering one id require an explicit choice per id.
 
-**Install, in order, aborting on any failure:**
+## 14. Commands
 
-1. `GET index.json` + `.sig` over HTTPS.
-2. Verify signature against the repo's pinned key.
-3. Skip entries whose `apiVersion` or `minAppVersion` do not fit the running build.
-4. Download archive → verify `sha256` from the **signed** index → verify `size`.
-5. Unpack to temp: reject absolute paths, `..`, reparse points and zip-slip entries; validate `plugin.json` + payload against schema; then move into `%APPDATA%\Chirpdesk\plugins\<id>\`.
-6. Enable only if the user asked; otherwise installed-but-disabled.
-
-**Pinning.** First fetch pins the key fingerprint (TOFU). If the fingerprint changes later, the repo is blocked and shown in the manager with both fingerprints; only an explicit re-trust unblocks it. This is deliberate friction: it is the only defence against a repo being taken over.
-
-**Limits.** ≤ 5 MB and ≤ 200 files per data plugin; no executables; no absolute paths or `..`; `integration` kind is not installable in v1 and, when it arrives, needs a second consent screen listing the executable and commands.
-
-**Offline.** Index cached for 24 h; installed plugins always work offline; sync is on demand by default and can be enabled per repo.
-
-**Conflicts.** Two repos offering the same `id`: the manager shows both sources and requires a choice; the choice is recorded per id, not globally.
-
-## 10. Commands
-
-`> plugins` opens the manager (list, enable/disable, reveal folder, reasons for disabled) · `> plugin: disable <id>` · `> theme <family>` · `> theme <family> <variant|auto>` · `> add any site` · `> reload plugins` · `> repo add <url>` · `> repo list` · `> repo remove <name>` · `> repo sync`.
+`> plugins` (manager: list, enable/disable, reveal folder, reasons) · `> plugin: disable <id>` · `> theme <family>` · `> theme <family> <variant|auto>` · `> add service <definition>` · `> reload plugins` · `> repo add <url>` · `> repo list` · `> repo remove <name>` · `> repo sync`.
