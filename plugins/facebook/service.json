@@ -1,6 +1,4 @@
 {
-  "id": "facebook",
-  "name": "Facebook",
   "url": "https://www.facebook.com/",
   "pageDarkMode": "auto",
   "unreadRegex": "\\((\\d+)\\)",

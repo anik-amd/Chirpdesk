@@ -1,0 +1,10 @@
+{
+  "id": "telegram",
+  "kind": "service",
+  "name": "Telegram",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Telegram Web.",
+  "permissions": []
+}

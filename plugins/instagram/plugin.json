@@ -1,0 +1,10 @@
+{
+  "id": "instagram",
+  "kind": "service",
+  "name": "Instagram",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Instagram Direct.",
+  "permissions": []
+}

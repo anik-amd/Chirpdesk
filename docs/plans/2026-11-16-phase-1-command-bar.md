@@ -1,6 +1,6 @@
 # Phase 1 — Command Bar, definitions, multi-service
 
-**Status:** Tasks 1–4 complete (2026-11-17): definitions, settings v2, shipped definitions, registry with warm/cold activation, MRU cycling and per-profile environments. **Decision update (ADR 0011):** the built-in add-site flow is removed; a site enters only as a `service` definition plugin, so the definition plugin loader (Task 4b) is the on-ramp for any new site. Next: Task 5 (Command Bar cycle mode), then Task 4b before any UI that creates instances.
+**Status:** Tasks 1–4 and 4b complete (2026-11-17): definitions, settings v2, registry, warm/cold activation, MRU cycling, per-profile environments, and the service plugin loader. Bundled definitions now live as `plugins/<id>/` folders copied beside the exe; user plugins load from `%APPDATA%\Chirpdesk\plugins` and shadow bundled ids. Next: Task 5 (Command Bar cycle mode).
 
 Continues `docs/plans/2026-11-16-phase-0-spine.md`. Do not start until phase 0's soak, reboot row and toast-click row are ticked: this phase multiplies every one of those behaviours by the number of services.
 
@@ -86,7 +86,9 @@ Cold instances have no runtime and no profile lock; they appear in search and st
 
 ## Task 4b: Definition plugin loader
 
-**Why now:** ADR 0011 removes the URL add flow. Installing a `service` plugin is the only way to introduce a site, so this loader is what makes the app extensible instead of fixed to the four embedded definitions.
+**Status:** complete (2026-11-17). Bundled definitions moved to `plugins/<id>/`; `PluginLoader` scans bundled then user roots, fills `id`/`name` from the manifest, validates permissions (refusing `inject-js`, `process`, and bundled-only permissions for user plugins), and shadows by id.
+
+**Why now:** ADR 0011 removes the URL add flow. Installing a `service` plugin is the only way to introduce a site, so this loader is what makes the app extensible instead of fixed to the embedded definitions.
 
 **Files:**
 - Create: `src/Chirpdesk.Core/Plugins/PluginManifest.cs`, `PluginLoader.cs`
@@ -167,7 +169,7 @@ Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible
 
 | Check | Asserts |
 |---|---|
-| definitions | every shipped definition validates; a deliberately malformed one in a temp folder is skipped, not fatal |
+| definitions | every bundled `plugins/<id>` pair validates; a deliberately malformed folder in a temp root is skipped, not fatal; a user plugin shadows the bundled id |
 | catalog | instance overrides resolve; definition fallback resolves; unknown id is a clear failure |
 | migration | v1 fixture migrates to v2 without inventing or losing an instance |
 | registry | two warm services park/activate without disposing; shared profile reuses one environment; MRU order after three switches |

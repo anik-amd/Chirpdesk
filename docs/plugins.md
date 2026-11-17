@@ -4,7 +4,7 @@ Every **distributable content pack** is a plugin: a folder containing `plugin.js
 
 This document is the authoring contract for humans and AI agents. It describes v1, which is **data only**: no plugin executes code in the app process.
 
-> **Implementation status (2026-11-17).** The five bundled definitions are still compiled into the app as embedded JSON and there is no plugin folder loader yet. The JSON shape below is the contract the loader will consume, and `DefinitionValidator` is the source of truth for service definitions today. Write to this contract; a plugin that validates today will load unchanged when the loader lands.
+> **Implementation status (2026-11-17).** Service plugins load from folders: the five bundled definitions live in the repo's `plugins/` directory and are copied beside the executable; user plugins live in `%APPDATA%\Chirpdesk\plugins\<id>\`. Startup scanning, manifest validation, fail-open skipping and user-over-bundled shadowing are implemented. Not built yet: the plugin manager, repo install/update, and the `FileSystemWatcher` rescan. `PluginLoader` and `DefinitionValidator` are the source of truth.
 
 ## 1. Model: plugin vs instance
 
@@ -75,7 +75,7 @@ Every kind has one.
 
 | Field | Type | Required | Rules |
 |---|---|---|---|
-| `id` | string | yes | `^[a-z0-9][a-z0-9-]{0,31}$`; unique; immutable across versions; equals `service.json.id` |
+| `id` | string | yes | `^[a-z0-9][a-z0-9-]{0,31}$`; unique; immutable across versions; the definition id must match |
 | `kind` | enum | yes | `service` \| `theme` \| `filter` \| `tool` \| `integration` |
 | `name` | string | yes | display name, 1–40 chars |
 | `version` | semver | yes | the plugin's own version, e.g. `1.0.0` |
@@ -83,7 +83,7 @@ Every kind has one.
 | `author` | string | no | shown in the manager |
 | `homepage` | string | no | absolute `https` |
 | `description` | string | no | one line, ≤ 160 chars |
-| `permissions` | string[] | yes | see §9; `[]` is normal for a service |
+| `permissions` | string[] | no | empty when omitted; see §9 |
 | `assets` | string[] | no | relative file names only, no `..` |
 
 ```json
@@ -101,12 +101,10 @@ Every kind has one.
 
 ## 5. `service.json` — the site definition
 
-This is the file to write when adding a site. Field names are camelCase; JSON comments and trailing commas are tolerated by the loader, but ship plain JSON.
+This is the file to write when adding a site. Field names are camelCase; JSON comments and trailing commas are tolerated by the loader, but ship plain JSON. The manifest is canonical: `id` and `name` may be omitted here and are filled from `plugin.json`; if present, `id` must match and `name` wins.
 
 ```json
 {
-  "id": "example-chat",
-  "name": "Example Chat",
   "url": "https://chat.example.com/",
   "icon": "icon.svg",
   "unreadRegex": "\\((\\d+)\\)",
@@ -119,8 +117,8 @@ This is the file to write when adding a site. Field names are camelCase; JSON co
 
 | Field | Required | Rules | Applied today |
 |---|---|---|---|
-| `id` | yes | `^[a-z0-9][a-z0-9-]{0,31}$`; must equal the manifest id | yes |
-| `name` | yes | non-empty display name | yes |
+| `id` | no | if present, must equal the manifest id; otherwise the manifest id is used | yes |
+| `name` | no | if present it wins; otherwise the manifest name is used | yes |
 | `url` | yes | absolute `https`, no credentials (`user:pass@`) | yes |
 | `icon` | no | bare file name; no `/`, `\` or `..` | validated, not rendered yet |
 | `unreadRegex` | no | valid .NET regex; first capture group is the count; default `\((\d+)\)` | yes |
@@ -167,7 +165,7 @@ Omit it ⇒ `native`. The runtime also logs a capability probe (`permission=… 
 }
 ```
 
-- `urlTemplate` must be absolute `https` and contain exactly the `{tag}` placeholder.
+- `urlTemplate` must be absolute `https` and contain the `{tag}` placeholder.
 - `tagPattern`, when present, must be a valid regex; a notification tag that does not match opens the site without routing.
 - The host substitutes only the tag, never arbitrary notification text. This is what stops a hostile page from steering the resulting URL.
 
@@ -190,8 +188,6 @@ Omit it ⇒ `native`. The runtime also logs a capability probe (`permission=… 
 
 ```json
 {
-  "id": "example-chat",
-  "name": "Example Chat",
   "url": "https://chat.example.com/",
   "unreadRegex": "\\((\\d+)\\)",
   "notificationMode": "native",
@@ -205,14 +201,14 @@ That is a complete site plugin. No code, no assets required.
 
 ### 5.5 Authoring checklist — for humans and AI agents
 
-1. **Pick an id** matching `^[a-z0-9][a-z0-9-]{0,31}$`. Use it unchanged in `plugin.json` and `service.json`.
+1. **Pick an id** matching `^[a-z0-9][a-z0-9-]{0,31}$` and put it in `plugin.json`. If `service.json` also names an id, it must be identical; otherwise omit it.
 2. **URL**: absolute `https`, no credentials. No `http`, `file:`, `javascript:` or relative paths.
 3. **Unread regex**: find the pattern the site puts in the document title, e.g. `(3) Telegram`. Default `\((\d+)\)` is correct for most sites; write a different one only with evidence, and keep the count in the first group.
 4. **Notification mode**: `native` unless you know the site notifies from a service worker (`shim`) or you cannot observe page notifications (`title-only`).
 5. **Dark mode**: `off` if the site has its own dark theme (test it: set Windows to dark and look). Otherwise `auto`.
 6. **Assets**: bare file names only. Do not reference `../`, a drive letter or a URL.
 7. **Validate the JSON** (no comments, no trailing commas is safest) and check every field against §5.
-8. **Expect fail-open**: an invalid plugin is skipped and logged (`definition skipped: …`), the app starts, and existing instances keep their profiles.
+8. **Expect fail-open**: an invalid plugin is skipped and logged (`plugin skipped: …`), the app starts, and existing instances keep their profiles.
 
 **Never** in a plugin: executable code, page-context JavaScript, filesystem paths, host-action names you did not find in §8, or changes to the auth/WebSocket allowlist. There is no permission that grants any of these in v1.
 
@@ -331,13 +327,15 @@ Plugin management is built-in shell UI, never a tool action.
 
 ## 10. Validation, lifecycle and failure
 
-1. Parse JSON; a schema error disables the plugin, logs the reason and flags it in the manager.
-2. `apiVersion` above the host's is disabled with "requires a newer Chirpdesk".
-3. Unknown fields are ignored (forward compatibility).
-4. Bad required field, bad colour, bad regex, `..` in an asset path, duplicate variant id, or a `defaults` entry pointing at a missing variant disables the plugin.
-5. A disabled plugin never deletes data, never blocks startup and never takes other plugins with it.
-6. Folders are watched; changes trigger a debounced (500 ms) rescan. Enable/disable is instant.
-7. Disabling a service definition leaves existing instances and profiles on disk; they report a missing definition until it is re-enabled.
+1. At startup, scan `<install>\plugins\` then `%APPDATA%\Chirpdesk\plugins\`. A missing folder is fine.
+2. Parse `plugin.json`; a schema error disables that plugin, logs the reason and (with the manager) flags it.
+3. `apiVersion` above the host's is disabled with "requires a newer Chirpdesk".
+4. Unknown fields are ignored (forward compatibility). Unknown kinds and unknown permissions are errors; known non-service kinds are ignored by the service loader.
+5. A user plugin shadows a bundled plugin with the same id. Two plugins with one id in the same tier keep the first and report the second.
+6. A bad field, bad regex, `..` in an asset path, a missing `service.json` or a definition/manifest id mismatch disables only that plugin.
+7. A disabled plugin never deletes data, never blocks startup and never takes other plugins with it.
+8. Disabling a service definition leaves existing instances and profiles on disk; they report a missing definition until it is re-enabled.
+9. A `FileSystemWatcher` rescan (500 ms debounce) and per-plugin enable/disable arrive with the plugin manager; today changes are picked up at the next start.
 
 ## 11. Security rules
 
@@ -350,7 +348,7 @@ Plugin management is built-in shell UI, never a tool action.
 
 - `apiVersion` is an integer, bumped only for breaking changes.
 - Within an `apiVersion`, changes are additive and unknown fields are ignored.
-- In v1 the C# validators (`DefinitionValidator` and the loader that follows) are authoritative. JSON Schema files under `schemas/` ship together with the loader; the docs follow the validator until then.
+- In v1 the C# validators (`PluginLoader`, `DefinitionValidator`) are authoritative. JSON Schema files under `schemas/` ship with repo install (phase 5); until then the docs follow the validator.
 
 ## 13. Plugin repositories
 

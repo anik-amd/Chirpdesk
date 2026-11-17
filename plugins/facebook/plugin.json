@@ -1,0 +1,10 @@
+{
+  "id": "facebook",
+  "kind": "service",
+  "name": "Facebook",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Facebook web client.",
+  "permissions": []
+}

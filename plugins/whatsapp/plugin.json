@@ -1,0 +1,10 @@
+{
+  "id": "whatsapp",
+  "kind": "service",
+  "name": "WhatsApp",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "WhatsApp Web.",
+  "permissions": []
+}

@@ -1,6 +1,4 @@
 {
-  "id": "whatsapp",
-  "name": "WhatsApp",
   "url": "https://web.whatsapp.com/",
   "notificationMode": "native",
   "pageDarkMode": "off",

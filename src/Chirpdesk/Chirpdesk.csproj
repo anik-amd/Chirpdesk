@@ -5,8 +5,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Shipped definitions travel inside the exe: a portable copy cannot lose them. -->
-    <EmbeddedResource Include="Definitions\*.json" />
+    <!-- Bundled plugins travel beside the exe; the plugin loader scans this folder at boot. -->
+    <None Include="..\..\plugins\**\*"
+          Link="plugins\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

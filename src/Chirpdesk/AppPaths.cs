@@ -16,6 +16,12 @@ public static class AppPaths
 
     public static string LogsRoot => Path.Combine(LocalRoot, "logs");
 
+    /// <summary>Bundled plugins that travel beside the executable. Trusted by install location.</summary>
+    public static string BundledPluginsDirectory { get; } = Path.Combine(AppContext.BaseDirectory, "plugins");
+
+    /// <summary>User-installed plugins. Roaming, because they are content, not machine state.</summary>
+    public static string UserPluginsDirectory { get; } = Path.Combine(DataRoot, "plugins");
+
     /// <summary>Written by <c>--selftest</c>; the exit code is still the verdict, this is the detail.</summary>
     public static string SelfTestReport => Path.Combine(LogsRoot, "selftest.log");
 

@@ -155,7 +155,7 @@ The v1 shell ships the loader, Command Bar, webview host, notification pipeline 
 
 **Cost accepted**
 
-A public manifest schema is an API we must keep stable; every field is a compatibility promise. Mitigation: `apiVersion` is validated, unknown fields are ignored, and the v1 schema is documented in `docs/plugins.md` with a JSON Schema file the loader enforces.
+A public manifest schema is an API we must keep stable; every field is a compatibility promise. Mitigation: `apiVersion` is validated, unknown fields are ignored, and the v1 schema is documented in `docs/plugins.md`. A JSON Schema file lands with repo installs in phase 5; until then `PluginLoader` is the validator.
 
 ## 4.2 Plugin repositories
 

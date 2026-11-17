@@ -20,6 +20,29 @@ public static class DefinitionLoader
 
     public static ServiceDefinition? Parse(string json, out string? error)
     {
+        var definition = Deserialize(json, out error);
+        if (definition is null)
+        {
+            return null;
+        }
+
+        DefinitionValidator.Normalize(definition);
+        var errors = DefinitionValidator.Validate(definition);
+        if (errors.Count > 0)
+        {
+            error = string.Join("; ", errors);
+            return null;
+        }
+
+        return definition;
+    }
+
+    /// <summary>
+    /// Reads the JSON without normalising or validating it, so a plugin can fill `id` and
+    /// `name` from its manifest first. Never throws.
+    /// </summary>
+    internal static ServiceDefinition? Deserialize(string json, out string? error)
+    {
         error = null;
 
         ServiceDefinition? definition;
@@ -36,15 +59,6 @@ public static class DefinitionLoader
         if (definition is null)
         {
             error = "empty definition";
-            return null;
-        }
-
-        DefinitionValidator.Normalize(definition);
-        var errors = DefinitionValidator.Validate(definition);
-        if (errors.Count > 0)
-        {
-            error = string.Join("; ", errors);
-            return null;
         }
 
         return definition;

@@ -1,6 +1,4 @@
 {
-  "id": "telegram",
-  "name": "Telegram",
   "url": "https://web.telegram.org/k/",
   "pageDarkMode": "off",
   "unreadRegex": "\\((\\d+)\\)",

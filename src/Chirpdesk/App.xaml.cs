@@ -45,7 +45,7 @@ public partial class App : Application
         var options = StartupOptions.Parse(e.Args);
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
         _registry = new ServiceRegistry(_log);
-        _catalog = ShippedDefinitions.Load(_log);
+        _catalog = PluginCatalog.Load(_log);
 
         // Windows starts this process to answer a toast click that has left the screen.
         // It is not the app: no tray, no webviews, one call, then exit.

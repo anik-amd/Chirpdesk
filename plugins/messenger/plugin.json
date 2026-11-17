@@ -1,0 +1,10 @@
+{
+  "id": "messenger",
+  "kind": "service",
+  "name": "Messenger",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Messenger web client.",
+  "permissions": []
+}

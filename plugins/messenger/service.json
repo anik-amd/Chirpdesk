@@ -1,7 +1,5 @@
 {
-  "id": "instagram",
-  "name": "Instagram",
-  "url": "https://www.instagram.com/direct/inbox/",
+  "url": "https://www.messenger.com/",
   "pageDarkMode": "auto",
   "unreadRegex": "\\((\\d+)\\)",
   "apiVersion": 1,
