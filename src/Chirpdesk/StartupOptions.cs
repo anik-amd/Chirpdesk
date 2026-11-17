@@ -13,12 +13,10 @@ internal sealed record StartupOptions(
     TimeSpan? QuitAfter,
     bool Hidden,
     bool NotifyTest,
-    string? AddSite,
     bool WarmAll)
 {
     private const string SoakPrefix = "--soak-seconds=";
     private const string QuitPrefix = "--quit-after=";
-    private const string AddSitePrefix = "--add-site=";
     private const string OpenPrefix = "--open";
 
     public static StartupOptions Parse(string[] args)
@@ -32,7 +30,6 @@ internal sealed record StartupOptions(
         var soak = TimeSpan.FromSeconds(60);
         TimeSpan? quitAfter = null;
         string? open = null;
-        string? addSite = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -50,19 +47,6 @@ internal sealed record StartupOptions(
                 continue;
             }
 
-            if (arg.StartsWith(AddSitePrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                addSite = arg[AddSitePrefix.Length..].Trim();
-                continue;
-            }
-
-            // Also accept "--add-site <spec>", which is how PowerShell passes a quoted spec.
-            if (arg.Equals("--add-site", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-            {
-                addSite = args[++i].Trim();
-                continue;
-            }
-
             // Bare --open means "the first configured service"; --open=whatsapp names one.
             if (arg.Equals(OpenPrefix, StringComparison.OrdinalIgnoreCase))
             {
@@ -74,7 +58,7 @@ internal sealed record StartupOptions(
             }
         }
 
-        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, addSite, warmAll);
+        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, warmAll);
     }
 
     /// <summary>Any timeout is clamped to something a human would accept (10 s to 1 h).</summary>

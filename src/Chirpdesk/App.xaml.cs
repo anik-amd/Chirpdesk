@@ -108,11 +108,7 @@ public partial class App : Application
 
         _log.Info("started hidden");
 
-        if (options.AddSite is not null)
-        {
-            _ = AddSiteAsync(options.AddSite, show: !options.Hidden);
-        }
-        else if (options.WarmAll)
+        if (options.WarmAll)
         {
             _ = WarmAllAsync(show: !options.Hidden);
         }
@@ -309,98 +305,6 @@ public partial class App : Application
             _log?.Error($"could not activate '{instanceId}'", ex);
             return false;
         }
-    }
-
-    /// <summary>
-    /// The built-in add-any-site flow, command-line edition until the settings UI lands:
-    /// <c>--add-site "My Chat|https://chat.example.com/"</c>. The instance it creates is a
-    /// custom site (no definition), which is exactly what the UI will write in phase 2.
-    /// </summary>
-    private async Task AddSiteAsync(string spec, bool show)
-    {
-        var separator = spec.IndexOf('|', StringComparison.Ordinal);
-        if (separator <= 0 || separator == spec.Length - 1)
-        {
-            _log?.Warn("--add-site needs Name|https://url");
-            return;
-        }
-
-        var name = spec[..separator].Trim();
-        var rawUrl = spec[(separator + 1)..].Trim();
-
-        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            _log?.Warn("--add-site needs an absolute https url");
-            return;
-        }
-
-        try
-        {
-            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
-            var settings = store.Load();
-
-            var id = MakeInstanceId(name, settings);
-            var instance = new ServiceInstance
-            {
-                InstanceId = id,
-                Name = name,
-                Url = uri.ToString(),
-                WarmAtBoot = true,
-
-                // A site added by URL is assumed to have no built-in dark theme; a shipped
-                // definition says otherwise and wins once it exists.
-                PageDarkMode = "auto",
-            };
-
-            settings.Services.Add(instance);
-            store.Save(settings);
-            _log?.Info($"added site '{id}'");
-
-            await OpenInstanceAsync(instance, show, probe: false);
-        }
-        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
-        {
-            _log?.Error("could not add the site", ex);
-        }
-    }
-
-    /// <summary>Stable, path-safe id from a display name; collisions get a numeric suffix.</summary>
-    private static string MakeInstanceId(string name, AppSettings settings)
-    {
-        var slug = new string(name.ToLowerInvariant()
-            .Select(c => char.IsLetterOrDigit(c) && c < 128 ? c : '-')
-            .ToArray());
-
-        while (slug.Contains("--", StringComparison.Ordinal))
-        {
-            slug = slug.Replace("--", "-", StringComparison.Ordinal);
-        }
-
-        slug = slug.Trim('-');
-
-        if (slug.Length == 0)
-        {
-            slug = "site";
-        }
-
-        if (!char.IsLetterOrDigit(slug[0]))
-        {
-            slug = "site-" + slug;
-        }
-
-        if (slug.Length > 32)
-        {
-            slug = slug[..32].TrimEnd('-');
-        }
-
-        var unique = slug;
-        var suffix = 2;
-        while (settings.Services.Exists(s => s.InstanceId == unique))
-        {
-            unique = $"{slug}-{suffix++}";
-        }
-
-        return unique;
     }
 
     private static ServiceInstance? ResolveInstance(AppSettings settings, string requestedId, SettingsStore store)

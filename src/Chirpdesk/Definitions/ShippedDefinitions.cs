@@ -7,7 +7,8 @@ namespace Chirpdesk.Definitions;
 /// <summary>
 /// Shipped definitions live as embedded JSON so a portable copy cannot lose them, and are
 /// validated through the same path a plugin will use later. Invalid ones are skipped and
-/// logged; having no definitions still leaves the app usable with custom sites.
+/// logged. Bundled and installed definitions are the only way to introduce a site (ADR 0011);
+/// existing instances with an inline URL still resolve if a definition disappears.
 /// </summary>
 internal static class ShippedDefinitions
 {

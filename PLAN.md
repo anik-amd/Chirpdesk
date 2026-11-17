@@ -40,7 +40,7 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | R4 | Notifications = native Windows toasts, no backlog storm at login | `NotificationReceived` → toast, dedupe, warm-up suppression, capability probe per service |
 | R5 | **One** command surface for everything; no sidebar, tab strip or menu | Unified Command Bar, zero permanent chrome |
 | R6 | `Ctrl+Tab` cycles open services; `Ctrl+P` opens the same bar for search/commands | Single overlay component, two entry modes, one global summon hotkey |
-| R7 | Add **any** chat site by URL | Built-in add flow creates a service **instance**; curated definitions are optional, never required |
+| R7 | Add a **chat site by installing its definition plugin** | A `service` plugin is the only on-ramp; every site has a curated definition (ADR 0011) |
 | R8 | Isolated session per service (multiple accounts) | One `WebView2` profile per service **instance** |
 | R9 | Theme system: popular families, each with dark **and** light variants built in, live switch | Theme plugins with `variants[]`, token pipeline, instant `DynamicResource` swap |
 | R10 | Small on disk and RAM | WPF + WebView2, framework-dependent, cache trimming |
@@ -48,7 +48,7 @@ Design benchmark: **Limusic** (`limusic.app`) — a Tauri/Rust/Svelte desktop cl
 | R12 | **See and reclaim disk** used by these chat apps | Per-profile size breakdown, safe cleanup, orphan scan |
 | R13 | Shipped service **definitions**, themes, filter packs and tool panels are **plugins** with one manifest | Data-only in v1; user service instances are settings, not plugins |
 | R14 | Ship a **plugin directory** in the repo; users may add **their own plugin repos** | Signed indexes, per-repo trust consent, data-only installs |
-| R15 | Shell first, catalogue later | Core ships with: loader, Command Bar, webview host, notification pipeline, storage primitives, any-site add flow. Catalogue content arrives as plugins |
+| R15 | Shell first, catalogue later | Core ships with: loader, Command Bar, webview host, notification pipeline, storage primitives. Catalogue content arrives as plugins |
 
 ## 2.1 Non-functional targets and constraints
 
@@ -105,7 +105,7 @@ Every **distributable content pack** is a plugin: a folder with a `plugin.json` 
 - **Definition** = a plugin (shipped or installed from a repo): url, icon, unread regex, skin CSS, filter pack ref, accent.
 - **Instance** = a row in `settings.json`: `definitionId` + optional overrides, one profile directory, one warm/cold state.
 
-Adding `https://web.telegram.org/` is therefore a **built-in flow** that creates an instance. It never writes a plugin folder, never needs a manifest, and never touches the plugin loader. WhatsApp-as-a-plugin means its *definition* can be updated from a repo — not that clicking "add service" installs a plugin.
+Adding `https://web.telegram.org/` means installing Telegram's **definition plugin**, which makes the site available; running it writes a settings instance. There is no URL add flow: a definition is the only object that knows the site's regex, notification mode and `pageDarkMode`, and a user-added URL would be a permanently second-class instance (ADR 0011).
 
 | Kind | Payload | Code? | Trust tier | Ships in v1 |
 |---|---|---|---|---|
@@ -115,7 +115,7 @@ Adding `https://web.telegram.org/` is therefore a **built-in flow** that creates
 | `tool` | declarative `panel.json` (list/table + actions from host primitives) | no | **bundled only in v1** | Disk cleaner |
 | `integration` | optional helper executable + JSON-RPC contract (e.g. TDLib for Telegram) | **yes** | user-installed, explicit consent | phase 7 only |
 
-There is no `template` kind and no `"template": true` flag. Any-site is a built-in form that takes the pasted `https` URL, pre-fills a display name and the default unread regex, and writes an instance — not a plugin. A repo can still distribute a **curated** service definition for a site with a tricky unread regex or cosmetic CSS; that is optional polish, never the only way to add a site.
+There is no `template` kind and no `"template": true` flag, and no built-in "add any site" form: every site is a `service` definition plugin, bundled or installed from a repo, so nothing can be added to the app that is not also inspectable, versioned and replaceable. User instances remain settings rows and are still how two accounts of one site stay separate.
 
 **Layout**
 
@@ -151,7 +151,7 @@ Because a tool can only surface built-in capability, **user-installed tools are 
 
 **Shell first, catalogue later**
 
-The v1 shell ships the loader, Command Bar, webview host, notification pipeline, storage primitives and the built-in any-site flow, with a minimal bundled catalogue (4 service definitions, 2–3 themes, 1 cleaner panel). Everything else — the other theme families, more service definitions, more filter packs — arrives through the plugin repo, not through a rebuild. That ordering is what makes the extensibility pay off: adding Catppuccin Frappé is a data change, not a release.
+The v1 shell ships the loader, Command Bar, webview host, notification pipeline and storage primitives, with a minimal bundled catalogue (4 service definitions, 2–3 themes, 1 cleaner panel). Everything else — the other theme families, more service definitions, more filter packs — arrives through the plugin repo, not through a rebuild. That ordering is what makes the extensibility pay off: adding Catppuccin Frappé is a data change, not a release.
 
 **Cost accepted**
 
@@ -452,7 +452,7 @@ Ordering: unread first, then recency, then fuzzy score. `>` restricts to command
 
 ### 10.2 Commands
 
-`> theme dark` · `> theme light` · `> theme system` · `> theme <family> [variant|auto]` · `> settings` · `> add service` · `> add any site <url>` · `> plugins` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> warm at boot <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
+`> theme dark` · `> theme light` · `> theme system` · `> theme <family> [variant|auto]` · `> settings` · `> add service <definition>` · `> plugins` · `> storage` · `> filters` · `> blocking: off` · `> warm <service>` · `> warm at boot <service>` · `> sleep <service>` · `> mute` · `> dnd 30m|1h|tomorrow` · `> reload` · `> copy url` · `> open in browser` · `> quit`
 
 `> warm at boot <service>` toggles the persisted pin and the Settings switch reads/writes the same field; a dot on the service row marks "pinned warm" while the badge keeps showing live runtime state (`warm` / `asleep` / `cold`).
 
@@ -498,9 +498,9 @@ A **definition** is a `service` plugin: shared, versioned, replaceable. An **ins
   "services": [
     {
       "instanceId": "whatsapp-work",       // ^[a-z0-9-]{1,32}$, unique
-      "definitionId": "whatsapp",          // plugin id, or null for a custom site
+      "definitionId": "whatsapp",          // plugin id; null only on legacy rows from before ADR 0011
       "name": "WhatsApp (work)",           // display name
-      "url": null,                         // override; null = definition url; required when definitionId is null
+      "url": null,                         // override; null = definition url; legacy rows may carry an inline url
       "iconUri": null,                     // captured favicon or custom image
       "accent": null,                      // override of definition accent
       "warmAtBoot": true,
@@ -518,11 +518,11 @@ A **definition** is a `service` plugin: shared, versioned, replaceable. An **ins
 }
 ```
 
-Custom site (the built-in any-site flow) is the same shape with `"definitionId": null` and inline `url`, `name`, `unreadRegex` defaults. An instance of a known definition leaves `url` null so a definition update from a repo takes effect; overriding the URL pins it. No plugin folder is created. Known embedded-browser walls (Google sign-in, some Cloudflare challenges) are detected and replaced with an honest "this site blocks embedded sign-in — open it in your browser" hint plus an `open in browser` action. Cookies cannot be transferred between the browser and the webview, so we do not pretend that signing in elsewhere authenticates the instance.
+A row with `"definitionId": null` and an inline `url` is a **legacy custom instance**: it still resolves fail-open, but nothing creates new ones (ADR 0011). An instance of a known definition leaves `url` null so a definition update from a repo takes effect; overriding the URL pins it. Known embedded-browser walls (Google sign-in, some Cloudflare challenges) are detected and replaced with an honest "this site blocks embedded sign-in — open it in your browser" hint plus an `open in browser` action. Cookies cannot be transferred between the browser and the webview, so we do not pretend that signing in elsewhere authenticates the instance.
 
 **Popups and sign-in.** `NewWindowRequested` is handled explicitly: a popup the page opens for OAuth or `window.open` becomes a visible, transient WebView2 window using the **same profile**, with normal chrome, because the user clicked a button that asked for it. It closes independently and never replaces the service webview. Popups are never silently handed to the system browser; if a site refuses embedded browsers, the honest "this site blocks embedded sign-in — open it in your browser" hint is shown instead of pretending a browser sign-in transfers into the instance.
 
-Add flow: paste URL → validate `https` and reject credentials/`javascript:`/`file:` → load once → capture `FaviconUri` and title → save **cold** → offer "warm at boot". Two accounts of the same site = add twice; the second instance gets a fresh `instanceId` and profile.
+Add flow: install or enable a `service` definition plugin (bundled or from a repo) → the site appears in the catalogue → selecting it writes an instance (`definitionId` = plugin id, fresh profile), saved **cold** → offer "warm at boot". Two accounts of the same site = create a second instance of that definition; the second instance gets a fresh `instanceId` and profile. A site without a definition is not addable; write the plugin (see `docs/plugins.md`) instead. Messenger and Facebook stay **separate definitions** (`messenger.com` and `facebook.com`), and each supports multiple accounts as instances.
 
 **Profile ownership.** `profileId` defaults to `instanceId`. `shareProfileWith` is recorded on the **dependent** instance (`"shareProfileWith": "facebook"`), and the owner sees the pairing in Settings and can revoke it — that revocation is the second side of the opt-in. The target is the owner. Deleting the owner requires unsharing or deleting both — otherwise the remaining instance silently loses its session.
 
@@ -670,11 +670,11 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 |---|---|---|
 | **0 — Spine** | SDK install, project skeleton, hidden host + one-shot visible login path, one service (WhatsApp), toast pipeline + AUMID, notification capability probe, single instance | Log in once, hide, 3 h tray-hidden, inbound message toasts with correct text and icon; toast click shows WhatsApp in the window; window never appears unprompted; Alt+Tab clean while hidden |
 | **1 — Command Bar** | plugin loader + manifest validation (service definitions and themes), definition/instance settings model, multi-service hosting, per-profile environments, Command Bar (cycle + search), global hotkey, show/hide window styles, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type `tel` → `Enter` works as one continuous interaction (typing latches search); cold services appear in search but never in cycle; half-typed text survives switching; two instances of one definition keep separate sessions |
-| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, built-in any-site add flow, per-instance regex, storage scan/trim/orphan primitives, cleaner `tool` panel | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 200 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
+| **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, instance creation from installed definitions, per-instance regex, storage scan/trim/orphan primitives, cleaner `tool` panel | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 200 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
 | **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
 | **4 — Design** | one baseline palette with dark and light ends (ADR 0010), token pipeline, system light/dark following, live preview, contrast validator, high-contrast fallback | Theme switch is instant; every variant passes AA; dark reaches the hosted page only where the definition opts in (`pageDarkMode: auto`), never on a site with its own theme. Colour families and theme plugins are deferred until after v1. |
 | **5 — Plugin ecosystem** | catalogue expansion: 10 theme families, extra service definitions and filter packs; plugin manager UI, repo add/list/remove/sync, signature + hash verification, TOFU pinning, install/update/uninstall, conflict resolution between repos, `> repo` commands | Adding the official repo installs a newer filter pack and a theme without a rebuild; a repo with a changed key is blocked until re-trusted; a corrupt archive is rejected and the app still starts |
-| **6 — Ship** | Inno Setup installer with .NET 8 Desktop + WebView2 runtime checks, portable zip, self-updater with ECDSA verification and downgrade refusal, first-run overlay teaching the global hotkey/`Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine with neither runtime: setup detects both, explains or installs them with consent, then the app runs; add service, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered or older manifest |
+| **6 — Ship** | Inno Setup installer with .NET 8 Desktop + WebView2 runtime checks, portable zip, self-updater with ECDSA verification and downgrade refusal, first-run overlay teaching the global hotkey/`Ctrl+Tab`/`Ctrl+P`, CI release workflow, README docs | Fresh machine with neither runtime: setup detects both, explains or installs them with consent, then the app runs; install a definition plugin, sign in, reboot, receive toast, switch theme, run a cleanup; second release updates itself and refuses a tampered or older manifest |
 | **7 — Optional** | ABP list import (tier 3), out-of-process integration plugin host (TDLib as first integration), live preview during cycle, inline toast reply | only if v1 proves itself in daily use |
 
 Each phase ends with a build you can actually run.
@@ -759,8 +759,8 @@ Decided:
 - License **MIT**; repo stays **private** until v1 works.
 - Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
 - One Command Bar for navigation, commands and theme switching.
-- **Plugin-shaped architecture**: shipped service **definitions**, themes (with dark+light variants), filter packs and bundled tool panels are plugins with one manifest; data-only in v1; code only out-of-process, phase 7. **User-added sites are instances in `settings.json`, not plugins.**
-- **Shell first**: v1 ships the loader, Command Bar, host, notifications, storage primitives and the built-in any-site flow, with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
+- **Plugin-shaped architecture**: shipped service **definitions**, themes (with dark+light variants), filter packs and bundled tool panels are plugins with one manifest; data-only in v1; code only out-of-process, phase 7. **A site exists only as a service plugin; running it is an instance in `settings.json` (ADR 0011).**
+- **Shell first**: v1 ships the loader, Command Bar, host, notifications and storage primitives, with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
 - **Visibility is user-requested**: one window, hidden at boot, shown on tray/hotkey/Command Bar/toast, never shown to fix a lifecycle problem.
 - **Global summon hotkey** `Ctrl+Alt+Space`; tray left-click is the fallback when registration fails.
 - Adblock packs ship as `filter` plugins, maintained in the repo's `plugins/` + `registry/`, installable from the official repo or any user-added repo.
@@ -790,7 +790,8 @@ Every entry is a cost we are knowingly paying. If the revisit trigger fires, the
 | Per-profile `CoreWebView2Environment` | more processes, more RAM, slower first boot | total RAM with 4 warm services exceeds ~1.6 GB on a 12 GB machine → evaluate multi-profile single environment |
 | `NotificationReceived` only covers non-persistent notifications | service-worker `showNotification` needs a shim or degrades to title-only | a core service uses background SW push with content and neither shim nor title fallback satisfies R4 |
 | ECDSA P-256 instead of Ed25519 | slightly larger signatures/keys; not the modern default | .NET ships Ed25519, or a crypto dependency is approved by ADR |
-| User sites are settings instances, not plugins | community cannot ship a "site recipe" as a first-class installable object, only as a service definition plugin | users ask to share a full preconfigured service (regex + CSS + icon) as one installable item |
+| Every site is a definition plugin, and instances are settings rows (ADR 0011) | a site with no plugin cannot be added; a one-off site needs a plugin written first | users need a one-off site often enough that authoring a plugin is the blocker; provide a generator/template or a "make a plugin from this URL" helper |
+| Installing a service plugin does not make an instance | one extra step to run a site; two accounts are still two instances | users expect install = sign in, or the instance step is invisible enough to feel broken |
 | Tool plugins are bundled-only and cannot add capability | the cleaner is data but not user-extensible in v1 | a real third-party tool need appears that the host primitive set can express safely |
 | Fail-open filtering | some ads slip through when a filter file is broken | a service breaks *because* of a filter and fail-open did not prevent it |
 | Cosmetic filtering with CSS selectors | selectors rot when sites redesign | more than one breakage per month per service |

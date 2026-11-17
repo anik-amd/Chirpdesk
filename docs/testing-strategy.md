@@ -42,7 +42,7 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | `NotificationPolicy` | per-service mode (`native`/`shim`/`title-only`) selects the right path, origin not belonging to the service is dropped, boot cutoff drops pre-start notifications |
 | `PluginManifest` | missing required field, bad id pattern, unknown `apiVersion`, unimplemented permission rejected, asset path traversal rejected |
 | `ThemeVariants` | duplicate variant id rejected, `defaults` must reference an existing variant of matching mode, missing token in one variant disables the family, family with no light variant keeps dark under follow-system, all-themes-missing falls back to baseline |
-| `ServiceInstance` | instance id validated and unique, `definitionId: null` yields a custom site with defaults, disabling a definition keeps the instance and profile, `shareProfileWith` refuses a missing owner, two instances sharing a profile resolve to one environment, deleting an owner requires unsharing first, two instances of one definition get distinct profiles |
+| `ServiceInstance` | instance id validated and unique, a legacy `definitionId: null` row with an inline URL still resolves, disabling a definition keeps the instance and profile, `shareProfileWith` refuses a missing owner, two instances sharing a profile resolve to one environment, deleting an owner requires unsharing first, two instances of one definition get distinct profiles |
 | `ToolPanel` | unknown primitive disables only that action, `revealFolder` rejects a path argument, `deleteOrphan` rejects an id from another session, missing permission greys the action, panel still renders when all actions fail |
 | `UpdateManifest` | ECDSA P-256 signature verified against the pinned SPKI key, tampered payload hash rejected, wrong key rejected, malformed manifest rejected, version not newer than running build rejected, no network path taken on failure |
 | `PluginRegistry` | user plugin overrides bundled with same id, duplicate ids across repos require a choice, rescan picks up a new folder, broken plugin disabled not fatal, a user-installed `tool` is refused |
@@ -77,10 +77,11 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 10 | Orphan scan | finds a seeded fake leftover, Recycle Bin restore works |
 | 11 | Change | settings dialogs apply without restart |
 | 12 | Theme variants | `> theme catppuccin` follows dark/light as Windows flips; every variant readable; deleting all theme plugins renders the baseline and says so |
-| 13 | Add any site | `> add` with a real chat URL creates an instance with its own profile, appears in search, and stays cold; two adds of the same site keep separate sessions |
+| 13 | Definition plugin | install a `service` plugin → its site appears, creating an instance gives it its own profile and it stays cold; a second instance of the same definition keeps a separate session; no URL-only add path exists |
 | 14 | Notification capability | each bundled service reports its mode (`native`/`shim`/`title-only`); a background message produces a toast in that mode and the mode is shown in Settings |
 | 15 | Global summon | `Ctrl+Alt+Space` opens the bar in search mode while another app has focus; a deliberately conflicting hotkey shows a Settings warning and the tray still works |
 | 16 | Tool panel | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
+| 17 | Multiple accounts | one definition, two instances: both warm with separate unread counts and toasts, signing one out leaves the other signed in; Messenger and Facebook are separate definitions and open their own sites |
 
 Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbers.
 

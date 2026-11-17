@@ -21,7 +21,7 @@ Page darkening is a **per-site** policy, because the site knows whether it alrea
 
 - a service definition declares `pageDarkMode: off | auto`, and an instance may override it;
 - `off` is the default, and it is what WhatsApp uses — WhatsApp follows the system scheme itself, so the filter would only fight it;
-- `auto` means "darken only if the page still measures light after `prefers-color-scheme`", which is what `--add-site` sets for a site added by URL;
+- `auto` means "darken only if the page still measures light after `prefers-color-scheme`", which is what a definition sets when its site has no dark theme of its own (ADR 0011 removed the URL add flow that used to set it);
 - the app never guesses from the URL alone; the policy is explicit data.
 
 ## Consequences

@@ -1,6 +1,6 @@
 # Phase 1 — Command Bar, definitions, multi-service
 
-**Status:** Tasks 1–3 complete (2026-11-17) and Task 4 started: one WebView2 environment per profile is now cached process-wide, which is the shared-profile requirement the registry will build on. Next in Task 4: the registry itself (warm/cold, active id, park/activate) and wiring `ShowHostFor` to it.
+**Status:** Tasks 1–4 complete (2026-11-17): definitions, settings v2, shipped definitions, registry with warm/cold activation, MRU cycling and per-profile environments. **Decision update (ADR 0011):** the built-in add-site flow is removed; a site enters only as a `service` definition plugin, so the definition plugin loader (Task 4b) is the on-ramp for any new site. Next: Task 5 (Command Bar cycle mode), then Task 4b before any UI that creates instances.
 
 Continues `docs/plans/2026-11-16-phase-0-spine.md`. Do not start until phase 0's soak, reboot row and toast-click row are ticked: this phase multiplies every one of those behaviours by the number of services.
 
@@ -38,7 +38,7 @@ Validation is fail-open: an invalid definition is skipped and logged, never fata
 
 `AppSettings` gains `PluginSources` (local folders only in phase 1) and moves to `CurrentSchemaVersion = 2`.
 
-Migration from v1 is additive: an instance with `definitionId = null` and a `url` stays a custom site; an instance whose `definitionId` matches a known definition inherits that definition's `url`/regex when its own fields are empty. Migration writes only after a successful validation pass, and a v2 file opened by a v1 build still refuses to downgrade (existing behaviour).
+Migration from v1 is additive: an instance with `definitionId = null` and a `url` stays a legacy custom instance; an instance whose `definitionId` matches a known definition inherits that definition's `url`/regex when its own fields are empty. Migration writes only after a successful validation pass, and a v2 file opened by a v1 build still refuses to downgrade (existing behaviour).
 
 **Tests:** v1 file loads and keeps its custom instance; migration does not invent an instance; duplicate ids still rejected; a v2 instance with a definition but no URL is valid and resolves later.
 
@@ -49,19 +49,19 @@ Migration from v1 is additive: an instance with `definitionId = null` and a `url
 ## Task 3: Shipped definitions
 
 **Files:**
-- Create: `src/Chirpdesk/Definitions/whatsapp.json`, `messenger.json`, `telegram.json`, `instagram.json`
-- Create: `src/Chirpdesk/Definitions/DefinitionCatalog.cs`
-- Test: `tests/Chirpdesk.Core.Tests/Definitions/CatalogTests.cs` (with the JSON loaded as embedded resources from the app project via a linked copy, or a Core-side fixture)
+- Create: `src/Chirpdesk/Definitions/whatsapp.json`, `messenger.json`, `telegram.json`, `facebook.json`, `instagram.json`
+- Create: `src/Chirpdesk/Definitions/ShippedDefinitions.cs` (the loader entry point), `src/Chirpdesk.Core/Definitions/ServiceCatalog.cs`
+- Test: `tests/Chirpdesk.Core.Tests/Definitions/ServiceCatalogTests.cs`
 
 Embedded resources, not loose files, so a portable copy cannot lose them. The catalog resolves `instance + definition` into the runtime values the host needs (`url`, `name`, `unreadRegex`, `notificationMode`), with instance values winning.
 
-Only WhatsApp's `notificationMode` is measured (`native`, phase 0). The others ship as `null` meaning "probe at first run and record", which is already what `ServiceRuntime` does.
+Only WhatsApp's `notificationMode` is measured (`native`, phase 0). Omitted mode means `native`; `ServiceRuntime` still logs a capability probe (`permission=… serviceWorker=…`) so an unmeasured site can be recorded without claiming it was verified.
 
 **Tests:** instance overrides definition; definition supplies the URL when the instance has none; unknown definition id yields a clear failure and no crash; a definition with a bad icon still resolves.
 
-Shipped and loaded as four embedded JSON documents (`Definitions/*.json`, embedded so a portable copy cannot lose them). WhatsApp is `native`/`pageDarkMode: off` because phase 0 measured it. Messenger, Telegram and Instagram ship with the default `native` and `auto`: **unmeasured**, and phase 1 must either probe each one or record them as assumed, not claim verification.
+Shipped and loaded as five embedded JSON documents (`Definitions/*.json`, embedded so a portable copy cannot lose them). WhatsApp is `native`/`pageDarkMode: off` because phase 0 measured it. Telegram is `off` because its web client has its own `night` theme. Messenger and Facebook are **separate definitions** even though they share a vendor: `messenger` opens `messenger.com`, `facebook` opens `facebook.com`, and both support multiple accounts by creating two instances of the same definition. Messenger, Facebook and Instagram ship with `auto` dark mode and the default `native` notifications: **unmeasured**, and phase 1 must either probe each one or record them as assumed, not claim verification.
 
-**Commit:** `feat(app): ship WhatsApp, Messenger, Telegram and Instagram definitions`.
+**Commit:** `feat(app): ship WhatsApp, Messenger, Telegram, Facebook and Instagram definitions`.
 
 ---
 
@@ -81,6 +81,25 @@ Cold instances have no runtime and no profile lock; they appear in search and st
 **Tests:** MRU updates on activation; two instances sharing a profile reuse one environment object; removing an instance disposes its runtime exactly once.
 
 **Commit:** `feat(app): registry for warm and cold services`.
+
+---
+
+## Task 4b: Definition plugin loader
+
+**Why now:** ADR 0011 removes the URL add flow. Installing a `service` plugin is the only way to introduce a site, so this loader is what makes the app extensible instead of fixed to the four embedded definitions.
+
+**Files:**
+- Create: `src/Chirpdesk.Core/Plugins/PluginManifest.cs`, `PluginLoader.cs`
+- Modify: `src/Chirpdesk/Definitions/ShippedDefinitions.cs` (or replace it with the loader), `App.xaml.cs`
+- Test: `tests/Chirpdesk.Core.Tests/Plugins/PluginLoaderTests.cs`
+
+Scan `<install>\plugins\` and `%APPDATA%\Chirpdesk\plugins\<id>\`; each folder needs `plugin.json` and, for `kind: service`, `service.json`. Validate the manifest (`id` pattern, `kind`, `version`, `apiVersion` = 1, permissions known), validate the definition through `DefinitionLoader`, and feed the result into `ServiceCatalog`. A user plugin shadows a bundled plugin of the same id; the manager reports it. `FileSystemWatcher` rescan can wait for Task 9 or phase 5 as long as startup scanning is correct.
+
+Every failure is per-plugin and logged: missing payload, invalid JSON, id mismatch between manifest and definition, traversal in `icon`, duplicate ids, `apiVersion` too high. The app still starts with whatever loaded, and existing instances stay resolvable.
+
+**Tests:** a valid service plugin loads with manifest values applied; an invalid manifest is skipped and one error is reported; id mismatch is rejected; an `icon` containing `..` or a separator is rejected; duplicate ids keep the bundled one unless the user plugin shadows it; unknown `kind` is skipped; a missing `service.json` is skipped; `apiVersion: 2` is disabled with a clear reason.
+
+**Commit:** `feat(core): load service definitions from plugin folders`.
 
 ---
 
@@ -106,7 +125,7 @@ Size cap 560 × 420, anchored 12 % from the top, centred (§12 budget). Cycle mo
 
 Order: warm services, then cold services, then commands. Matching: prefix beats substring, case-insensitive, and a definition's aliases match (`wa` → WhatsApp). Typing `tel` must put Telegram first even when a cold service named "Telethon" also exists.
 
-**Tests:** prefix outranks substring; warm outranks cold at equal score; custom site matches by name and host; empty query shows warm services in MRU order; no match shows nothing and `Enter` does nothing.
+**Tests:** prefix outranks substring; warm outranks cold at equal score; a legacy custom instance matches by name and host; empty query shows warm services in MRU order; no match shows nothing and `Enter` does nothing.
 
 **Commit:** `feat(app): command bar search mode and ranking`.
 

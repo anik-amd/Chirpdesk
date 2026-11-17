@@ -3,7 +3,8 @@ namespace Chirpdesk.Core.Settings;
 /// <summary>
 /// One site the user actually runs: one profile, one unread count, one warm/cold state.
 /// A definition (plugin) is shared; an instance is this row. <see cref="DefinitionId"/> being
-/// null means a custom site the user added by URL — the built-in flow, never a plugin.
+/// null means a legacy custom site whose inline URL still resolves; new sites only arrive as
+/// definition plugins (ADR 0011).
 /// </summary>
 public sealed class ServiceInstance
 {

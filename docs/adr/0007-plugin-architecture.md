@@ -1,6 +1,6 @@
 # ADR 0007 — Extensible content is a data plugin; user instances are settings; code only out-of-process
 
-**Status:** accepted (2026-11-16), revised after review
+**Status:** accepted (2026-11-16), revised after review; the built-in add-any-site flow is superseded by ADR 0011
 
 ## Context
 
