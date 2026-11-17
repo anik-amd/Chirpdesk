@@ -1355,8 +1355,8 @@ public partial class App : Application
 
         var wasVisible = _host.IsVisible;
         _registry?.Active?.Activate();
-        UpdateBusyFor(_registry?.Active);
         var foreground = _host.ShowForUser();
+        UpdateBusyFor(_registry?.Active);
         _registry?.Active?.FocusPage();
 
         _log?.Info($"window shown: wasVisible={wasVisible} foreground={foreground} visible={_host.IsVisible}");

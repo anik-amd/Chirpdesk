@@ -50,7 +50,13 @@ internal sealed class ToastService : IToastSink
 
     private ToastNotifier Notifier => _notifier ??= ToastNotificationManager.CreateToastNotifier(Aumid.AppId);
 
-    public void Show(ToastMessage message)
+    public void Show(ToastMessage message) => ShowAndTrack(message);
+
+    /// <summary>
+    /// Shows a toast and returns the live object so a diagnostic can hide exactly that one.
+    /// Normal callers use <see cref="Show"/>; the reference list still owns the lifetime.
+    /// </summary>
+    public ToastNotification? ShowAndTrack(ToastMessage message)
     {
         try
         {
@@ -104,10 +110,35 @@ internal sealed class ToastService : IToastSink
             };
 
             Notifier.Show(toast);
+            return toast;
         }
         catch (Exception ex) when (IsExpected(ex))
         {
             _log.Error("could not show a toast", ex);
+            return null;
+        }
+    }
+
+    /// <summary>Hides a tracked toast and removes it from history; used only by the self-test.</summary>
+    public void Hide(ToastNotification? toast)
+    {
+        if (toast is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Notifier.Hide(toast);
+            ToastNotificationManager.History.Remove(toast.Tag, toast.Group, Aumid.AppId);
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _log.Warn($"could not remove a toast: {ex.Message}");
+        }
+        finally
+        {
+            Forget(toast);
         }
     }
 

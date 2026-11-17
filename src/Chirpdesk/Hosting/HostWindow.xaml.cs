@@ -18,6 +18,7 @@ public partial class HostWindow : Window
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
         StateChanged += (_, _) => UpdateMaximizeGlyph();
+        SizeChanged += (_, _) => UpdateBarLayout();
     }
 
     public nint Handle => new WindowInteropHelper(this).Handle;
@@ -95,11 +96,8 @@ public partial class HostWindow : Window
     {
         BarBackdrop.Source = backdrop;
 
-        var height = ActualHeight > 0 ? ActualHeight : Height;
-        var top = Math.Max(24, height * 0.12);
-        BarHost.Margin = new Thickness(24, top, 24, 0);
-        BarHost.MaxHeight = Math.Max(180, height - top - 24);
         BarLayer.Visibility = System.Windows.Visibility.Visible;
+        UpdateBarLayout();
 
         _barHideToken++;
 
@@ -166,6 +164,19 @@ public partial class HostWindow : Window
         BarLayer.Visibility = System.Windows.Visibility.Collapsed;
         BarBackdrop.Source = null;
         BarHost.RenderTransform = null;
+    }
+
+    private void UpdateBarLayout()
+    {
+        if (!IsCommandBarOpen)
+        {
+            return;
+        }
+
+        var height = ActualHeight > 0 ? ActualHeight : Height;
+        var top = Math.Max(24, height * 0.12);
+        BarHost.Margin = new Thickness(24, top, 24, 0);
+        BarHost.MaxHeight = Math.Max(180, height - top - 24);
     }
 
     public bool IsDark { get; private set; }
@@ -314,7 +325,7 @@ public partial class HostWindow : Window
         {
             BusyTrack.Visibility = Visibility.Visible;
 
-            if (!SystemParameters.ClientAreaAnimation)
+            if (!IsVisible || !SystemParameters.ClientAreaAnimation)
             {
                 BusyShift.X = 0;
                 return;

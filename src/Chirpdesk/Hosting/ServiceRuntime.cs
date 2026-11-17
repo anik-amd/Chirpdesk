@@ -495,6 +495,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _bridge.Attach();
         SetupBlocking(core);
         core.DocumentTitleChanged += OnDocumentTitleChanged;
+        core.NavigationStarting += (_, _) => SetNavigating(true);
         core.NavigationCompleted += (_, args) =>
         {
             SetNavigating(false);

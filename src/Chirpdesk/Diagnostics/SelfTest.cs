@@ -817,7 +817,7 @@ internal sealed class SelfTest
     private void CheckToastShown()
     {
         var toasts = new ToastService(_log);
-        toasts.Show(new ToastMessage("Chirpdesk self-test", "If you can read this, toasts work.", null, "selftest"));
+        var toast = toasts.ShowAndTrack(new ToastMessage("Chirpdesk self-test", "If you can read this, toasts work.", null, "selftest"));
 
         var found = false;
         try
@@ -832,15 +832,7 @@ internal sealed class SelfTest
         // Soft: Windows can have notifications switched off for this app, which is a user setting,
         // not a defect in Chirpdesk.
         Check("toast-shown", found, found ? "appeared in Action Center history" : "not in history (notifications may be off)", soft: true);
-
-        try
-        {
-            ToastNotificationManager.History.Remove("selftest", "selftest", Aumid.AppId);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
-        {
-            _log.Warn($"could not remove the self-test toast: {ex.Message}");
-        }
+        toasts.Hide(toast);
     }
 
     private static ProcessStartInfo? StartInfo()
