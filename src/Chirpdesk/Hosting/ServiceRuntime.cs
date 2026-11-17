@@ -143,6 +143,10 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _view.HorizontalAlignment = HorizontalAlignment.Stretch;
         _view.VerticalAlignment = VerticalAlignment.Stretch;
         _view.Visibility = Visibility.Visible;
+
+        // Resizing from the parked 1×1 needs a layout pass before the renderer repaints,
+        // otherwise the page stays blank until the next manual resize.
+        _host.UpdateLayout();
     }
 
     /// <summary>Warm but not on screen: 1×1 keeps the renderer's composition target alive.</summary>
