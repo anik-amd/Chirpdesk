@@ -8,9 +8,9 @@ public enum BarMode
 }
 
 /// <summary>
-/// The Command Bar's mode and highlight, with no WPF in it. Opening in cycle mode starts on the
-/// next service in MRU order; a printable key latches to search and keeps the highlight, and
-/// only a release while still in cycle mode commits (ADR 0002).
+/// The Command Bar's mode, highlight and query, with no WPF in it. Cycle starts on the next
+/// service in MRU order; Ctrl+P opens search directly; only a Ctrl release while still in
+/// cycle mode commits (ADR 0002).
 /// </summary>
 public sealed class BarState
 {
@@ -33,6 +33,26 @@ public sealed class BarState
         state._highlight = activeId is null ? -1 : state._entries.IndexOf(activeId);
         state.Move(direction);
         return state;
+    }
+
+    /// <summary>Ctrl+P opens directly here; results are filled in as the query changes.</summary>
+    public static BarState ForSearch() => new([]) { Mode = BarMode.Search };
+
+    /// <summary>
+    /// Replaces the visible rows. The highlight follows <paramref name="keepSelected"/> when
+    /// that row survived the filter, otherwise it lands on the first row.
+    /// </summary>
+    public void ShowResults(IReadOnlyList<string> entries, string? keepSelected = null)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        _entries.Clear();
+        _entries.AddRange(entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry))
+            .Distinct(StringComparer.Ordinal));
+
+        var index = keepSelected is null ? -1 : _entries.IndexOf(keepSelected);
+        _highlight = index >= 0 ? index : (_entries.Count > 0 ? 0 : -1);
     }
 
     public BarMode Mode { get; private set; }
@@ -64,18 +84,6 @@ public sealed class BarState
         return true;
     }
 
-    /// <summary>A printable key turns cycle into search with the highlight retained.</summary>
-    public void Latch(string text)
-    {
-        if (Mode != BarMode.Cycle)
-        {
-            return;
-        }
-
-        Mode = BarMode.Search;
-        Append(text);
-    }
-
     public void Append(string text)
     {
         if (Mode == BarMode.Search && !string.IsNullOrEmpty(text))
@@ -93,7 +101,7 @@ public sealed class BarState
     }
 
     /// <summary>
-    /// Ctrl released. Commits only in cycle mode; a latched bar stays open with no switch.
+    /// Ctrl released. Commits only in cycle mode; an open search bar stays open with no switch.
     /// </summary>
     public string? ReleaseControl()
     {

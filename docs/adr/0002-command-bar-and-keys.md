@@ -1,6 +1,6 @@
 # ADR 0002 — One Command Bar, `Ctrl+Tab` cycles and `Ctrl+P` searches
 
-**Status:** accepted (2026-11-16)
+**Status:** accepted (2026-11-16), revised 2026-11-17: the printable-key latch from cycle into search was removed; cycle is a pure switcher and `Ctrl+P` is the only search entry
 
 ## Context
 
@@ -11,8 +11,7 @@ The app has no sidebar, tab strip or menu bar by requirement. Navigation, comman
 One overlay component with two entry modes:
 
 - `Ctrl+Tab` (hold) → **cycle** mode: MRU list of warm services, commit on `Ctrl` release.
-- A printable key while cycling (or `Ctrl+P`) → **latch** into search mode with the highlight retained; releasing `Ctrl` then does not commit.
-- `Ctrl+P` → **search** mode: sticky input, warm services → cold services → commands.
+- `Ctrl+P` → **search** mode: sticky input, warm services → cold services → commands. Typing during cycle does **not** open search; cycle stays a pure switcher.
 - The bar takes focus when it opens, so it receives those keys; reserved accelerators (`Ctrl+W`, `Ctrl+1..9`, `Esc`) keep their meaning.
 
 There is deliberately no "second `Tab`" latch: with `Ctrl` still held, another `Tab` produces the same `Ctrl+Tab` event as the first (and as auto-repeat), so it cannot be distinguished.

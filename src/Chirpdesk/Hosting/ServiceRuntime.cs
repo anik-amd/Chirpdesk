@@ -200,6 +200,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _host.UpdateLayout();
     }
 
+    /// <summary>Reloads the page without touching the profile or the notification pipeline.</summary>
+    public void Reload() => _view.CoreWebView2?.Reload();
+
     public int ReceivedNotifications => _bridge?.Received ?? 0;
 
     public static async Task<ServiceRuntime> CreateAsync(

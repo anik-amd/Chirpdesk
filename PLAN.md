@@ -444,11 +444,11 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, 
 |---|---|---|
 | `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` cancels. Query line hidden. |
 | `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: warm services (unread shown) → cold services (`cold`) → commands. Fuzzy filter as you type. `Enter` runs, `Esc` dismisses. |
-| Cycle, then type | **Search** (latched) | A printable key while cycling is captured by the bar (it takes focus when it opens) and appended to the query; the bar latches into search, so releasing `Ctrl` no longer commits. `Ctrl+P` latches explicitly. There is no "second `Tab`" gesture: with `Ctrl` still down another `Tab` is indistinguishable from the first `Ctrl+Tab` and from key auto-repeat. |
+| `Ctrl+P` while cycling | **Search** | The same open bar switches to search with the highlighted tab still selected (unified palette, one focus model). There is no "second `Tab`" gesture: with `Ctrl` still down another `Tab` is indistinguishable from the first `Ctrl+Tab` and from key auto-repeat. |
 
 Rows are rendered by one template in both modes: icon · name · unread count · state badge (`warm` / `asleep` / `cold`) · current-highlight.
 
-Ordering: unread first, then recency, then fuzzy score. `>` restricts to commands; bare text searches services and commands together.
+Ordering: warm → cold → commands; prefix beats substring, then input order (MRU for warm rows). `>` restricts to commands; bare text searches services and commands together.
 
 ### 10.2 Commands
 
@@ -465,9 +465,8 @@ Ordering: unread first, then recency, then fuzzy score. `>` restricts to command
 | `Ctrl+Alt+Space` (global) | summon the Command Bar in search mode, even when Chirpdesk has no focus |
 | `Ctrl+Tab` (hold) | cycle warm services |
 | `Tab` / `Shift+Tab` while held | move highlight |
-| any printable key while cycling | append to the query and latch into search |
-| `Ctrl+P` while cycling | latch into search with the highlight retained |
-| release `Ctrl` | commit (unless latched) |
+| `Ctrl+P` while cycling | switch the same bar to search, keeping the highlighted tab |
+| release `Ctrl` | commit the cycle |
 | `Ctrl+P` | search mode |
 | `Ctrl+Shift+P` | passed through to the page (site print shortcut) |
 | `Ctrl+1..9` | direct jump, settings order (power path, no UI) |
@@ -669,7 +668,7 @@ Settings writes are atomic (temp + rename); a corrupt file falls back to default
 | Phase | Scope | Done when |
 |---|---|---|
 | **0 — Spine** | SDK install, project skeleton, hidden host + one-shot visible login path, one service (WhatsApp), toast pipeline + AUMID, notification capability probe, single instance | Log in once, hide, 3 h tray-hidden, inbound message toasts with correct text and icon; toast click shows WhatsApp in the window; window never appears unprompted; Alt+Tab clean while hidden |
-| **1 — Command Bar** | plugin loader + manifest validation (service definitions and themes), definition/instance settings model, multi-service hosting, per-profile environments, Command Bar (cycle + search), global hotkey, show/hide window styles, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services; hold → type `tel` → `Enter` works as one continuous interaction (typing latches search); cold services appear in search but never in cycle; half-typed text survives switching; two instances of one definition keep separate sessions |
+| **1 — Command Bar** | plugin loader + manifest validation (service definitions and themes), definition/instance settings model, multi-service hosting, per-profile environments, Command Bar (one palette: cycle + Ctrl+P search), global hotkey, show/hide window styles, cold/warm rows, unread counts, `Ctrl+1..9`, `Ctrl+W` | `Ctrl+Tab` cycles warm services in the palette; `Ctrl+P` lists open tabs first and `type tel → Enter` focuses Telegram; cold services appear in search but never in cycle; half-typed text survives switching; two instances of one definition keep separate sessions |
 | **2 — Lifecycle + storage** | warm/cold at boot, sleep, autostart with 20 s delay, mute + DND, settings window, instance creation from installed definitions, per-instance regex, storage scan/trim/orphan primitives, cleaner `tool` panel | Reboot with 3 warm + 1 cold: notifications within 30 s, no storm, no window; disk stays under 200 MB after a week; orphan scan finds a real leftover folder and restores it from the Recycle Bin |
 | **3 — Blocking** | request matcher, curated tier-1 pack, cosmetic packs, per-service counters, allowlist, enable/disable commands | WhatsApp + Messenger + Telegram log in and send messages with blocking on; counters show blocked requests; `> blocking: off` for one service restores every request |
 | **4 — Design** | one baseline palette with dark and light ends (ADR 0010), token pipeline, system light/dark following, live preview, contrast validator, high-contrast fallback | Theme switch is instant; every variant passes AA; dark reaches the hosted page only where the definition opts in (`pageDarkMode: auto`), never on a site with its own theme. Colour families and theme plugins are deferred until after v1. |

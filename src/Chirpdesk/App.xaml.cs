@@ -40,6 +40,7 @@ public partial class App : Application
     private CommandBarView? _bar;
     private BarState? _barState;
     private ModifierWatcher? _barWatcher;
+    private IReadOnlyList<SearchCandidate> _searchCandidates = Array.Empty<SearchCandidate>();
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
 
@@ -351,6 +352,15 @@ public partial class App : Application
             return;
         }
 
+        // Ctrl+P opens the same bar directly in search mode; Ctrl+Shift+P belongs to the page.
+        if (e.Key == Key.P
+            && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            OpenSearchBar();
+            return;
+        }
+
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
@@ -376,23 +386,28 @@ public partial class App : Application
             return;
         }
 
-        // With Ctrl held, WPF does not raise TextInput for a printable key, but typing a letter
-        // is exactly how cycle latches into search (ADR 0002), and how the query grows before
-        // Ctrl is released.
-        if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 && TryMapText(e.Key, out var typed))
+        if (e.Key == Key.P
+            && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
         {
             e.Handled = true;
 
             if (_barState.Mode == BarMode.Cycle)
             {
-                _barState.Latch(typed);
-            }
-            else
-            {
-                _barState.Append(typed);
+                SwitchToSearch();
             }
 
-            RenderCommandBar();
+            return;
+        }
+
+        // Ctrl+P leaves Ctrl down; support typing the query until it is released. Once released,
+        // TextInput handles the rest.
+        if (_barState.Mode == BarMode.Search
+            && (Keyboard.Modifiers & ModifierKeys.Control) != 0
+            && TryMapText(e.Key, out var typed))
+        {
+            e.Handled = true;
+            _barState.Append(typed);
+            UpdateSearchResults(keepSelected: null);
             return;
         }
 
@@ -412,10 +427,15 @@ public partial class App : Application
 
                 return;
 
+            case Key.Enter when _barState.Mode == BarMode.Search:
+                e.Handled = true;
+                CommitSearchSelection();
+                return;
+
             case Key.Back when _barState.Mode == BarMode.Search:
                 e.Handled = true;
                 _barState.Backspace();
-                RenderCommandBar();
+                UpdateSearchResults(keepSelected: null);
                 return;
         }
     }
@@ -446,23 +466,14 @@ public partial class App : Application
 
     private void OnHostPreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (_barState is null || string.IsNullOrEmpty(e.Text))
+        if (_barState is not { Mode: BarMode.Search } || string.IsNullOrEmpty(e.Text))
         {
             return;
         }
 
         e.Handled = true;
-
-        if (_barState.Mode == BarMode.Cycle)
-        {
-            _barState.Latch(e.Text);
-        }
-        else
-        {
-            _barState.Append(e.Text);
-        }
-
-        RenderCommandBar();
+        _barState.Append(e.Text);
+        UpdateSearchResults(keepSelected: null);
     }
 
     /// <summary>
@@ -522,6 +533,186 @@ public partial class App : Application
         _log?.Info($"command bar opened: {order.Count} warm service(s)");
     }
 
+    private void OpenSearchBar()
+    {
+        if (_host is null || _bar is null || _registry is null || _barState is not null)
+        {
+            return;
+        }
+
+        _barState = BarState.ForSearch();
+        _searchCandidates = BuildSearchCandidates();
+        UpdateSearchResults(keepSelected: null);
+
+        // Same airspace rule as cycle mode: the webview would paint over the bar.
+        _registry.Active?.CollapseForCommandBar();
+        _host.ShowCommandBar();
+        _host.Focus();
+
+        _log?.Info($"command bar opened in search mode: {_searchCandidates.Count} candidate(s)");
+    }
+
+    /// <summary>
+    /// Ctrl+P while cycling keeps the unified bar open and switches it to search, with the
+    /// highlighted tab still highlighted.
+    /// </summary>
+    private void SwitchToSearch()
+    {
+        if (_barState is null || _barState.Mode != BarMode.Cycle)
+        {
+            return;
+        }
+
+        var keep = _barState.Selected;
+        _barWatcher?.Stop();
+
+        _barState = BarState.ForSearch();
+        _searchCandidates = BuildSearchCandidates();
+        UpdateSearchResults(keepSelected: keep);
+
+        _log?.Info("command bar switched to search mode");
+    }
+
+    private IReadOnlyList<SearchCandidate> BuildSearchCandidates()
+    {
+        if (_registry is null)
+        {
+            return Array.Empty<SearchCandidate>();
+        }
+
+        var settings = LoadSearchSettings();
+        var byId = new Dictionary<string, ServiceInstance>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var instance in settings.Services)
+        {
+            byId[instance.InstanceId] = instance;
+        }
+
+        var candidates = new List<SearchCandidate>();
+
+        // Warm rows keep MRU order; cold rows follow settings order.
+        foreach (var id in _registry.Order)
+        {
+            byId.TryGetValue(id, out var instance);
+            var resolved = instance is null ? null : _catalog?.Resolve(instance);
+            var aliases = resolved?.DefinitionId is { } definitionId
+                ? _catalog?.Find(definitionId)?.Aliases
+                : null;
+
+            candidates.Add(new SearchCandidate(
+                id,
+                resolved?.Name ?? _registry.Find(id)?.Name ?? id,
+                SearchKind.Warm,
+                aliases,
+                HostOf(resolved?.Url)));
+        }
+
+        foreach (var instance in settings.Services.OrderBy(service => service.Order))
+        {
+            if (_registry.IsWarm(instance.InstanceId))
+            {
+                continue;
+            }
+
+            var resolved = _catalog?.Resolve(instance);
+            if (resolved is null)
+            {
+                continue;
+            }
+
+            var aliases = resolved.DefinitionId is { } definitionId
+                ? _catalog?.Find(definitionId)?.Aliases
+                : null;
+
+            candidates.Add(new SearchCandidate(
+                instance.InstanceId,
+                resolved.Name,
+                SearchKind.Cold,
+                aliases,
+                HostOf(resolved.Url)));
+        }
+
+        candidates.Add(new SearchCandidate("command:hide", "Hide window", SearchKind.Command, ["hide"]));
+        candidates.Add(new SearchCandidate("command:reload", "Reload active tab", SearchKind.Command, ["reload"]));
+        candidates.Add(new SearchCandidate("command:quit", "Quit Chirpdesk", SearchKind.Command, ["quit"]));
+
+        return candidates;
+    }
+
+    private AppSettings LoadSearchSettings()
+    {
+        try
+        {
+            return new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"search settings unavailable: {ex.Message}");
+            return new AppSettings();
+        }
+    }
+
+    private void UpdateSearchResults(string? keepSelected)
+    {
+        if (_barState is null)
+        {
+            return;
+        }
+
+        var ranked = SearchIndex.Rank(_barState.Query, _searchCandidates);
+        _barState.ShowResults(ranked.Select(candidate => candidate.Id).ToList(), keepSelected);
+        RenderCommandBar();
+    }
+
+    private void CommitSearchSelection()
+    {
+        if (_barState is null)
+        {
+            return;
+        }
+
+        var selected = _barState.Selected;
+        if (selected is null)
+        {
+            return;
+        }
+
+        _barState.Commit();
+        CloseCommandBar(restore: true);
+
+        if (selected.StartsWith("command:", StringComparison.Ordinal))
+        {
+            ExecuteCommand(selected["command:".Length..]);
+            return;
+        }
+
+        _ = ActivateServiceAsync(selected);
+        _log?.Info($"command bar search committed '{selected}'");
+    }
+
+    private void ExecuteCommand(string command)
+    {
+        _log?.Info($"command bar command: {command}");
+
+        switch (command)
+        {
+            case "hide":
+                HideHost();
+                return;
+
+            case "reload":
+                _registry?.Active?.Reload();
+                return;
+
+            case "quit":
+                Quit();
+                return;
+        }
+    }
+
+    private static string? HostOf(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : null;
+
     private void RenderCommandBar()
     {
         if (_bar is null || _barState is null || _host is null || _registry is null)
@@ -529,8 +720,14 @@ public partial class App : Application
             return;
         }
 
+        var names = _searchCandidates
+            .GroupBy(candidate => candidate.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
+
         var rows = _barState.Entries
-            .Select(id => new BarRow(id, _registry.Find(id)?.Name ?? id))
+            .Select(id => new BarRow(
+                id,
+                names.TryGetValue(id, out var name) ? name : _registry.Find(id)?.Name ?? id))
             .ToList();
 
         _bar.Render(rows, _barState.Highlight, _barState.Mode, _barState.Query, _host.IsDark);

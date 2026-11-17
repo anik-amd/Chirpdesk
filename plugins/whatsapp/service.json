@@ -3,6 +3,7 @@
   "notificationMode": "native",
   "pageDarkMode": "off",
   "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["wa"],
   "apiVersion": 1,
   "minApiVersion": 1
 }

@@ -107,7 +107,7 @@ Every failure is per-plugin and logged: missing payload, invalid JSON, id mismat
 
 ## Task 5: Command Bar — cycle mode
 
-**Status:** complete (2026-11-17). The bar is an overlay inside `HostWindow` (airspace, ADR 0002); `BarState` in Core owns cycle/latch/release/cancel; `ModifierWatcher` polls Ctrl at 30 ms; opening collapses the active view and closing restores it. Search ranking is Task 6; scroll/focus survival is verified in Task 7.
+**Status:** complete (2026-11-17). The bar is an overlay inside `HostWindow` (airspace, ADR 0002); `BarState` in Core owns cycle/release/cancel; `ModifierWatcher` polls Ctrl at 30 ms; opening collapses the active view and closing restores it. Revised same day: no printable-key latch — cycle is a pure switcher, `Ctrl+P` is the only search entry (ADR 0002 revision). Search ranking is Task 6; scroll/focus survival is verified in Task 7.
 
 **Files:**
 - Create: `src/Chirpdesk/CommandBar/CommandBarWindow.xaml(.cs)`, `BarState.cs`, `ModifierWatcher.cs`
@@ -115,7 +115,7 @@ Every failure is per-plugin and logged: missing payload, invalid JSON, id mismat
 
 Size cap 560 × 420, anchored 12 % from the top, centred (§12 budget). Cycle mode is a list of warm services in MRU order, highlight moved by `Tab`/`Shift+Tab`, committed on `Ctrl` release. `ModifierWatcher` polls `GetAsyncKeyState` at 30 ms in one class (ADR 0002) and raises "released".
 
-**Tests:** highlight wraps; a printable key latches to search with the highlight retained; releasing `Ctrl` after latch does not commit; `Esc` cancels without switching; empty list is a no-op, not a crash.
+**Tests:** highlight wraps; a printable key during cycle does not enter search; releasing `Ctrl` commits the highlight; `Esc` cancels without switching; empty list is a no-op, not a crash.
 
 **Commit:** `feat(app): command bar cycle mode`.
 
@@ -123,8 +123,11 @@ Size cap 560 × 420, anchored 12 % from the top, centred (§12 budget). Cycle mo
 
 ## Task 6: Search mode and ranking
 
+**Status:** complete (2026-11-17). `Ctrl+P` opens the same bar in search mode; warm tabs come first, then cold instances, then the built-in `hide`, `reload` and `quit` commands. `SearchIndex` ranks prefix over substring, then kind, then input order; aliases and legacy hosts match.
+
 **Files:**
-- Create: `src/Chirpdesk/CommandBar/SearchIndex.cs`
+- Create: `src/Chirpdesk.Core/CommandBar/SearchIndex.cs`
+- Modify: `src/Chirpdesk/App.xaml.cs`, `src/Chirpdesk.Core/Definitions/ServiceDefinition.cs`, `src/Chirpdesk/CommandBar/CommandBarView.xaml`, `CommandBarView.xaml.cs`
 - Test: `tests/Chirpdesk.Core.Tests/CommandBar/SearchIndexTests.cs`
 
 Order: warm services, then cold services, then commands. Matching: prefix beats substring, case-insensitive, and a definition's aliases match (`wa` → WhatsApp). Typing `tel` must put Telegram first even when a cold service named "Telethon" also exists.
@@ -175,7 +178,7 @@ Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible
 | catalog | instance overrides resolve; definition fallback resolves; unknown id is a clear failure |
 | migration | v1 fixture migrates to v2 without inventing or losing an instance |
 | registry | two warm services park/activate without disposing; shared profile reuses one environment; MRU order after three switches |
-| bar state | cycle wrap, latch, cancel and reserved keys, all from the pure state machine |
+| bar state | cycle wrap, cancel, Ctrl+P switch to search keeping the highlight, and search filtering, all from the pure state machine |
 | hotkey | registration succeeds, or the failure is reported (soft, because another app may own the combo) |
 
 `scripts/gate.ps1` runs all of it.

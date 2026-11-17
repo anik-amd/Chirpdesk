@@ -2,6 +2,7 @@
   "url": "https://web.telegram.org/k/",
   "pageDarkMode": "off",
   "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["tg"],
   "apiVersion": 1,
   "minApiVersion": 1
 }

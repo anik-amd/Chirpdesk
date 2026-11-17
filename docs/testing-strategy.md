@@ -44,7 +44,8 @@ The split is enforced by project structure, not discipline: `Chirpdesk.Core` has
 | `PluginManifest` | missing required field, bad id pattern, unknown `apiVersion`, unimplemented permission rejected, asset path traversal rejected |
 | `ThemeVariants` | duplicate variant id rejected, `defaults` must reference an existing variant of matching mode, missing token in one variant disables the family, family with no light variant keeps dark under follow-system, all-themes-missing falls back to baseline |
 | `PluginLoader` | manifest id/kind/version/apiVersion/permissions validated; user plugin shadows bundled; duplicate ids, missing payload, id mismatch, bad JSON and traversing assets skip only that plugin |
-| `BarState` | cycle opens on the next/previous MRU row; highlight wraps; a printable key latches search and keeps the highlight; Ctrl release after latch does not commit; Esc cancels; empty list is a no-op |
+| `BarState` | cycle opens on the next/previous MRU row; highlight wraps; Ctrl release commits; Esc cancels; empty list is a no-op; search results keep the selected id when it survives filtering |
+| `SearchIndex` | prefix beats substring and exact beats prefix; warm beats cold beats command at equal score; aliases and legacy host match; empty query lists warm rows in input order; no match returns nothing |
 | `ToolPanel` | unknown primitive disables only that action, `revealFolder` rejects a path argument, `deleteOrphan` rejects an id from another session, missing permission greys the action, panel still renders when all actions fail |
 | `UpdateManifest` | ECDSA P-256 signature verified against the pinned SPKI key, tampered payload hash rejected, wrong key rejected, malformed manifest rejected, version not newer than running build rejected, no network path taken on failure |
 | `PluginRegistry` | user plugin overrides bundled with same id, duplicate ids across repos require a choice, rescan picks up a new folder, broken plugin disabled not fatal, a user-installed `tool` is refused |
@@ -71,7 +72,7 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 2 | No boot storm | ≤ 2 toasts at login for real backlog, none after the gate opens |
 | 3 | Long idle | 8 h tray-hidden, test message still toasts |
 | 4 | Switch | `Ctrl+Tab` → 3 services → commit; half-typed text and scroll position survive |
-| 5 | Cycle→type | `Ctrl+Tab`, type `tel`, `Enter` → Telegram focused |
+| 5 | Search | `Ctrl+P`, type `tel`, `Enter` → Telegram focused; `Ctrl+Tab` never enters search |
 | 6 | Cold service | selecting a cold service loads it, then it appears in cycle order |
 | 7 | Blocking sanity | login, send, receive on WhatsApp/Messenger/Telegram with tier 1 + cosmetic on |
 | 8 | Blocking fail-open | corrupt the filter file → all services still log in |

@@ -23,6 +23,7 @@ public partial class CommandBarView : UserControl
         Header.Text = mode == BarMode.Search ? "> " + query : "Switch service";
         Rows.ItemsSource = rows;
         Rows.SelectedIndex = highlight >= 0 && highlight < rows.Count ? highlight : -1;
+        EmptyText.Text = mode == BarMode.Search ? "No matches." : "No warm services.";
         EmptyText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 

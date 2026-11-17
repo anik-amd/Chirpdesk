@@ -37,6 +37,9 @@ public sealed class ServiceDefinition
 
     public string? UserAgent { get; set; }
 
+    /// <summary>Short search aliases, e.g. <c>wa</c> for WhatsApp. Optional.</summary>
+    public List<string>? Aliases { get; set; }
+
     /// <summary>How a notification click becomes a route. Optional: without it a click opens the site.</summary>
     public NotificationActivation? Activation { get; set; }
 

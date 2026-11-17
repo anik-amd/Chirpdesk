@@ -46,24 +46,35 @@ public class BarStateTests
     }
 
     [Fact]
-    public void A_printable_key_latches_search_and_keeps_the_highlight()
+    public void Search_starts_empty_so_results_can_be_filled_in()
     {
-        var bar = BarState.ForCycle(Warm, activeId: "whatsapp", direction: 1);
-        bar.Move(1);
-
-        bar.Latch("t");
+        var bar = BarState.ForSearch();
 
         Assert.Equal(BarMode.Search, bar.Mode);
-        Assert.Equal("t", bar.Query);
-        Assert.Equal(2, bar.Highlight);
-        Assert.Equal("messenger", bar.Selected);
+        Assert.Empty(bar.Entries);
+        Assert.Null(bar.Selected);
+    }
+
+    [Fact]
+    public void Showing_results_keeps_the_selected_id_when_it_survives_filtering()
+    {
+        var bar = BarState.ForSearch();
+
+        bar.ShowResults(["whatsapp", "telegram", "messenger"], keepSelected: "telegram");
+        Assert.Equal("telegram", bar.Selected);
+
+        bar.ShowResults(["telegram"], keepSelected: "telegram");
+        Assert.Equal("telegram", bar.Selected);
+
+        bar.ShowResults(["whatsapp", "messenger"], keepSelected: "telegram");
+        Assert.Equal("whatsapp", bar.Selected);
     }
 
     [Fact]
     public void Search_accepts_more_text_and_backspace()
     {
-        var bar = BarState.ForCycle(Warm, activeId: "whatsapp", direction: 1);
-        bar.Latch("t");
+        var bar = BarState.ForSearch();
+        bar.Append("t");
         bar.Append("el");
 
         Assert.Equal("tel", bar.Query);
@@ -73,16 +84,27 @@ public class BarStateTests
     }
 
     [Fact]
-    public void Releasing_control_after_latching_does_not_commit()
+    public void Releasing_control_in_search_does_not_close_or_commit()
     {
-        var bar = BarState.ForCycle(Warm, activeId: "whatsapp", direction: 1);
-        bar.Latch("t");
+        var bar = BarState.ForSearch();
+        bar.ShowResults(["telegram"], keepSelected: "telegram");
 
         var committed = bar.ReleaseControl();
 
         Assert.Null(committed);
         Assert.Equal(BarMode.Search, bar.Mode);
         Assert.True(bar.IsOpen);
+    }
+
+    [Fact]
+    public void Enter_with_no_results_selects_nothing()
+    {
+        var bar = BarState.ForSearch();
+        bar.Append("zzz");
+        bar.ShowResults([]);
+
+        Assert.Null(bar.Selected);
+        Assert.Null(bar.Commit());
     }
 
     [Fact]

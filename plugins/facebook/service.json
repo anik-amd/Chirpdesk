@@ -2,6 +2,7 @@
   "url": "https://www.facebook.com/",
   "pageDarkMode": "auto",
   "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["fb"],
   "apiVersion": 1,
   "minApiVersion": 1
 }

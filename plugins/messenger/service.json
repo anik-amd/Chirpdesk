@@ -2,6 +2,7 @@
   "url": "https://www.messenger.com/",
   "pageDarkMode": "auto",
   "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["msgr"],
   "apiVersion": 1,
   "minApiVersion": 1
 }

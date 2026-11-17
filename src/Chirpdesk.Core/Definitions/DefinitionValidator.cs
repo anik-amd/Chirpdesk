@@ -30,6 +30,15 @@ public static partial class DefinitionValidator
         definition.NotificationMode = NormalizeChoice(definition.NotificationMode, NotificationModes, ServiceDefinition.NativeMode);
         definition.PageDarkMode = NormalizeChoice(definition.PageDarkMode, PageDarkModes, ServiceDefinition.PageDarkOff);
 
+        if (definition.Aliases is not null)
+        {
+            definition.Aliases = definition.Aliases
+                .Select(alias => alias?.Trim() ?? string.Empty)
+                .Where(alias => alias.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         if (definition.MinApiVersion <= 0)
         {
             definition.MinApiVersion = 1;
@@ -81,6 +90,23 @@ public static partial class DefinitionValidator
         if (definition.UnreadRegex is { Length: > 0 } pattern && !IsValidRegex(pattern))
         {
             errors.Add($"'{definition.Id}' has an invalid unread regex");
+        }
+
+        if (definition.Aliases is { } aliases)
+        {
+            if (aliases.Count > 16)
+            {
+                errors.Add($"'{definition.Id}' has more than 16 aliases");
+            }
+
+            foreach (var alias in aliases)
+            {
+                if (string.IsNullOrWhiteSpace(alias) || alias.Length > 32)
+                {
+                    errors.Add($"'{definition.Id}' has an invalid alias");
+                    break;
+                }
+            }
         }
 
         if (definition.ApiVersion != HostApiVersion)

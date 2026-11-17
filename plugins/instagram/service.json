@@ -2,6 +2,7 @@
   "url": "https://www.instagram.com/direct/inbox/",
   "pageDarkMode": "auto",
   "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["ig", "insta"],
   "apiVersion": 1,
   "minApiVersion": 1
 }
