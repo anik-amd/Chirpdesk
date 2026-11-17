@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -621,34 +622,17 @@ public partial class HostWindow : Window
     public void HideToBackground()
     {
         _railHoverTimer.Stop();
+        _boundsAnimation?.Stop();
 
-        if (!SystemParameters.ClientAreaAnimation || !IsVisible)
+        if (SystemParameters.ClientAreaAnimation && IsVisible)
         {
-            Hide();
-            WindowChrome.MakeToolWindow(Handle);
-            return;
+            NativeMethods.AnimateWindow(Handle, 180, NativeMethods.AwBlend | NativeMethods.AwHide);
         }
 
-        var token = ++_visibilityToken;
-        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-        };
-
-        fade.Completed += (_, _) =>
-        {
-            if (token != _visibilityToken)
-            {
-                return;
-            }
-
-            Hide();
-            Opacity = 1;
-            BeginAnimation(OpacityProperty, null);
-            WindowChrome.MakeToolWindow(Handle);
-        };
-
-        BeginAnimation(OpacityProperty, fade);
+        Hide();
+        Opacity = 1;
+        BeginAnimation(OpacityProperty, null);
+        WindowChrome.MakeToolWindow(Handle);
     }
 
     private int _visibilityToken;
@@ -730,66 +714,81 @@ public partial class HostWindow : Window
     /// <summary>Animates the four window bounds together; the content follows the real window.</summary>
     private void AnimateBounds(Rect target)
     {
+        _boundsAnimation?.Stop();
+
         if (!SystemParameters.ClientAreaAnimation)
         {
-            Left = target.Left;
-            Top = target.Top;
-            Width = target.Width;
-            Height = target.Height;
+            ApplyBounds(target);
             return;
         }
 
         var from = new Rect(Left, Top, Width, Height);
-        var duration = TimeSpan.FromMilliseconds(190);
-        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-
-        DoubleAnimation Bound(double start, double end) => new(start, end, duration)
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var start = Stopwatch.StartNew();
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
         {
-            EasingFunction = ease,
-            FillBehavior = FillBehavior.Stop,
+            Interval = TimeSpan.FromMilliseconds(16),
         };
 
-        var left = Bound(from.Left, target.Left);
-        left.Completed += (_, _) => SettleBounds(target);
-        BeginAnimation(LeftProperty, left);
-        BeginAnimation(TopProperty, Bound(from.Top, target.Top));
-        BeginAnimation(WidthProperty, Bound(from.Width, target.Width));
-        BeginAnimation(HeightProperty, Bound(from.Height, target.Height));
+        timer.Tick += (_, _) =>
+        {
+            var progress = Math.Min(1d, start.Elapsed.TotalMilliseconds / 220d);
+            var eased = progress < 0.5
+                ? 2 * progress * progress
+                : 1 - Math.Pow(-2 * progress + 2, 2) / 2;
+
+            var bounds = new Rect(
+                from.Left + (target.Left - from.Left) * eased,
+                from.Top + (target.Top - from.Top) * eased,
+                from.Width + (target.Width - from.Width) * eased,
+                from.Height + (target.Height - from.Height) * eased);
+
+            ApplyBounds(bounds);
+
+            if (progress >= 1)
+            {
+                timer.Stop();
+                _boundsAnimation = null;
+                ApplyBounds(target);
+            }
+        };
+
+        _boundsAnimation = timer;
+        timer.Start();
     }
 
-    private void SettleBounds(Rect target)
+    private void ApplyBounds(Rect bounds)
     {
-        BeginAnimation(LeftProperty, null);
-        BeginAnimation(TopProperty, null);
-        BeginAnimation(WidthProperty, null);
-        BeginAnimation(HeightProperty, null);
-        Left = target.Left;
-        Top = target.Top;
-        Width = target.Width;
-        Height = target.Height;
+        // SetWindowPos moves the real HWND, including the WebView2 surface, instead of
+        // waiting for WPF's layout engine to catch up.
+        var dpi = VisualTreeHelper.GetDpi(this);
+        NativeMethods.SetWindowPos(
+            Handle,
+            IntPtr.Zero,
+            (int)Math.Round(bounds.Left * dpi.DpiScaleX),
+            (int)Math.Round(bounds.Top * dpi.DpiScaleY),
+            (int)Math.Round(bounds.Width * dpi.DpiScaleX),
+            (int)Math.Round(bounds.Height * dpi.DpiScaleY),
+            NativeMethods.SwpNoZorder | NativeMethods.SwpNoActivate);
+
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
     }
+
+    private DispatcherTimer? _boundsAnimation;
 
     private void MinimizeToTaskbar()
     {
-        if (!SystemParameters.ClientAreaAnimation)
+        if (SystemParameters.ClientAreaAnimation && IsVisible)
         {
-            WindowState = WindowState.Minimized;
-            return;
+            NativeMethods.AnimateWindow(Handle, 180, NativeMethods.AwBlend | NativeMethods.AwHide);
         }
 
-        var fade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(170))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-        };
-
-        fade.Completed += (_, _) =>
-        {
-            WindowState = WindowState.Minimized;
-            BeginAnimation(OpacityProperty, null);
-            Opacity = 1;
-        };
-
-        BeginAnimation(OpacityProperty, fade);
+        WindowState = WindowState.Minimized;
+        BeginAnimation(OpacityProperty, null);
+        Opacity = 1;
     }
 
     private void FadeInFromTaskbar()

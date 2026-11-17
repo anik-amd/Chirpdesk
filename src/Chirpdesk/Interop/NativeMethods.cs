@@ -46,11 +46,24 @@ internal static class NativeMethods
     private static extern short GetAsyncKeyState(int virtualKey);
 
     [DllImport("user32.dll")]
+    internal static extern nint SetFocus(nint hWnd);
+
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetCursorPos(out NativePoint point);
 
+    internal const int AwHide = 0x0001_0000;
+    internal const int AwBlend = 0x0002_0000;
+    internal const uint SwpNoZorder = 0x0004;
+    internal const uint SwpNoActivate = 0x0010;
+
     [DllImport("user32.dll")]
-    internal static extern nint SetFocus(nint hWnd);
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AnimateWindow(nint hWnd, int dwTime, int dwFlags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     internal const int WmGetMinMaxInfo = 0x0024;
     internal const uint MonitorDefaultToNearest = 0x0000_0002;
