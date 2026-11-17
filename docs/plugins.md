@@ -82,7 +82,7 @@ Every kind has one.
 | `apiVersion` | integer | yes | `1`; the host refuses a higher number |
 | `author` | string | no | shown in the manager |
 | `homepage` | string | no | absolute `https` |
-| `description` | string | no | one line, ≤ 160 chars |
+| `description` | string | no | one line, ≤ 160 chars; shown as the plugin's usage hint |
 | `permissions` | string[] | no | empty when omitted; see §9 |
 | `assets` | string[] | no | relative file names only, no `..` |
 
@@ -120,6 +120,7 @@ This is the file to write when adding a site. Field names are camelCase; JSON co
 |---|---|---|---|
 | `id` | no | if present, must equal the manifest id; otherwise the manifest id is used | yes |
 | `name` | no | if present it wins; otherwise the manifest name is used | yes |
+| `description` | no | if present it wins; otherwise the manifest description is the Plugins-page usage hint | plugins page |
 | `url` | yes | absolute `https`, no credentials (`user:pass@`) | yes |
 | `icon` | no | bare file name; no `/`, `\` or `..` | validated, not rendered yet |
 | `unreadRegex` | no | valid .NET regex; first capture group is the count; default `\((\d+)\)` | yes |

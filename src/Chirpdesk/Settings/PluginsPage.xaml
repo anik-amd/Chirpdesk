@@ -1,0 +1,46 @@
+<UserControl x:Class="Chirpdesk.Settings.PluginsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#F6F5F3">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock Text="Plugins &amp; services" FontSize="20" FontWeight="SemiBold" Foreground="#333036" />
+            <TextBlock Text="Turn on a service plugin and it adds its account. One plugin is one site; add another account any time."
+                       FontSize="12"
+                       Foreground="#5E5A60"
+                       TextWrapping="Wrap"
+                       Margin="0,4,0,0" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Text="Installed plugins" FontSize="15" FontWeight="SemiBold" Foreground="#333036" Margin="0,0,0,6" />
+                <StackPanel x:Name="PluginsPanel" />
+
+                <Border Height="1" Opacity="0.15" Background="#333036" Margin="0,14" />
+
+                <TextBlock Text="Browse plugins" FontSize="15" FontWeight="SemiBold" Foreground="#333036" Margin="0,0,0,6" />
+                <TextBlock Text="The signed plugin repository and install/update flow arrive in phase 5. Bundled plugins are already installed; user plugins are read from the plugins folder."
+                           FontSize="12"
+                           Foreground="#5E5A60"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,8" />
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Open plugins folder" Width="150" Margin="0,0,8,0" Click="OnOpenPluginsFolder" />
+                    <TextBlock Text="Installing and updates are deferred; no network install exists yet."
+                               FontSize="12"
+                               Foreground="#5E5A60"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Button Grid.Row="2" Content="Back" Width="88" HorizontalAlignment="Right" Margin="0,10,0,0" Click="OnBack" />
+    </Grid>
+</UserControl>

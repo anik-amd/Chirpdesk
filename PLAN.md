@@ -443,12 +443,12 @@ A running total on the storage page: *"Reclaimed 812 MB since install."* Cheap, 
 | Entry | Mode | Behaviour |
 |---|---|---|
 | `Ctrl+Tab` (hold) | **Cycle** | MRU list of **warm** services only, unread counts visible. `Tab` / `Shift+Tab` move the highlight, releasing `Ctrl` commits, `Esc` hides the window. Query line hidden. |
-| `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: **open (warm) tabs only**, in MRU order. Fuzzy filter as you type. `Enter` activates, `Esc` dismisses. Cold services and commands are deliberately not in this palette yet. |
+| `Ctrl+P` | **Search** | Sticky bar with focused input. Rows: enabled services (open/asleep/cold) in MRU order, then **Settings** and **Plugins & services** commands. Fuzzy filter as you type. `Enter` activates, `Esc` hides. |
 | `Ctrl+P` while cycling | **Search** | The same open bar switches to search with the highlighted tab still selected (unified palette, one focus model). There is no "second `Tab`" gesture: with `Ctrl` still down another `Tab` is indistinguishable from the first `Ctrl+Tab` and from key auto-repeat. |
 
-Rows are rendered by one template in both modes: icon · name · unread count · state badge (`warm` / `asleep` / `cold`) · current-highlight.
+Rows are rendered by one template in both modes: icon · name · state badge (`open` / `asleep` / `cold`) · current-highlight.
 
-Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows are a later feature, not part of this palette yet.
+Ordering: open services first, then asleep/cold, then commands; prefix beats substring, then input order (MRU for open rows).
 
 ### 10.2 Commands
 
@@ -474,7 +474,9 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 | `Ctrl+W` | close the highlighted tab in the palette, otherwise the active tab; last tab hides the window |
 | `Esc` | hide the window |
 
-**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; the close button, `Esc` and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text. `Ctrl+W` closes a tab instead; the instance stays in settings and becomes cold.
+**Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; the close button, `Esc` and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text. `Ctrl+W` closes a tab; deactivating a plugin sleeps its service instead.
+
+**Settings and plugins interface.** Settings is a **page in the main window**, opened from the command palette or the tray; there is no separate settings window. The Plugins page lists installed service plugins with their own usage description and Active/Inactive state: **Activate** creates the first account and opens it, **Add account** creates another instance, **Deactivate** sleeps the runtimes without signing out. Browse/install UI is a placeholder until the signed repository lands in phase 5. Installed-but-inactive plugins also appear in the command palette and can be activated from there.
 
 **Interception:** `Ctrl+Tab` and `Ctrl+P` are handled by a WebView2 message hook while the page has focus; once the bar opens it takes focus and handles `Tab`, arrows, `Ctrl+1..9`, `Ctrl+W`, `Esc` and text itself. `Ctrl+Shift+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global hotkey is deferred.
 
@@ -482,7 +484,7 @@ Ordering: MRU order; prefix beats substring, then MRU breaks ties. Command rows 
 
 ### 10.4 Settings is a destination, not navigation
 
-Settings stays a small window (URLs, icons, regexes, theme choice, storage, autostart, blocking) reached only by `> settings`. No tabs, no rail, no command strip anywhere in the app.
+Settings is a page (URLs, regexes, appearance, storage, autostart, DND) opened from the palette or tray. No tabs, no rail, no command strip anywhere in the app.
 
 ---
 

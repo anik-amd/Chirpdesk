@@ -250,6 +250,11 @@ public static partial class PluginLoader
             definition.Name = manifest.Name;
         }
 
+        if (string.IsNullOrWhiteSpace(definition.Description))
+        {
+            definition.Description = manifest.Description;
+        }
+
         DefinitionValidator.Normalize(definition);
 
         var problems = DefinitionValidator.Validate(definition);

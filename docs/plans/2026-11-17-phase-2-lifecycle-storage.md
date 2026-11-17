@@ -28,7 +28,7 @@ Add only what the phase needs: `DndUntil` (nullable UTC timestamp), `Autostart` 
 
 ## Task 2: Sleep and wake runtimes (TDD)
 
-**Status:** complete (2026-11-17). `LifecycleTracker` in Core owns warm/asleep/cold; `ServiceRegistry.SleepAsync` disposes exactly once, removes the tab from MRU, tracks it as asleep, and hands over to the next warm tab (or none). Waking reuses the normal activation path, which creates the runtime and marks it warm. Selftest sleeps both test runtimes and re-adds/wakes one. Sleep/wake controls land in the settings window (Task 7); `warmAtBoot` is untouched by sleep.
+**Status:** revised 2026-11-17 after product feedback. Plugin activation is the lifecycle: activating a plugin creates/opens its service and warms it; deactivating sleeps its runtimes and disables the instances without signing out. There is no separate Sleep/Open control. `LifecycleTracker`, `SleepAsync` and the warm/asleep/cold states remain internal machinery.
 
 **Files:**
 - Modify: `src/Chirpdesk/Hosting/ServiceRegistry.cs`, `ServiceRuntime.cs`, `App.xaml.cs`
@@ -114,7 +114,7 @@ ADR 0011 makes this the only way to add a site: pick an installed `service` defi
 
 ## Task 7: Settings window (UI)
 
-**Status:** complete (2026-11-17). One 720×600 window from the tray: service rows (state, warm at boot, mute, sleep/open, remove), add-from-definition, theme, autostart, DND, per-profile Data/Cache with Trim caches, and orphan scan with Recycle. Visual/layout checks are part of the phase gate; the window was smoke-opened and its controls enumerated through UI Automation.
+**Status:** revised 2026-11-17 after product feedback. Settings is a **page inside the main window**, opened from the command palette or the tray, not a popup. It is deliberately a light document page until phase 4 can theme tokens properly. Service rows are configuration only (warm at boot, mute, remove); adding and activating services moved to the Plugins page. Manual verification is in `docs/manual-verification.md`.
 
 **Files:**
 - Create: `src/Chirpdesk/Settings/SettingsWindow.xaml(.cs)`, `SettingsViewModel.cs`

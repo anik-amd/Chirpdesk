@@ -44,6 +44,15 @@ public partial class HostWindow : Window
 
     public bool IsCommandBarOpen => BarLayer.Visibility == System.Windows.Visibility.Visible;
 
+    /// <summary>A page (settings/plugins) occupies the content area instead of the webview.</summary>
+    public bool IsPageOpen => PageLayer.Visibility == System.Windows.Visibility.Visible;
+
+    public void SetPage(System.Windows.UIElement page) => PageHost.Content = page;
+
+    public void ShowPage() => PageLayer.Visibility = System.Windows.Visibility.Visible;
+
+    public void HidePage() => PageLayer.Visibility = System.Windows.Visibility.Collapsed;
+
     /// <summary>Shows the overlay at 12 % from the top, horizontally centred (§12 budget).</summary>
     public void ShowCommandBar(System.Windows.Media.ImageSource? backdrop = null)
     {

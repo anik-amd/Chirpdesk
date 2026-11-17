@@ -72,6 +72,19 @@ public class BootPlanTests
     }
 
     [Fact]
+    public void A_disabled_instance_is_not_warmed_even_if_it_is_pinned()
+    {
+        var disabled = Instance("off", warm: true);
+        disabled.Enabled = false;
+        var settings = new AppSettings { Services = [disabled, Instance("on", warm: true)] };
+
+        var plan = BootPlan.Select(settings);
+
+        Assert.Single(plan);
+        Assert.Equal("on", plan[0].InstanceId);
+    }
+
+    [Fact]
     public void An_empty_settings_file_has_an_empty_plan()
     {
         Assert.Empty(BootPlan.Select(new AppSettings()));

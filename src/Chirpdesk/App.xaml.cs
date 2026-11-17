@@ -43,7 +43,8 @@ public partial class App : Application
     private ServiceRegistry? _registry;
     private ServiceCatalog? _catalog;
     private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
-    private SettingsWindow? _settingsWindow;
+    private SettingsPage? _settingsPage;
+    private PluginsPage? _pluginsPage;
     private CommandBarView? _bar;
     private BarState? _barState;
     private ModifierWatcher? _barWatcher;
@@ -62,6 +63,7 @@ public partial class App : Application
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
         _log.Info($"tool panels: {_panels.Count} loaded");
+        LinkLegacyInstances();
 
         // Windows starts this process to answer a toast click that has left the screen.
         // It is not the app: no tray, no webviews, one call, then exit.
@@ -436,6 +438,27 @@ public partial class App : Application
 
     private void OnHostKeyDown(object sender, KeyEventArgs e)
     {
+        if (_host?.IsPageOpen == true)
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                ClosePage();
+                return;
+            }
+
+            if (e.Key == Key.P
+                && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                ClosePage();
+                _ = OpenSearchBarAsync();
+                return;
+            }
+
+            return;
+        }
+
         if (_barState is not null)
         {
             return;
@@ -803,25 +826,108 @@ public partial class App : Application
             return Array.Empty<SearchCandidate>();
         }
 
+        var settings = LoadSearchSettings();
+        var byId = new Dictionary<string, ServiceInstance>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var instance in settings.Services)
+        {
+            byId[instance.InstanceId] = instance;
+        }
+
         var candidates = new List<SearchCandidate>();
 
+        // Open tabs first, in MRU order.
         foreach (var id in _registry.Order)
         {
-            var runtime = _registry.Find(id);
-            if (runtime is null)
+            byId.TryGetValue(id, out var instance);
+
+            if (instance is not null && !instance.Enabled)
+            {
+                continue;
+            }
+
+            var resolved = instance is null ? null : _catalog?.Resolve(instance);
+            var aliases = resolved?.DefinitionId is { } definitionId
+                ? _catalog?.Find(definitionId)?.Aliases
+                : null;
+
+            candidates.Add(new SearchCandidate(
+                id,
+                resolved?.Name ?? _registry.Find(id)?.Name ?? id,
+                SearchKind.Warm,
+                aliases,
+                HostOf(resolved?.Url),
+                State: "open"));
+        }
+
+        // Enabled instances that are not warm yet: asleep or cold.
+        foreach (var instance in settings.Services.Where(service => service.Enabled).OrderBy(service => service.Order))
+        {
+            if (_registry.IsWarm(instance.InstanceId))
+            {
+                continue;
+            }
+
+            var resolved = _catalog?.Resolve(instance);
+            if (resolved is null)
+            {
+                continue;
+            }
+
+            var aliases = resolved.DefinitionId is { } definitionId
+                ? _catalog?.Find(definitionId)?.Aliases
+                : null;
+
+            var state = _registry.StateOf(instance.InstanceId).ToString().ToLowerInvariant();
+            candidates.Add(new SearchCandidate(
+                instance.InstanceId,
+                resolved.Name,
+                SearchKind.Cold,
+                aliases,
+                HostOf(resolved.Url),
+                State: state));
+        }
+
+        var definitions = _catalog is null
+            ? Array.Empty<ServiceDefinition>()
+            : _catalog.Definitions.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        foreach (var definition in definitions)
+        {
+            var hasEnabledInstance = settings.Services.Any(
+                instance => instance.Enabled
+                    && string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase));
+
+            if (hasEnabledInstance || string.IsNullOrWhiteSpace(definition.Id))
             {
                 continue;
             }
 
             candidates.Add(new SearchCandidate(
-                id,
-                runtime.Name,
-                SearchKind.Warm,
-                _catalog?.Find(runtime.DefinitionId)?.Aliases,
-                HostOf(runtime.Url)));
+                $"plugin:{definition.Id}",
+                definition.Name,
+                SearchKind.Cold,
+                definition.Aliases,
+                State: "plugin off"));
         }
 
+        candidates.Add(new SearchCandidate("command:settings", "Settings", SearchKind.Command));
+        candidates.Add(new SearchCandidate("command:plugins", "Plugins & services", SearchKind.Command));
+
         return candidates;
+    }
+
+    private AppSettings LoadSearchSettings()
+    {
+        try
+        {
+            return new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"search settings unavailable: {ex.Message}");
+            return new AppSettings();
+        }
     }
 
     private void UpdateSearchResults(string? keepSelected)
@@ -875,6 +981,31 @@ public partial class App : Application
 
         _barState.Commit();
         CloseCommandBar(restore: true);
+
+        if (string.Equals(selected, "command:settings", StringComparison.Ordinal))
+        {
+            OpenSettings();
+            return;
+        }
+
+        if (string.Equals(selected, "command:plugins", StringComparison.Ordinal))
+        {
+            OpenPlugins();
+            return;
+        }
+
+        if (selected.StartsWith("plugin:", StringComparison.Ordinal))
+        {
+            var definition = _catalog?.Find(selected["plugin:".Length..]);
+            if (definition is not null)
+            {
+                _log?.Info($"command bar activating plugin '{definition.Id}'");
+                _ = EnablePluginAsync(definition);
+            }
+
+            return;
+        }
+
         _ = ActivateServiceAsync(selected);
         _log?.Info($"command bar search committed '{selected}'");
     }
@@ -889,14 +1020,23 @@ public partial class App : Application
             return;
         }
 
-        var names = _searchCandidates
+        var lookup = _searchCandidates
             .GroupBy(candidate => candidate.Id, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.First().Name, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         var rows = _barState.Entries
-            .Select(id => new BarRow(
-                id,
-                names.TryGetValue(id, out var name) ? name : _registry.Find(id)?.Name ?? id))
+            .Select(id =>
+            {
+                if (lookup.TryGetValue(id, out var candidate))
+                {
+                    var name = string.IsNullOrWhiteSpace(candidate.State) || candidate.State == "open"
+                        ? candidate.Name
+                        : $"{candidate.Name} · {candidate.State}";
+                    return new BarRow(id, name);
+                }
+
+                return new BarRow(id, _registry.Find(id)?.Name ?? id);
+            })
             .ToList();
 
         _bar.Render(rows, _barState.Highlight, _barState.Mode, _barState.Query, _host.IsDark);
@@ -972,7 +1112,7 @@ public partial class App : Application
     {
         var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
         _host?.SetDark(dark);
-        _settingsWindow?.SetDark(dark);
+        _settingsPage?.SetDark(dark);
 
         var mode = ThemeDecision.ToStorageValue(_themeMode);
         var resolved = dark ? "dark" : "light";
@@ -994,6 +1134,11 @@ public partial class App : Application
         if (_host is null)
         {
             return;
+        }
+
+        if (_host.IsPageOpen)
+        {
+            ClosePage();
         }
 
         if (_barState is not null)
@@ -1029,6 +1174,11 @@ public partial class App : Application
 
     private void HideHost()
     {
+        if (_host?.IsPageOpen == true)
+        {
+            ClosePage();
+        }
+
         if (_barState is not null)
         {
             CloseCommandBar(restore: true);
@@ -1189,44 +1339,211 @@ public partial class App : Application
             return;
         }
 
-        if (_settingsWindow is { IsVisible: true })
+        if (_settingsPage is null)
         {
-            _settingsWindow.Activate();
+            _settingsPage = new SettingsPage(
+                new SettingsStore(AppPaths.SettingsFile, _log),
+                _panels,
+                _registry,
+                _log,
+                ApplyTheme,
+                UpdateTrayStatus,
+                ClosePage);
+        }
+
+        ShowPage(_settingsPage);
+        _settingsPage.Reload();
+    }
+
+    private void OpenPlugins()
+    {
+        if (_host is null || _registry is null || _log is null || _catalog is null)
+        {
             return;
         }
 
-        var window = new SettingsWindow(
-            new SettingsStore(AppPaths.SettingsFile, _log),
-            _catalog ?? new ServiceCatalog([]),
-            _panels,
-            _registry,
-            _log,
-            instance => OpenInstanceAsync(instance, show: true, probe: false),
-            SleepFromSettingsAsync,
-            ApplyTheme,
-            UpdateTrayStatus,
-            _host.IsDark);
+        if (_pluginsPage is null)
+        {
+            _pluginsPage = new PluginsPage(
+                _catalog,
+                new SettingsStore(AppPaths.SettingsFile, _log),
+                _registry,
+                _log,
+                EnablePluginAsync,
+                AddAccountAsync,
+                DisablePluginAsync,
+                ClosePage);
+        }
 
-        window.Closed += (_, _) => _settingsWindow = null;
-        _settingsWindow = window;
-        window.Show();
-        window.Activate();
+        ShowPage(_pluginsPage);
+        _pluginsPage.Reload();
     }
 
-    private async Task SleepFromSettingsAsync(string instanceId)
+    private void ShowPage(FrameworkElement page)
     {
-        if (_registry is not null)
+        if (_host is null || _registry is null)
         {
-            await _registry.SleepAsync(instanceId);
+            return;
         }
+
+        if (_barState is not null)
+        {
+            CloseCommandBar(restore: false);
+        }
+
+        _registry.Active?.CollapseForCommandBar();
+        _host.ShowForUser();
+
+        _host.SetPage(page);
+        _host.ShowPage();
+        _host.Focus();
+    }
+
+    private void LinkLegacyInstances()
+    {
+        if (_catalog is null || _log is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log);
+            var settings = store.Load();
+            var changed = false;
+
+            foreach (var instance in settings.Services.Where(instance => instance.DefinitionId is null))
+            {
+                var definition = _catalog.Definitions.FirstOrDefault(
+                    candidate => string.Equals(candidate.Url, instance.Url, StringComparison.OrdinalIgnoreCase));
+
+                if (definition is null)
+                {
+                    continue;
+                }
+
+                instance.DefinitionId = definition.Id;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                store.Save(settings);
+                _log.Info("linked legacy instances to their definitions");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log.Warn($"could not link legacy instances: {ex.Message}");
+        }
+    }
+
+    private void ClosePage()
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        _host.HidePage();
+        _registry?.Active?.RestoreFromCommandBar();
+        _host.UpdateLayout();
+    }
+
+    private async Task EnablePluginAsync(ServiceDefinition definition)
+    {
+        if (_log is null || _catalog is null)
+        {
+            return;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log);
+        var settings = store.Load();
+        var instances = settings.Services
+            .Where(instance => string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (instances.Count == 0)
+        {
+            var instance = InstanceFactory.Create(definition, definition.Name, settings.Services);
+            instance.Enabled = true;
+            settings.Services.Add(instance);
+            instances.Add(instance);
+            _log.Info($"plugin '{definition.Id}' turned on; instance '{instance.InstanceId}' created");
+        }
+
+        foreach (var instance in instances)
+        {
+            instance.Enabled = true;
+        }
+
+        store.Save(settings);
+
+        var first = instances[0];
+        ClosePage();
+        await OpenInstanceAsync(first, show: true, probe: false);
+    }
+
+    private async Task AddAccountAsync(ServiceDefinition definition)
+    {
+        if (_log is null)
+        {
+            return;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log);
+        var settings = store.Load();
+        ServiceInstance instance;
+
+        try
+        {
+            instance = InstanceFactory.Create(definition, definition.Name, settings.Services);
+        }
+        catch (ArgumentException ex)
+        {
+            _log.Warn($"plugin '{definition.Id}' cannot add another account: {ex.Message}");
+            return;
+        }
+
+        instance.Enabled = true;
+        settings.Services.Add(instance);
+        store.Save(settings);
+        _log.Info($"plugin '{definition.Id}' added account '{instance.InstanceId}'");
+
+        ClosePage();
+        await OpenInstanceAsync(instance, show: true, probe: false);
+    }
+
+    private async Task DisablePluginAsync(ServiceDefinition definition)
+    {
+        if (_log is null || _registry is null)
+        {
+            return;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log);
+        var settings = store.Load();
+        var instances = settings.Services
+            .Where(instance => string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var instance in instances)
+        {
+            instance.Enabled = false;
+
+            if (_registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
+            {
+                await _registry.SleepAsync(instance.InstanceId);
+            }
+        }
+
+        store.Save(settings);
+        _log.Info($"plugin '{definition.Id}' turned off; sessions preserved");
     }
 
     private void Terminate(int exitCode)
     {
         _quitting = true;
-
-        _settingsWindow?.Close();
-        _settingsWindow = null;
 
         _tray?.Dispose();
         _tray = null;

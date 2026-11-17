@@ -19,53 +19,51 @@ namespace Chirpdesk.Settings;
 /// The only settings surface: services/instances, add-from-definition, appearance, autostart,
 /// DND and storage. Changes save immediately; no tabs or rail.
 /// </summary>
-public partial class SettingsWindow : Window
+public partial class SettingsPage : UserControl
 {
     private static readonly string[] DndLabels = ["Off", "For 30 minutes", "For 1 hour", "Until tomorrow 08:00"];
 
     private readonly SettingsStore _store;
-    private readonly ServiceCatalog _catalog;
     private readonly IReadOnlyList<PanelDefinition> _panels;
     private readonly ServiceRegistry _registry;
     private readonly ILog _log;
-    private readonly Func<ServiceInstance, Task> _open;
-    private readonly Func<string, Task> _sleep;
     private readonly Action _applyTheme;
     private readonly Action? _stateChanged;
+    private readonly Action _back;
     private AppSettings _settings;
     private IReadOnlyList<OrphanItem> _orphans = [];
+    private bool _scanned;
     private bool _loading;
 
-    internal SettingsWindow(
+    internal SettingsPage(
         SettingsStore store,
-        ServiceCatalog catalog,
         IReadOnlyList<PanelDefinition> panels,
         ServiceRegistry registry,
         ILog log,
-        Func<ServiceInstance, Task> open,
-        Func<string, Task> sleep,
         Action applyTheme,
         Action? stateChanged,
-        bool dark)
+        Action back)
     {
         InitializeComponent();
         _store = store;
-        _catalog = catalog;
         _panels = panels;
         _registry = registry;
         _log = log;
-        _open = open;
-        _sleep = sleep;
         _applyTheme = applyTheme;
         _stateChanged = stateChanged;
+        _back = back;
         _settings = store.Load();
 
         ThemeBox.ItemsSource = new[] { "system", "light", "dark" };
         DndBox.ItemsSource = DndLabels;
-        DefinitionBox.ItemsSource = catalog.Definitions.OrderBy(definition => definition.Name, StringComparer.OrdinalIgnoreCase).ToList();
-        DefinitionBox.DisplayMemberPath = nameof(ServiceDefinition.Name);
 
-        SetDark(dark);
+        SetDark(dark: false);
+        Reload();
+    }
+
+    public void Reload()
+    {
+        _settings = _store.Load();
         LoadControls();
         RefreshServices();
         RenderToolPanel();
@@ -74,10 +72,10 @@ public partial class SettingsWindow : Window
 
     public void SetDark(bool dark)
     {
-        Background = new SolidColorBrush(dark ? Color.FromRgb(0x11, 0x12, 0x14) : Color.FromRgb(0xF6, 0xF5, 0xF3));
-        TextElement.SetForeground(
-            Root,
-            new SolidColorBrush(dark ? Color.FromRgb(0xC9, 0xC4, 0xCC) : Color.FromRgb(0x33, 0x30, 0x36)));
+        // Settings is a document page: a light surface with dark text is readable in both
+        // palettes. A themed settings page waits for the phase-4 token pipeline.
+        Background = new SolidColorBrush(Color.FromRgb(0xF6, 0xF5, 0xF3));
+        TextElement.SetForeground(Root, new SolidColorBrush(Color.FromRgb(0x33, 0x30, 0x36)));
     }
 
     private void LoadControls()
@@ -146,19 +144,9 @@ public partial class SettingsWindow : Window
             Grid.SetColumn(mute, 2);
             row.Children.Add(mute);
 
-            var toggle = new Button
-            {
-                Content = state == RuntimeState.Warm ? "Sleep" : "Open",
-                Width = 72,
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            toggle.Click += async (_, _) => await ToggleRuntimeAsync(instance);
-            Grid.SetColumn(toggle, 3);
-            row.Children.Add(toggle);
-
             var remove = new Button { Content = "Remove", Width = 76 };
             remove.Click += async (_, _) => await RemoveInstanceAsync(instance);
-            Grid.SetColumn(remove, 4);
+            Grid.SetColumn(remove, 3);
             row.Children.Add(remove);
 
             ServicesPanel.Children.Add(row);
@@ -182,33 +170,9 @@ public partial class SettingsWindow : Window
         RefreshServices();
     }
 
-    private async Task ToggleRuntimeAsync(ServiceInstance instance)
-    {
-        try
-        {
-            if (_registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
-            {
-                await _sleep(instance.InstanceId);
-            }
-            else
-            {
-                await _open(instance);
-            }
-
-            RefreshServices();
-            RefreshStorage();
-        }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException)
-        {
-            _log.Error($"settings: could not change runtime state for '{instance.InstanceId}'", ex);
-            MessageBox.Show(this, ex.Message, "Chirpdesk", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
     private async Task RemoveInstanceAsync(ServiceInstance instance)
     {
         var answer = MessageBox.Show(
-            this,
             $"Remove '{instance.Name}' from the list?\n\nThe profile stays on disk so it can be removed from Storage.",
             "Remove service",
             MessageBoxButton.OKCancel,
@@ -221,36 +185,13 @@ public partial class SettingsWindow : Window
 
         if (_registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
         {
-            await _sleep(instance.InstanceId);
+            await _registry.SleepAsync(instance.InstanceId);
         }
 
         _settings.Services.Remove(instance);
         Save();
         RefreshServices();
         RefreshStorage();
-    }
-
-    private void OnAddService(object sender, RoutedEventArgs e)
-    {
-        if (DefinitionBox.SelectedItem is not ServiceDefinition definition)
-        {
-            MessageBox.Show(this, "Pick a definition first.", "Add service", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        try
-        {
-            var instance = InstanceFactory.Create(definition, NameBox.Text, _settings.Services);
-            _settings.Services.Add(instance);
-            Save();
-            NameBox.Text = string.Empty;
-            RefreshServices();
-            _log.Info($"settings: created instance '{instance.InstanceId}' from '{definition.Id}'");
-        }
-        catch (ArgumentException ex)
-        {
-            MessageBox.Show(this, ex.Message, "Add service", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
     }
 
     private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
@@ -280,7 +221,7 @@ public partial class SettingsWindow : Window
             _loading = true;
             AutostartBox.IsChecked = !enabled;
             _loading = false;
-            MessageBox.Show(this, "Windows refused the autostart change.", "Autostart", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Windows refused the autostart change.", "Autostart", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -333,7 +274,7 @@ public partial class SettingsWindow : Window
             }
             else
             {
-                MessageBox.Show(this, "Nothing to trim: profiles are under budget or still warm.",
+                MessageBox.Show("Nothing to trim: profiles are under budget or still warm.",
                     "Storage", MessageBoxButton.OK, MessageBoxImage.Information);
             }
 
@@ -342,7 +283,7 @@ public partial class SettingsWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _log.Error("settings: trim failed", ex);
-            MessageBox.Show(this, ex.Message, "Storage", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(ex.Message, "Storage", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -424,6 +365,12 @@ public partial class SettingsWindow : Window
     {
         OrphanPanel.Children.Clear();
 
+        OrphanStatus.Text = !_scanned
+            ? "Not scanned yet."
+            : _orphans.Count == 0
+                ? "Scan complete: no leftovers found."
+                : $"{_orphans.Count} leftover(s) found. Nothing is pre-selected.";
+
         if (_orphans.Count == 0)
         {
             return;
@@ -451,7 +398,7 @@ public partial class SettingsWindow : Window
             var recycle = new Button { Content = "Recycle", Width = 80 };
             recycle.Click += (_, _) =>
             {
-                if (MessageBox.Show(this, $"Move '{orphan.Path}' to the Recycle Bin?", "Remove leftover",
+                if (MessageBox.Show($"Move '{orphan.Path}' to the Recycle Bin?", "Remove leftover",
                         MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
                 {
                     return;
@@ -480,6 +427,7 @@ public partial class SettingsWindow : Window
             KnownRoots.ForThisUser(),
             KnownRoots.IsInUse);
 
+        _scanned = true;
         _log.Info($"settings: orphan scan found {_orphans.Count} item(s)");
         RefreshOrphans();
     }
@@ -601,5 +549,5 @@ public partial class SettingsWindow : Window
 
     private static string Megabytes(long bytes) => $"{bytes / (1024d * 1024d):0.0} MB";
 
-    private void OnClose(object sender, RoutedEventArgs e) => Close();
+    private void OnBack(object sender, RoutedEventArgs e) => _back();
 }

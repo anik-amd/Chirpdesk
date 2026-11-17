@@ -89,6 +89,12 @@
             <!-- The active service webview. Empty while everything is parked. -->
             <Grid x:Name="ServiceLayer" />
 
+            <!-- Settings/Plugins pages replace the page area; the webview is collapsed while
+                 a page is open because it is an HWND. -->
+            <Grid x:Name="PageLayer" Background="#F6F5F3" Visibility="Collapsed">
+                <ContentControl x:Name="PageHost" />
+            </Grid>
+
             <!-- Command Bar overlay. The webview HWND is collapsed first, so the last captured
                  frame sits here as the backdrop and the bar still reads as an overlay. -->
             <Grid x:Name="BarLayer" Visibility="Collapsed">

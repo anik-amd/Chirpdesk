@@ -15,7 +15,7 @@ public static class BootPlan
         ArgumentNullException.ThrowIfNull(settings);
 
         return settings.Services
-            .Where(instance => instance.WarmAtBoot)
+            .Where(instance => instance.Enabled && instance.WarmAtBoot)
             .OrderBy(instance => instance.Order)
             .ThenBy(instance => instance.InstanceId, StringComparer.Ordinal)
             .ToList();

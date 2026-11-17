@@ -23,6 +23,9 @@ public sealed class ServiceInstance
 
     public bool WarmAtBoot { get; set; }
 
+    /// <summary>False when the owning plugin is turned off; instances and profiles stay.</summary>
+    public bool Enabled { get; set; } = true;
+
     public string? UnreadRegex { get; set; }
 
     public string? UserAgent { get; set; }
