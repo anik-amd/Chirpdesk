@@ -905,7 +905,7 @@ public partial class App : Application
                     $"Deactivate {definition.Name}",
                     SearchKind.Command,
                     (definition.Aliases ?? []).Append("plugin").Append("deactivate").ToList(),
-                    State: "plugin on",
+                    State: "active",
                     Accent: definition.Accent,
                     Initial: InitialOf(definition.Name),
                     DefinitionId: definition.Id));
@@ -917,7 +917,7 @@ public partial class App : Application
                 definition.Name,
                 SearchKind.Cold,
                 (definition.Aliases ?? []).Append("plugin").Append("inactive").Append("off").ToList(),
-                State: "plugin off",
+                State: "inactive",
                 Accent: definition.Accent,
                 Initial: InitialOf(definition.Name),
                 DefinitionId: definition.Id));
