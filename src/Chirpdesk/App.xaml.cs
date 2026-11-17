@@ -112,6 +112,10 @@ public partial class App : Application
         {
             _ = AddSiteAsync(options.AddSite, show: !options.Hidden);
         }
+        else if (options.WarmAll)
+        {
+            _ = WarmAllAsync(show: !options.Hidden);
+        }
         else if (options.OpenService is not null)
         {
             _ = OpenServiceAsync(options.OpenService, show: !options.Hidden, probe: options.NotifyTest);
@@ -245,6 +249,30 @@ public partial class App : Application
         }
 
         _log?.Info($"opened '{instance.InstanceId}'{(show ? " for the user" : " parked")}");
+    }
+
+    /// <summary>Warms every configured service, one after another, so Ctrl+Tab has something to cycle.</summary>
+    private async Task WarmAllAsync(bool show)
+    {
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            foreach (var instance in settings.Services.OrderBy(s => s.Order))
+            {
+                await OpenInstanceAsync(instance, show: false, probe: false);
+            }
+
+            if (show)
+            {
+                ShowHost();
+            }
+
+            _log?.Info($"warmed {settings.Services.Count} service(s)");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or InvalidOperationException)
+        {
+            _log?.Error("could not warm all services", ex);
+        }
     }
 
     /// <summary>
