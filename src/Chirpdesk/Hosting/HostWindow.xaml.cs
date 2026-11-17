@@ -13,6 +13,8 @@ public partial class HostWindow : Window
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
+        StateChanged += (_, _) => MaximizeButton.Content =
+            WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
     }
 
     public nint Handle => new WindowInteropHelper(this).Handle;
@@ -33,11 +35,26 @@ public partial class HostWindow : Window
     /// One palette, two ends. The window background is the only chrome that exists before the
     /// title bar lands, so it is also the visible proof that the theme was applied.
     /// </summary>
-    public void SetDark(bool dark) =>
+    public void SetDark(bool dark)
+    {
         Background = new System.Windows.Media.SolidColorBrush(
             dark
                 ? System.Windows.Media.Color.FromRgb(0x11, 0x12, 0x14)
                 : System.Windows.Media.Color.FromRgb(0xF6, 0xF5, 0xF3));
+
+        var bar = dark
+            ? System.Windows.Media.Color.FromRgb(0x1A, 0x17, 0x1C)
+            : System.Windows.Media.Color.FromRgb(0xEA, 0xE7, 0xE3);
+        var text = dark
+            ? System.Windows.Media.Color.FromRgb(0xC9, 0xC4, 0xCC)
+            : System.Windows.Media.Color.FromRgb(0x33, 0x30, 0x36);
+
+        TitleBar.Background = new System.Windows.Media.SolidColorBrush(bar);
+        TitleText.Foreground = new System.Windows.Media.SolidColorBrush(text);
+        MinimizeButton.Foreground = new System.Windows.Media.SolidColorBrush(text);
+        MaximizeButton.Foreground = new System.Windows.Media.SolidColorBrush(text);
+        CloseButton.Foreground = new System.Windows.Media.SolidColorBrush(text);
+    }
 
     /// <summary>
     /// User-requested show: normal app window, taskbar button, Alt+Tab entry.
@@ -72,6 +89,30 @@ public partial class HostWindow : Window
         Hide();
         WindowChrome.MakeToolWindow(Handle);
     }
+
+    private void OnTitleBarMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ToggleMaximize();
+            return;
+        }
+
+        if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
+        {
+            DragMove();
+        }
+    }
+
+    private void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnMaximizeClick(object sender, RoutedEventArgs e) => ToggleMaximize();
+
+    /// <summary>Close means hide: the product is a tray app and the webviews must survive.</summary>
+    private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
+
+    private void ToggleMaximize() =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void OnSourceInitialized(object? sender, EventArgs e) => WindowChrome.MakeToolWindow(Handle);
 
