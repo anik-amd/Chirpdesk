@@ -475,15 +475,14 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     }
 
     /// <summary>
-    /// Warm but not on screen: 320×240 keeps the renderer's composition target alive until
-    /// the next <see cref="Activate"/> puts this view back in the window.
+    /// Warm but not on screen. Keep the last full size: resizing a visible WebView2 before the
+    /// window fades out is what produced the small page flash on close, and it also left the
+    /// controller at 320×240 when the window was shown again.
     /// </summary>
     public void Park()
     {
-        _view.Width = 320;
-        _view.Height = 240;
-        _view.HorizontalAlignment = HorizontalAlignment.Left;
-        _view.VerticalAlignment = VerticalAlignment.Top;
+        _view.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _view.VerticalAlignment = VerticalAlignment.Stretch;
         _view.Visibility = Visibility.Visible;
     }
 
