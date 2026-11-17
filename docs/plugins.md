@@ -277,7 +277,25 @@ Validation: variant ids `^[a-z0-9-]{1,24}$`, unique; `mode` is `dark` or `light`
 
 Bundled filter packs are active by default. Deactivating one on the Plugins page removes its rules from every warm tab immediately; re-activating restores them. The permanent allowlist and the per-tab `blocking: off` command are independent of any pack.
 
-## 8. `panel.json` — the `tool` kind
+## 7.1 `themes.json` — palette flavours
+
+A `theme` plugin may ship named flavours. The host maps the known Catppuccin ids to token
+dictionaries; an unknown id is simply unavailable and falls back to the compiled palette. A theme
+plugin without `themes.json` is a capability plugin such as `page-dark`.
+
+```json
+{
+  "flavors": [
+    { "id": "latte", "name": "Latte", "mode": "light", "swatch": "#EFF1F5" },
+    { "id": "mocha", "name": "Mocha", "mode": "dark", "swatch": "#1E1E2E" }
+  ]
+}
+```
+
+`id` is `^[a-z0-9-]{1,24}$`, `mode` is `light` or `dark`, and `swatch` is a six-digit hex colour
+used only for the Settings card. Light and dark flavours are chosen separately.
+
+## 8. `panel.json` - the `tool` kind
 
 Tools are bundled only in v1 and cannot add capability. The host renders a closed set of primitives and executes a closed set of actions; there is no XAML, script, path or arbitrary command.
 
