@@ -455,19 +455,8 @@ public partial class HostWindow : Window
             return;
         }
 
-        BarLayer.Opacity = 0;
-        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-        };
-
-        fade.Completed += (_, _) =>
-        {
-            BarLayer.BeginAnimation(OpacityProperty, null);
-            BarLayer.Opacity = 1;
-        };
-
-        BarLayer.BeginAnimation(OpacityProperty, fade);
+        BarLayer.Opacity = 1;
+        BarLayer.BeginAnimation(OpacityProperty, null);
 
         var scale = new ScaleTransform(0.985, 0.985);
         var slide = new TranslateTransform(0, -10);
@@ -480,6 +469,8 @@ public partial class HostWindow : Window
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
         scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
         slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-10, 0, duration) { EasingFunction = ease });
+
+        BarHost.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
     }
 
     public void HideCommandBar()
