@@ -1,0 +1,9 @@
+{
+  "id": "facebook",
+  "name": "Facebook",
+  "url": "https://www.facebook.com/",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

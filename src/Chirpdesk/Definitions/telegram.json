@@ -2,7 +2,7 @@
   "id": "telegram",
   "name": "Telegram",
   "url": "https://web.telegram.org/k/",
-  "pageDarkMode": "auto",
+  "pageDarkMode": "off",
   "unreadRegex": "\\((\\d+)\\)",
   "apiVersion": 1,
   "minApiVersion": 1
