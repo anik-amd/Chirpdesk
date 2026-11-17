@@ -3,7 +3,7 @@ namespace Chirpdesk.Core.Settings;
 /// <summary>The whole user configuration. Small enough to rewrite atomically on every change.</summary>
 public sealed class AppSettings
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 

@@ -85,6 +85,14 @@ public sealed class SettingsStore : ISettingsStore
                 return new AppSettings();
             }
 
+            // Migrations are additive: fill the new defaults, bump the version, write it back
+            // so the next launch is a no-op. Reading never invents or drops an instance.
+            if (parsed.SchemaVersion < AppSettings.CurrentSchemaVersion)
+            {
+                parsed.SchemaVersion = AppSettings.CurrentSchemaVersion;
+                Save(parsed);
+            }
+
             return parsed;
         }
     }
