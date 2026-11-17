@@ -20,6 +20,24 @@ internal static partial class SettingsValidator
 
         settings.Theme = Theming.ThemeDecision.ToStorageValue(Theming.ThemeDecision.Parse(settings.Theme));
 
+        settings.CacheBudgetMb = settings.CacheBudgetMb <= 0
+            ? AppSettings.DefaultCacheBudgetMb
+            : Math.Clamp(settings.CacheBudgetMb, AppSettings.MinCacheBudgetMb, AppSettings.MaxCacheBudgetMb);
+
+        settings.GlobalCacheBudgetMb = settings.GlobalCacheBudgetMb <= 0
+            ? AppSettings.DefaultGlobalCacheBudgetMb
+            : Math.Clamp(settings.GlobalCacheBudgetMb, AppSettings.MinCacheBudgetMb, AppSettings.MaxGlobalCacheBudgetMb);
+
+        if (settings.GlobalCacheBudgetMb < settings.CacheBudgetMb)
+        {
+            settings.GlobalCacheBudgetMb = settings.CacheBudgetMb;
+        }
+
+        if (settings.ReclaimedBytes < 0)
+        {
+            settings.ReclaimedBytes = 0;
+        }
+
         foreach (var instance in settings.Services)
         {
             if (string.IsNullOrWhiteSpace(instance.ProfileId))

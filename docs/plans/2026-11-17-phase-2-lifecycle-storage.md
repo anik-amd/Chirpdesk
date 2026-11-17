@@ -12,6 +12,8 @@ Continues `docs/plans/2026-11-16-phase-1-command-bar.md`. Read before writing co
 
 ## Task 1: Settings v3 — lifecycle and storage preferences (TDD)
 
+**Status:** complete (2026-11-17). Schema 3 adds `DndUntil`, `Autostart`, per-profile/global cache budgets and `ReclaimedBytes`; v2 migrates additively. Budgets clamp to 10–2000 MB per profile and never exceed the global budget; reclaimed bytes cannot go negative.
+
 **Files:**
 - Modify: `src/Chirpdesk.Core/Settings/AppSettings.cs`, `SettingsStore.cs`, `SettingsValidator.cs`
 - Test: `tests/Chirpdesk.Core.Tests/Settings/SettingsMigrationTests.cs`

@@ -45,7 +45,7 @@ public sealed class SettingsMigrationTests : IDisposable
 
         // Migration is written back, not only held in memory.
         using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(SettingsPath));
-        Assert.Equal(2, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(AppSettings.CurrentSchemaVersion, document.RootElement.GetProperty("schemaVersion").GetInt32());
     }
 
     [Fact]
@@ -63,17 +63,88 @@ public sealed class SettingsMigrationTests : IDisposable
     }
 
     [Fact]
-    public void A_v2_file_is_left_alone()
+    public void A_v2_file_migrates_to_v3_without_losing_instances()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(SettingsPath, """
+            {
+              "schemaVersion": 2,
+              "services": [
+                {
+                  "instanceId": "whatsapp",
+                  "definitionId": "whatsapp",
+                  "name": "WhatsApp",
+                  "warmAtBoot": true
+                }
+              ]
+            }
+            """);
+
+        var loaded = new SettingsStore(SettingsPath, NullLog.Instance).Load();
+
+        Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
+        Assert.Equal("whatsapp", Assert.Single(loaded.Services).InstanceId);
+        Assert.Equal(60, loaded.CacheBudgetMb);
+        Assert.Equal(180, loaded.GlobalCacheBudgetMb);
+        Assert.Equal(0, loaded.ReclaimedBytes);
+        Assert.False(loaded.Autostart);
+        Assert.Null(loaded.DndUntil);
+
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(SettingsPath));
+        Assert.Equal(AppSettings.CurrentSchemaVersion, document.RootElement.GetProperty("schemaVersion").GetInt32());
+    }
+
+    [Fact]
+    public void A_v3_file_is_left_alone()
     {
         Directory.CreateDirectory(_dir);
         var original = """
-            { "schemaVersion": 2, "services": [] }
+            { "schemaVersion": 3, "services": [] }
             """;
         File.WriteAllText(SettingsPath, original);
 
         _ = new SettingsStore(SettingsPath, NullLog.Instance).Load();
 
         Assert.Equal(original, File.ReadAllText(SettingsPath));
+    }
+
+    [Fact]
+    public void Budgets_are_clamped_and_global_never_smaller_than_per_profile()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(SettingsPath, """
+            {
+              "schemaVersion": 3,
+              "services": [],
+              "cacheBudgetMb": 500,
+              "globalCacheBudgetMb": 100,
+              "reclaimedBytes": -10
+            }
+            """);
+
+        var loaded = new SettingsStore(SettingsPath, NullLog.Instance).Load();
+
+        Assert.Equal(500, loaded.CacheBudgetMb);
+        Assert.Equal(500, loaded.GlobalCacheBudgetMb);
+        Assert.Equal(0, loaded.ReclaimedBytes);
+    }
+
+    [Fact]
+    public void Dnd_until_round_trips()
+    {
+        Directory.CreateDirectory(_dir);
+        var store = new SettingsStore(SettingsPath, NullLog.Instance);
+        var settings = new AppSettings
+        {
+            DndUntil = DateTimeOffset.UtcNow.AddMinutes(30),
+            Autostart = true,
+        };
+
+        store.Save(settings);
+        var loaded = store.Load();
+
+        Assert.Equal(settings.DndUntil, loaded.DndUntil);
+        Assert.True(loaded.Autostart);
     }
 
     [Fact]

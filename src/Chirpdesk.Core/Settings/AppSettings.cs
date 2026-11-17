@@ -3,12 +3,33 @@ namespace Chirpdesk.Core.Settings;
 /// <summary>The whole user configuration. Small enough to rewrite atomically on every change.</summary>
 public sealed class AppSettings
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
+
+    public const int DefaultCacheBudgetMb = 60;
+    public const int DefaultGlobalCacheBudgetMb = 180;
+    public const int MinCacheBudgetMb = 10;
+    public const int MaxCacheBudgetMb = 2000;
+    public const int MaxGlobalCacheBudgetMb = 20000;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     /// <summary><c>system</c>, <c>light</c> or <c>dark</c>. One palette; no colour families yet.</summary>
     public string Theme { get; set; } = "system";
+
+    /// <summary>Toast suppression until this instant. Null or past means off.</summary>
+    public DateTimeOffset? DndUntil { get; set; }
+
+    /// <summary>Mirror of the HKCU Run entry, so Settings can show the real state.</summary>
+    public bool Autostart { get; set; }
+
+    /// <summary>Cache budget per profile, in MB. Session data is never counted.</summary>
+    public int CacheBudgetMb { get; set; } = DefaultCacheBudgetMb;
+
+    /// <summary>Cache budget across every disposed profile, in MB.</summary>
+    public int GlobalCacheBudgetMb { get; set; } = DefaultGlobalCacheBudgetMb;
+
+    /// <summary>Running total of bytes reclaimed by trims; display only.</summary>
+    public long ReclaimedBytes { get; set; }
 
     public List<ServiceInstance> Services { get; set; } = [];
 }
