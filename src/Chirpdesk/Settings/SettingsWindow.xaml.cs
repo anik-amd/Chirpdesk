@@ -29,6 +29,7 @@ public partial class SettingsWindow : Window
     private readonly Func<ServiceInstance, Task> _open;
     private readonly Func<string, Task> _sleep;
     private readonly Action _applyTheme;
+    private readonly Action? _stateChanged;
     private AppSettings _settings;
     private IReadOnlyList<OrphanItem> _orphans = [];
     private bool _loading;
@@ -41,6 +42,7 @@ public partial class SettingsWindow : Window
         Func<ServiceInstance, Task> open,
         Func<string, Task> sleep,
         Action applyTheme,
+        Action? stateChanged,
         bool dark)
     {
         InitializeComponent();
@@ -51,6 +53,7 @@ public partial class SettingsWindow : Window
         _open = open;
         _sleep = sleep;
         _applyTheme = applyTheme;
+        _stateChanged = stateChanged;
         _settings = store.Load();
 
         ThemeBox.ItemsSource = new[] { "system", "light", "dark" };
@@ -296,6 +299,7 @@ public partial class SettingsWindow : Window
         };
 
         Save();
+        _stateChanged?.Invoke();
     }
 
     private static DateTimeOffset TomorrowMorning()

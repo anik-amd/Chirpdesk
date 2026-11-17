@@ -129,6 +129,8 @@ One window, 720 × 600, resizable, opened only by the user (tray → Settings). 
 
 ## Task 8: Mute and Do Not Disturb (TDD)
 
+**Status:** complete (2026-11-17). `NotificationPolicy` suppresses only toasts; unread counting is untouched. `GatedToastSink` reads settings at toast time, so mute/DND changes apply without restarting a webview and a broken settings read fails open. Settings offers Off/30 min/1 h/until tomorrow 08:00; the tray tooltip shows the DND end time. Clearing DND is done from Settings (no tray menu item yet).
+
 **Files:**
 - Create: `src/Chirpdesk.Core/Notifications/NotificationPolicy.cs`
 - Modify: `src/Chirpdesk/Notifications/ToastService.cs` wiring, `App.xaml.cs`, settings window/tray

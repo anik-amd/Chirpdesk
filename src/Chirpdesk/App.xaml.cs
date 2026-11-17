@@ -125,6 +125,7 @@ public partial class App : Application
 
         InitializeTheme();
         SyncAutostartMirror();
+        UpdateTrayStatus();
 
         _log.Info("started hidden");
 
@@ -251,7 +252,10 @@ public partial class App : Application
             effective,
             _log!,
             SystemClock.Instance,
-            new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
+            new GatedToastSink(
+                new ToastService(_log!, id => Dispatcher.Invoke(() => ShowHostFor(id))),
+                new SettingsStore(AppPaths.SettingsFile, _log!),
+                _log!),
             DateTimeOffset.UtcNow,
             dark);
 
@@ -1151,6 +1155,27 @@ public partial class App : Application
         timeout.Start();
     }
 
+    /// <summary>Keeps the tray honest about DND without opening Settings.</summary>
+    private void UpdateTrayStatus()
+    {
+        if (_tray is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            _tray.ToolTipText = settings.DndUntil is { } until && until > DateTimeOffset.UtcNow
+                ? $"Chirpdesk — DND until {until.ToLocalTime():HH:mm}"
+                : "Chirpdesk";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not update the tray status: {ex.Message}");
+        }
+    }
+
     private void OpenHost() => ShowHost();
 
     private void OpenSettings()
@@ -1174,6 +1199,7 @@ public partial class App : Application
             instance => OpenInstanceAsync(instance, show: true, probe: false),
             SleepFromSettingsAsync,
             ApplyTheme,
+            UpdateTrayStatus,
             _host.IsDark);
 
         window.Closed += (_, _) => _settingsWindow = null;
