@@ -103,6 +103,10 @@ internal sealed class HiddenWebViewProbe : IAsyncDisposable
         _view.Dispose();
         _responseBody?.Dispose();
 
+        // The probe deletes its profile folder afterwards; a cached environment pointing at a
+        // deleted folder would fail the next run for no reason.
+        WebViewHost.Forget(_profileDirectory);
+
         await Task.CompletedTask;
     }
 

@@ -1,6 +1,6 @@
 # Phase 1 — Command Bar, definitions, multi-service
 
-**Status:** Tasks 1–3 complete (2026-11-17). Definitions validate, settings are v2, and the catalog loads four shipped definitions (4 loaded, 0 skipped). Next: Task 4, the service registry and warm/cold switching.
+**Status:** Tasks 1–3 complete (2026-11-17) and Task 4 started: one WebView2 environment per profile is now cached process-wide, which is the shared-profile requirement the registry will build on. Next in Task 4: the registry itself (warm/cold, active id, park/activate) and wiring `ShowHostFor` to it.
 
 Continues `docs/plans/2026-11-16-phase-0-spine.md`. Do not start until phase 0's soak, reboot row and toast-click row are ticked: this phase multiplies every one of those behaviours by the number of services.
 

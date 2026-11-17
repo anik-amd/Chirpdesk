@@ -251,6 +251,7 @@ internal sealed class SelfTest
         }
         finally
         {
+            WebViewHost.Forget(directory);
             TryDelete(directory);
         }
     }
