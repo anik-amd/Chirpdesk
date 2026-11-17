@@ -99,7 +99,7 @@ internal sealed class HiddenWebViewProbe : IAsyncDisposable
 
         _disposed = true;
 
-        _host.ClearServiceContent();
+        _host.RemoveServiceContent(_view);
         _view.Dispose();
         _responseBody?.Dispose();
 

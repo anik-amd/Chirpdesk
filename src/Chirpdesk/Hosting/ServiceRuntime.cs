@@ -135,9 +135,15 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         return runtime;
     }
 
-    /// <summary>Warm service takes the window. Size is the only thing that changes.</summary>
+    /// <summary>
+    /// Warm service takes the window. Attaching the view is the part that actually switches:
+    /// the previous active one is still in the tree from its own <see cref="Activate"/>, and
+    /// resizing alone would leave the last-added page on screen.
+    /// </summary>
     public void Activate()
     {
+        _host.SetServiceContent(_view);
+
         _view.Width = double.NaN;
         _view.Height = double.NaN;
         _view.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -149,7 +155,10 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _host.UpdateLayout();
     }
 
-    /// <summary>Warm but not on screen: 1×1 keeps the renderer's composition target alive.</summary>
+    /// <summary>
+    /// Warm but not on screen: 320×240 keeps the renderer's composition target alive until
+    /// the next <see cref="Activate"/> puts this view back in the window.
+    /// </summary>
     public void Park()
     {
         _view.Width = 320;
@@ -173,7 +182,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             _bridge.Detach();
         }
 
-        _host.ClearServiceContent();
+        _host.RemoveServiceContent(_view);
         _view.Dispose();
 
         await Task.CompletedTask;

@@ -20,14 +20,24 @@ public partial class HostWindow : Window
     /// <summary>Hosts non-visual framework elements (the tray icon) so they get a Loaded event.</summary>
     public void Attach(System.Windows.UIElement element) => ContentRoot.Children.Add(element);
 
-    /// <summary>Puts one webview in the window. The caller owns its lifetime.</summary>
+    /// <summary>
+    /// Puts one webview in the window, replacing whatever was there. The caller owns its
+    /// lifetime; the replaced view stays alive, it is only detached. Already being the only
+    /// child is a no-op, so re-showing the active service does not reload its page.
+    /// </summary>
     public void SetServiceContent(System.Windows.UIElement element)
     {
+        if (ServiceLayer.Children.Count == 1 && ReferenceEquals(ServiceLayer.Children[0], element))
+        {
+            return;
+        }
+
         ServiceLayer.Children.Clear();
         ServiceLayer.Children.Add(element);
     }
 
-    public void ClearServiceContent() => ServiceLayer.Children.Clear();
+    /// <summary>Detaches one webview without touching another instance's content.</summary>
+    public void RemoveServiceContent(System.Windows.UIElement element) => ServiceLayer.Children.Remove(element);
 
     /// <summary>
     /// One palette, two ends. The window background is the only chrome that exists before the
