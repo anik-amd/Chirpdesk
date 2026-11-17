@@ -59,7 +59,7 @@ desktop session.
 
 ## Measurements still owed
 
-- Three warm + one cold after reboot: RAM and disk, plus notifications within 30 s and no boot storm.
+- Three warm + one cold after reboot: RAM and disk, plus notifications within 30 s and no boot storm. An idle three-warm run already measured ~1.8 GB total (`docs/measurements.md`), so check whether boot and a cold service change the picture.
 - Third account measurement (deferred on purpose).
 
 ## Known gaps

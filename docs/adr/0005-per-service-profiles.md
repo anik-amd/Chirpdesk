@@ -25,3 +25,14 @@ Phase 0 measured one signed-in WhatsApp at **547 MB private working set** (27 MB
 - Deleting a dependent instance never deletes the shared profile; deleting an owner is blocked until every dependent is unshared or removed. Standalone instances delete only their own profile directory (path-guarded), and the Recycle Bin is used for user data.
 - Cookie/session backup is per profile; there is no "move account" feature in v1.
 - The environment-per-profile choice is reversible only with a profile-folder migration, so it is measured in phase 1 rather than assumed forever.
+
+## Amendment 2026-11-17 - three warm services measured
+
+Three real accounts (WhatsApp, Telegram, Facebook) warm and idle measured **1773 MB** total: app
+126 MB plus 1647 MB across 20 `msedgewebview2` processes, with 585 MB of profiles on disk
+(`docs/measurements.md`, commit `4586bba`). That is above the 1.6 GB revisit trigger with three
+services rather than four, so three warm services is the practical guidance ceiling for the 12 GB
+target. The fallback (one environment with multiple WebView2 profiles) stays deferred: the current
+cost is acceptable on the target machine, nothing in daily use has demanded four warm services, and
+the migration is not worth doing on a single measurement. Revisit if the user genuinely needs four
+warm accounts or if the 12 GB target becomes the minimum.

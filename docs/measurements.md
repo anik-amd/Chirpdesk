@@ -136,3 +136,11 @@ Base commit `e2aa6e9` (two warm services, settings v3).
 **Verified while building phase 2.** Normal launch warmed two pinned services hidden (`boot: warmed 2 pinned service(s)`, no `window shown`); settings migrated v2→v3 with the same two instances; `--selftest` slept both test runtimes, left no active, re-added and woke one; the bundled cleaner panel loaded (`tool panels: 1 loaded`); the Settings window opened from the tray and exposed services, add, theme, autostart, DND and storage controls through UI Automation; Esc hides; Ctrl+W closes a tab and activates the next.
 
 **Needs the user's hands.** Settings visual check at 100 %/150 %; add a service from a definition and sign in; sleep then wake without re-pairing; enable autostart and reboot to see the 20 s delay; DND 30 min with a real message; trim > 0 bytes and confirm the session survives; seed and restore an orphan from the Recycle Bin; three warm + one cold RAM. These remain in `docs/testing-strategy.md` §5.
+
+## Measurement, 2026-11-17 20:59
+
+Base commit `4586bba`. App process 126.1 MB; WebView2 1647.1 MB across 20 processes; total **1773.2 MB**. Profiles on disk **585.3 MB**. Warm services logged: 3.
+
+This is the first real three-warm reading: **~1.77 GB** total, above ADR 0005's 1.6 GB revisit trigger with three services and below the ~2.2 GB prediction for four. Three warm services is the practical guidance ceiling until the daily-use evidence justifies the shared-environment fallback; the architecture is unchanged.
+
+Last blocking line: `2026-11-17 20:58:44.271 info blocking for 'facebook': on, packs=1, skipped=0`
