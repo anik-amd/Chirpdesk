@@ -152,8 +152,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// <summary>Warm but not on screen: 1×1 keeps the renderer's composition target alive.</summary>
     public void Park()
     {
-        _view.Width = 1;
-        _view.Height = 1;
+        _view.Width = 320;
+        _view.Height = 240;
         _view.HorizontalAlignment = HorizontalAlignment.Left;
         _view.VerticalAlignment = VerticalAlignment.Top;
         _view.Visibility = Visibility.Visible;
