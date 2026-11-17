@@ -405,6 +405,17 @@ public partial class App : Application
         {
             e.Handled = true;
             HideHost();
+            return;
+        }
+
+        // Ctrl+Tab / Ctrl+Shift+Tab cycles warm services while the window has focus. The
+        // always-available version needs the global hotkey and the overlay, which is the next
+        // slice; this one proves the registry and keyboard path.
+        if (e.Key == Key.Tab && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            e.Handled = true;
+            var direction = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? -1 : 1;
+            _registry?.Cycle(direction);
         }
     }
 

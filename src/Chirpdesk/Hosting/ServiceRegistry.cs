@@ -63,6 +63,13 @@ internal sealed class ServiceRegistry
 
     public void ParkActive() => Active?.Park();
 
+    /// <summary>Next/previous warm service in MRU order. False when there is nothing to move to.</summary>
+    public bool Cycle(int direction)
+    {
+        var next = _mru.Cycle(Active?.InstanceId, direction);
+        return next is not null && Activate(next);
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var runtime in _warm.Values)
