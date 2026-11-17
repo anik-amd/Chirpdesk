@@ -172,6 +172,8 @@ Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible
 
 ## Task 9: Phase 1 gate
 
+**Status:** automated gate complete (2026-11-17): 16 self-test checks and `gate.ps1` pass; RAM/disk recorded. Human rows 9.2/9.3 still open (two accounts, cold start from search, a real inbound message, three-warm RAM, sleep/standby).
+
 ### 9.1 Automated — extend `--selftest`
 
 | Check | Asserts |

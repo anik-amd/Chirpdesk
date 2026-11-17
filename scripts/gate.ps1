@@ -1,18 +1,19 @@
 #requires -Version 7.0
 <#
 .SYNOPSIS
-    Runs the automated half of the Chirpdesk phase-0 gate and prints one PASS/FAIL line per check.
+    Runs the automated half of the Chirpdesk phase gate and prints one PASS/FAIL line per check.
 
 .DESCRIPTION
     Two invocations, because one process cannot observe its own teardown:
 
-      1. Chirpdesk.exe --selftest   eleven headless checks, exit code is the verdict
+      1. Chirpdesk.exe --selftest   headless checks: settings, definitions, catalog, migration,
+                                    registry, command bar, environment, notifications, teardown
       2. Chirpdesk.exe --open=whatsapp --hidden --quit-after=25
                                     a real service is created, parked and disposed through the
                                     normal quit path, so the orphan check afterwards means something
 
-    Exit code 0 means every check passed. The human half (QR, a real message, visible flash,
-    3 h soak) is in docs/plans/2026-11-16-phase-0-spine.md §11.2 and cannot be automated.
+    Exit code 0 means every check passed. The human half (two accounts, a real message, the
+    visible palette) is in docs/testing-strategy.md §5 and cannot be automated.
 
 .EXAMPLE
     pwsh scripts/gate.ps1
@@ -73,7 +74,7 @@ try {
 
     # 1. The headless gate. Its own PASS/FAIL lines go to logs/selftest.log and the console.
     $selfTest = Start-Process -FilePath $exe -ArgumentList '--selftest', "--soak-seconds=$SoakSeconds" -PassThru -Wait
-    Write-Check 'selftest' ($selfTest.ExitCode -eq 0) "eleven checks in $(Join-Path $env:LOCALAPPDATA 'Chirpdesk\logs\selftest.log'); exit $($selfTest.ExitCode)"
+    Write-Check 'selftest' ($selfTest.ExitCode -eq 0) "headless checks in $(Join-Path $env:LOCALAPPDATA 'Chirpdesk\logs\selftest.log'); exit $($selfTest.ExitCode)"
 
     # 2. Real service, parked, normal quit. No window is ever shown.
     $before = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
@@ -99,5 +100,5 @@ if ($failures -gt 0) {
     exit 1
 }
 
-Write-Host 'All automated checks passed. Human rows: docs/plans/2026-11-16-phase-0-spine.md section 11.2'
+Write-Host 'All automated checks passed. Human rows: docs/testing-strategy.md section 5'
 exit 0

@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using System.IO;
+using Chirpdesk.Core.CommandBar;
+using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
+using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Time;
 using Chirpdesk.Hosting;
@@ -43,17 +46,23 @@ internal sealed class SelfTest
         Guarded("tray", CheckTray);
         Guarded("window-hidden", CheckWindowIsHidden);
         Guarded("single-instance", CheckSingleInstance);
+        Guarded("definitions", CheckDefinitions);
+        Guarded("catalog", CheckCatalog);
+        Guarded("migration", CheckMigration);
+        Guarded("bar-state", CheckBarState);
 
         try
         {
             var environmentOk = await CheckEnvironmentAsync().ConfigureAwait(true);
-            Check("environment", environmentOk, environmentOk ? "created under the profiles root" : "could not create a profile environment");
+            Check("environment", environmentOk, environmentOk ? "created under the profiles root, cached per profile" : "could not create or reuse a profile environment");
         }
         catch (Exception ex)
         {
             Check("environment", false, ex.Message);
             _log.Error("environment check crashed", ex);
         }
+
+        await CheckRegistryAsync().ConfigureAwait(true);
 
         var probeDirectory = Path.Combine(AppPaths.ProfilesRoot, "__probe");
         try
@@ -161,6 +170,240 @@ internal sealed class SelfTest
         }
     }
 
+    private void CheckDefinitions()
+    {
+        var temp = Path.Combine(Path.GetTempPath(), "chirpdesk-selftest-plugins", Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var bundledRoot = new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true);
+            var bundled = PluginLoader.LoadServiceDefinitions([bundledRoot], _log);
+            string[] expected = ["whatsapp", "messenger", "telegram", "facebook", "instagram"];
+            var present = expected.All(id => bundled.Definitions.Any(definition => definition.Id == id));
+            var clean = bundled.Errors.Count == 0;
+
+            var bad = Path.Combine(temp, "bad-root", "bad");
+            Directory.CreateDirectory(bad);
+            File.WriteAllText(Path.Combine(bad, "plugin.json"), """
+                { "id": "bad id", "kind": "service", "name": "Bad", "version": "1.0.0", "apiVersion": 1 }
+                """);
+            File.WriteAllText(Path.Combine(bad, "service.json"), """
+                { "url": "https://bad.example/" }
+                """);
+            var skipped = PluginLoader.LoadServiceDefinitions(
+                [new PluginScanRoot(Path.Combine(temp, "bad-root"), Bundled: false)],
+                _log);
+
+            var shadow = Path.Combine(temp, "shadow-root", "whatsapp");
+            Directory.CreateDirectory(shadow);
+            File.WriteAllText(Path.Combine(shadow, "plugin.json"), """
+                { "id": "whatsapp", "kind": "service", "name": "Shadow", "version": "1.0.0", "apiVersion": 1 }
+                """);
+            File.WriteAllText(Path.Combine(shadow, "service.json"), """
+                { "url": "https://shadow.example/" }
+                """);
+            var shadowed = PluginLoader.LoadServiceDefinitions(
+                [bundledRoot, new PluginScanRoot(Path.Combine(temp, "shadow-root"), Bundled: false)],
+                _log);
+            var shadowDefinition = shadowed.Definitions.FirstOrDefault(definition => definition.Id == "whatsapp");
+            var shadowWorks = shadowDefinition?.Url == "https://shadow.example/"
+                && shadowed.Shadowed.Contains("whatsapp");
+
+            Check(
+                "definitions",
+                present && clean && skipped.Errors.Count == 1 && skipped.Definitions.Count == 0 && shadowWorks,
+                $"bundled={bundled.Definitions.Count} skipped=1 shadowed=whatsapp");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Check("definitions", false, ex.Message);
+        }
+        finally
+        {
+            TryDelete(temp);
+        }
+    }
+
+    private void CheckCatalog()
+    {
+        var definition = new ServiceDefinition
+        {
+            Id = "probe",
+            Name = "Probe",
+            Url = "https://probe.example/",
+            UnreadRegex = @"\((\d+)\)",
+            ApiVersion = DefinitionValidator.HostApiVersion,
+        };
+
+        var catalog = new ServiceCatalog([definition]);
+        var fallback = catalog.Resolve(new ServiceInstance
+        {
+            InstanceId = "fallback",
+            DefinitionId = "probe",
+        });
+        var overridden = catalog.Resolve(new ServiceInstance
+        {
+            InstanceId = "override",
+            DefinitionId = "probe",
+            Name = "Probe Work",
+            Url = "https://probe.example/work",
+        });
+        var unknown = catalog.Resolve(new ServiceInstance
+        {
+            InstanceId = "unknown",
+            DefinitionId = "missing",
+        });
+
+        Check(
+            "catalog",
+            fallback?.Url == definition.Url
+            && overridden?.Name == "Probe Work"
+            && overridden.Url == "https://probe.example/work"
+            && unknown is null,
+            "instance overrides, definition fallback, unknown id fails closed");
+    }
+
+    private void CheckMigration()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "chirpdesk-selftest-migration", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "settings.json");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(path, """
+                {
+                  "schemaVersion": 1,
+                  "services": [
+                    {
+                      "instanceId": "legacy-chat",
+                      "definitionId": null,
+                      "name": "Legacy Chat",
+                      "url": "https://legacy.example/",
+                      "warmAtBoot": true
+                    }
+                  ]
+                }
+                """);
+
+            var loaded = new SettingsStore(path, _log).Load();
+            using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            var instance = loaded.Services.FirstOrDefault();
+
+            Check(
+                "migration",
+                instance?.InstanceId == "legacy-chat"
+                && instance.Url == "https://legacy.example/"
+                && document.RootElement.GetProperty("schemaVersion").GetInt32() == 2,
+                "v1 fixture migrated to v2, instance preserved");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            Check("migration", false, ex.Message);
+        }
+        finally
+        {
+            TryDelete(directory);
+        }
+    }
+
+    private void CheckBarState()
+    {
+        var cycle = BarState.ForCycle(["a", "b", "c"], activeId: "a", direction: 1);
+        var startsNext = cycle.Selected == "b";
+        cycle.Move(1);
+        cycle.Move(1);
+        var wraps = cycle.Selected == "a";
+        var escHides = BarKeys.Decide(cycle, BarKey.Escape, BarModifiers.None).Kind == BarKeyActionKind.Hide;
+        var ctrlWCloses = BarKeys.Decide(cycle, BarKey.W, BarModifiers.Control).Kind == BarKeyActionKind.CloseTab;
+
+        var search = BarState.ForSearch();
+        search.ShowResults(["telegram", "messenger"]);
+        search.Append("tel");
+        var digitsSelect = BarKeys.Decide(search, BarKey.Digit2, BarModifiers.Control).Value == 1;
+        var ranked = SearchIndex.Rank(
+            "tel",
+            [
+                new SearchCandidate("telegram", "Telegram", SearchKind.Warm),
+                new SearchCandidate("telethon", "Telethon", SearchKind.Cold),
+            ]);
+
+        Check(
+            "bar-state",
+            startsNext && wraps && escHides && ctrlWCloses && digitsSelect && ranked[0].Id == "telegram",
+            "cycle wraps, Esc hides, Ctrl+W closes, Ctrl+2 selects, prefix ranking");
+    }
+
+    private async Task CheckRegistryAsync()
+    {
+        var firstDirectory = Path.Combine(AppPaths.ProfilesRoot, "__registry-a");
+        var secondDirectory = Path.Combine(AppPaths.ProfilesRoot, "__registry-b");
+        ServiceRegistry? registry = null;
+        var ok = false;
+        var detail = string.Empty;
+
+        try
+        {
+            registry = new ServiceRegistry(_log);
+            await registry.AddAsync(await CreateProbeRuntimeAsync("registry-a", "__registry-a")).ConfigureAwait(true);
+            await registry.AddAsync(await CreateProbeRuntimeAsync("registry-b", "__registry-b")).ConfigureAwait(true);
+
+            registry.Activate("registry-a");
+            registry.Activate("registry-b");
+            registry.Activate("registry-a");
+
+            var orderOk = registry.Order.SequenceEqual(["registry-a", "registry-b"]);
+            var aliveOk = registry.Find("registry-a") is not null && registry.Find("registry-b") is not null;
+
+            registry.Cycle(1);
+            var cycleOk = registry.Active?.InstanceId == "registry-b";
+            ok = orderOk && aliveOk && cycleOk;
+            detail = $"mru={string.Join(',', registry.Order)} cycle={registry.Active?.InstanceId} bothAlive={aliveOk}";
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            detail = ex.Message;
+            _log.Error("registry check crashed", ex);
+        }
+        finally
+        {
+            if (registry is not null)
+            {
+                await registry.DisposeAsync().ConfigureAwait(true);
+            }
+
+            WebViewHost.Forget(firstDirectory);
+            WebViewHost.Forget(secondDirectory);
+            _ = await TryDeleteAsync(firstDirectory).ConfigureAwait(true);
+            _ = await TryDeleteAsync(secondDirectory).ConfigureAwait(true);
+        }
+
+        Check("registry", ok, detail);
+    }
+
+    private Task<ServiceRuntime> CreateProbeRuntimeAsync(string instanceId, string profileId) =>
+        ServiceRuntime.CreateAsync(
+            _host,
+            new ServiceInstance
+            {
+                InstanceId = instanceId,
+                Name = instanceId,
+                Url = "https://example.invalid/",
+                ProfileId = profileId,
+            },
+            _log,
+            SystemClock.Instance,
+            new NoToast(),
+            DateTimeOffset.UtcNow,
+            darkTheme: false);
+
+    private sealed class NoToast : IToastSink
+    {
+        public void Show(ToastMessage message)
+        {
+        }
+    }
+
     private void CheckAppIdentity()
     {
         var shortcut = Aumid.ShortcutPath;
@@ -246,8 +489,9 @@ internal sealed class SelfTest
 
         try
         {
-            await WebViewHost.CreateEnvironmentAsync("__envcheck", directory).ConfigureAwait(true);
-            return Directory.Exists(directory);
+            var first = await WebViewHost.CreateEnvironmentAsync("__envcheck", directory).ConfigureAwait(true);
+            var second = await WebViewHost.CreateEnvironmentAsync("__envcheck", directory).ConfigureAwait(true);
+            return Directory.Exists(directory) && ReferenceEquals(first, second);
         }
         finally
         {

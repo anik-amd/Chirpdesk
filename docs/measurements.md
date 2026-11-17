@@ -73,3 +73,36 @@ Temporary `HKCU\…\Run` entry wrapping the exe in `timeout 20`. Boot at 01:49:0
 [PASS] no-orphan-webviews - webview processes using Chirpdesk profiles: 0 before, 0 after
 [PASS] no-orphan-app - Chirpdesk processes left: 0
 ```
+
+## Phase 1 gate, 2026-11-17
+
+Base commit `dfc9a18` (two warm services: WhatsApp and Telegram).
+
+```
+[PASS] webview2-runtime - 157.0.4341.46
+[PASS] settings - round-trip, atomic replace and corrupt-file quarantine
+[PASS] app-identity - shortcut=True notifier=True aumid=Chirpdesk
+[PASS] tray - icon=True tooltip=Chirpdesk
+[PASS] window-hidden - toolwindow=True appwindow=False visible=True at=-32768,-32768
+[PASS] single-instance - exited=True code=0 windows=False in 501 ms
+[PASS] definitions - bundled=5 skipped=1 shadowed=whatsapp
+[PASS] catalog - instance overrides, definition fallback, unknown id fails closed
+[PASS] migration - v1 fixture migrated to v2, instance preserved
+[PASS] bar-state - cycle wraps, Esc hides, Ctrl+W closes, Ctrl+2 selects, prefix ranking
+[PASS] environment - created under the profiles root, cached per profile
+[PASS] registry - mru=registry-b,registry-a cycle=registry-b bothAlive=True
+[PASS] hidden-warm - timers=10/10 ready=complete
+[PASS] notification-capability - event=True script=True permission=granted
+[PASS] toast-shown - appeared in Action Center history
+[PASS] profile-released - no process is holding the profile
+```
+
+`pwsh scripts/gate.ps1 -SkipBuild -SoakSeconds 10`: all five outer checks passed (no-running-instance, selftest, warm-service-quit, no-orphan-webviews, no-orphan-app).
+
+**RAM and disk, two warm services.** App process 126.8 MB private working set; WebView2 1260.7 MB across 13 `msedgewebview2.exe` processes; total **1387.6 MB**. Profiles on disk **389.7 MB**. Measured after 15 s with both services warm, no sign-in performed in this session.
+
+This is higher than the phase-0 single-service reading (547 MB) because it includes two chat clients plus their service-worker/renderer processes. It sits close to the per-warm-service cost the plan warns about; record it before promising three warm services.
+
+**Manual evidence gathered during phase 1.** `Ctrl+Tab`/`Ctrl+Shift+Tab` cycles warm tabs; `Ctrl+P` lists open tabs and filters (`tel` ranks Telegram first); `Up`/`Down`/`Tab` move the highlight; `Esc` hides; `Ctrl+W` closes the highlighted tab and the next takes over; palette scroll survives open/close (CDP: `scrollTop=300` before, open and after); page focus returns on close; five bundled definitions load from `plugins/`; a user plugin in `%APPDATA%\Chirpdesk\plugins` loaded as a sixth definition before removal.
+
+**Not yet covered by hand.** Two WhatsApp accounts signed in simultaneously; a cold service started from search; a real inbound message while the palette is open; three warm services RAM; sleep/standby delivery. These remain in `docs/testing-strategy.md` §5.
