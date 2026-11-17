@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Settings;
@@ -224,6 +225,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     public string? Url => _instance.Url;
 
+    /// <summary>The persisted page-dark policy: <c>on</c>, <c>auto</c>, <c>off</c> or unset.</summary>
+    public string? PageDarkMode => _instance.PageDarkMode;
+
     /// <summary>Hides the page while the Command Bar is open. Not disposed; state survives.</summary>
     public void CollapseForCommandBar() => _view.Visibility = Visibility.Collapsed;
 
@@ -326,6 +330,12 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
     /// <summary>Last parsed unread count; 0 when the title does not show one.</summary>
     public int UnreadCount { get; private set; }
+
+    /// <summary>
+    /// Master switch owned by the bundled <c>page-dark</c> theme plugin. When the plugin is
+    /// deactivated no page is darkened, whatever the per-service policy says.
+    /// </summary>
+    public static bool PageDarkeningEnabled { get; set; } = true;
 
     public static async Task<ServiceRuntime> CreateAsync(
         HostWindow host,
@@ -553,10 +563,11 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     }
 
     /// <summary>
-    /// Applies dark or light to the page. <c>PreferredColorScheme</c> is the clean lever and
-    /// works without touching the DOM where the site supports it; the filter fallback is what
-    /// makes dark actually dark on sites that ignore the media query. The returned string is
-    /// logged so the choice is observable, not assumed.
+    /// Applies the configured page theme. Page darkening always follows the app: it only runs
+    /// while the app is dark, whatever the policy says. <c>on</c> and <c>auto</c> both allow the
+    /// filter in dark mode (<c>auto</c> is the plugin default, <c>on</c> an explicit user
+    /// override); <c>off</c> never touches the page. The returned string is logged so the choice
+    /// is observable, not assumed.
     /// </summary>
     public async Task ApplyThemeAsync(bool dark)
     {
@@ -575,26 +586,34 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 return;
             }
 
+            var mode = _instance.PageDarkMode;
+            var forced = string.Equals(mode, ServiceDefinition.PageDarkOn, StringComparison.OrdinalIgnoreCase);
+            var follow = string.Equals(mode, ServiceDefinition.PageDarkAuto, StringComparison.OrdinalIgnoreCase);
+            var filterEnabled = PageDarkeningEnabled && dark && (forced || follow);
+
             core.Profile.PreferredColorScheme = dark
                 ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
                 : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
 
-            var pageDark = dark
-                && string.Equals(_instance.PageDarkMode, "auto", StringComparison.OrdinalIgnoreCase);
-
-            var argument = pageDark ? "true" : "false";
+            var argument = filterEnabled ? "true" : "false";
             var script = "window.__chirpdeskTheme ? window.__chirpdeskTheme(" + argument + ") : ''";
             var result = await core.ExecuteScriptAsync(script);
 
-            var mode = dark ? "dark" : "light";
-            var policy = pageDark ? "auto" : "off";
+            var policy = forced ? "on" : follow ? "auto" : "off";
             var outcome = result.Trim('"');
-            _log.Info($"web theme for '{_instance.InstanceId}': mode={mode} pageDark={policy} result={outcome}");
+            _log.Info($"web theme for '{_instance.InstanceId}': mode={(dark ? "dark" : "light")} pageDark={policy} result={outcome}");
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
             _log.Warn($"could not apply the page theme for '{_instance.InstanceId}': {ex.Message}");
         }
+    }
+
+    /// <summary>Session-level switch used by the Command Bar; updates the page immediately.</summary>
+    public Task SetPageDarkModeAsync(string mode)
+    {
+        _instance.PageDarkMode = mode;
+        return ApplyThemeAsync(_darkTheme);
     }
 
     /// <summary>Counts only: a title is user content and never goes to the log.</summary>

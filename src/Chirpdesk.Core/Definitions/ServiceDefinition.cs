@@ -13,6 +13,7 @@ public sealed class ServiceDefinition
 
     public const string PageDarkOff = "off";
     public const string PageDarkAuto = "auto";
+    public const string PageDarkOn = "on";
 
     public string Id { get; set; } = string.Empty;
 

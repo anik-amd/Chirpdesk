@@ -144,6 +144,8 @@ The app sets the profile's `prefers-color-scheme` to match the app theme before 
 - `off` — never touch the page. Use this when the site has its own dark theme (WhatsApp, Telegram). The site reacts to `prefers-color-scheme` itself.
 - `auto` — let the host measure the rendered page and apply an inverting filter **only if it is still light**. The measurement waits for an opaque background, re-checks for ~10 s, and yields to a theme that arrives after hydration.
 
+Darkening only ever happens while the app itself is dark. The bundled `page-dark` **theme plugin** is the master switch: deactivate it and no page is inverted, whatever a definition or instance says. Bundled plugins are active by default; the Plugins page toggles it. A per-instance override of `on` or `off` is allowed, but `on` still obeys the app theme.
+
 Do not set `auto` for a site known to follow the OS scheme: the host would only be second-guessing it. Never try to express dark mode as JavaScript; page-context JS is not a plugin permission (§9).
 
 The app never guesses from a URL: `pageDarkMode` is explicit data, and the user may override it per instance.

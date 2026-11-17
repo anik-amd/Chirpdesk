@@ -898,6 +898,25 @@ public partial class App : Application
             "command:plugins", "Plugins & services", SearchKind.Command,
             ["plugins", "plugin", "add", "services"], State: null, Accent: "#275949", Initial: "P"));
 
+        // Only meaningful with a current tab and while the page-dark plugin is active.
+        if (_registry.Active is { } active
+            && PluginState.IsEnabled(settings, PluginState.PageDarkId))
+        {
+            var pageDark = string.Equals(
+                active.PageDarkMode,
+                ServiceDefinition.PageDarkOn,
+                StringComparison.OrdinalIgnoreCase);
+
+            candidates.Add(new SearchCandidate(
+                "command:page-dark",
+                pageDark ? "Turn page dark mode off" : "Turn page dark mode on",
+                SearchKind.Command,
+                ["page", "dark", "theme", "night", "mode", "appearance", "toggle"],
+                State: null,
+                Accent: "#3A4A63",
+                Initial: "D"));
+        }
+
         return candidates;
     }
 
@@ -983,6 +1002,12 @@ public partial class App : Application
         if (string.Equals(selected, "command:plugins", StringComparison.Ordinal))
         {
             OpenPlugins();
+            return;
+        }
+
+        if (string.Equals(selected, "command:page-dark", StringComparison.Ordinal))
+        {
+            _ = TogglePageDarkModeAsync();
             return;
         }
 
@@ -1074,6 +1099,7 @@ public partial class App : Application
                 {
                     "command:settings" => UiIcons.Create("settings", accentBrush, 22),
                     "command:plugins" => UiIcons.Create("plugins", accentBrush, 22),
+                    "command:page-dark" => UiIcons.Create("moon", accentBrush, 22),
                     _ => definitionId is null
                         ? ServiceBadge.Create(name, accent, 22)
                         : ServiceIcons.Create(definitionId, name, accent, 22),
@@ -1143,10 +1169,12 @@ public partial class App : Application
         {
             var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
             _themeMode = ThemeDecision.Parse(settings.Theme);
+            ServiceRuntime.PageDarkeningEnabled = PluginState.IsEnabled(settings, PluginState.PageDarkId);
         }
         catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
         {
             _themeMode = ThemeMode.System;
+            ServiceRuntime.PageDarkeningEnabled = true;
         }
 
         SystemTheme.Start();
@@ -1429,6 +1457,7 @@ public partial class App : Application
                 EnablePluginAsync,
                 AddAccountAsync,
                 DisablePluginAsync,
+                SetPluginEnabledAsync,
                 ClosePage);
         }
 
@@ -1596,6 +1625,76 @@ public partial class App : Application
 
         store.Save(settings);
         _log.Info($"plugin '{definition.Id}' turned off; sessions preserved");
+    }
+
+    /// <summary>
+    /// Flips the current tab between forced dark and off. The choice is persisted per instance,
+    /// so a toggle survives a restart and stays scoped to that account.
+    /// </summary>
+    private async Task TogglePageDarkModeAsync()
+    {
+        if (_log is null || _registry?.Active is not { } runtime)
+        {
+            return;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log);
+        var settings = store.Load();
+
+        if (!PluginState.IsEnabled(settings, PluginState.PageDarkId))
+        {
+            _log.Info("page dark mode ignored: the page-dark plugin is deactivated");
+            return;
+        }
+
+        var next = string.Equals(runtime.PageDarkMode, ServiceDefinition.PageDarkOn, StringComparison.OrdinalIgnoreCase)
+            ? ServiceDefinition.PageDarkOff
+            : ServiceDefinition.PageDarkOn;
+
+        var instance = settings.Services.FirstOrDefault(
+            service => string.Equals(service.InstanceId, runtime.InstanceId, StringComparison.OrdinalIgnoreCase));
+
+        if (instance is not null)
+        {
+            instance.PageDarkMode = next;
+            store.Save(settings);
+        }
+
+        await runtime.SetPageDarkModeAsync(next);
+        _log.Info($"page dark mode for '{runtime.InstanceId}' set to {next}");
+    }
+
+    /// <summary>
+    /// Activates or deactivates a non-service plugin. The page-dark theme plugin owns the
+    /// global darkening switch, so its state is mirrored onto every warm runtime immediately.
+    /// </summary>
+    private async Task SetPluginEnabledAsync(string pluginId, bool enabled)
+    {
+        if (_log is null)
+        {
+            return;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log);
+        var settings = store.Load();
+        PluginState.SetEnabled(settings, pluginId, enabled);
+        store.Save(settings);
+
+        if (string.Equals(pluginId, PluginState.PageDarkId, StringComparison.OrdinalIgnoreCase))
+        {
+            ServiceRuntime.PageDarkeningEnabled = enabled;
+            var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
+
+            foreach (var id in _registry?.Order ?? Array.Empty<string>())
+            {
+                if (_registry?.Find(id) is { } runtime)
+                {
+                    await runtime.ApplyThemeAsync(dark);
+                }
+            }
+        }
+
+        _log.Info($"plugin '{pluginId}' {(enabled ? "activated" : "deactivated")}");
     }
 
     private void Terminate(int exitCode)

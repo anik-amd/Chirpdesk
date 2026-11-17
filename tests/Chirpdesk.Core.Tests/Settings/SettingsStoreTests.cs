@@ -144,6 +144,8 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("auto", "auto")]
     [InlineData("AUTO", "auto")]
     [InlineData("off", "off")]
+    [InlineData("on", "on")]
+    [InlineData("ON", "on")]
     [InlineData("nonsense", "off")]
     [InlineData(null, null)]
     [InlineData("", null)]

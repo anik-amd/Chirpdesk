@@ -30,3 +30,19 @@ Page darkening is a **per-site** policy, because the site knows whether it alrea
 - The filter is a blunt instrument: gradients shift hue, shadows invert oddly, and fixed-position layers can move because `filter` creates a containing block. It is the price of dark on sites that do not support it; sites that do support `prefers-color-scheme` never get the filter.
 - The app cannot tell a deliberately light site from a broken one; luminance is the only signal, so a site choosing a bright background on purpose will still be inverted in dark mode.
 - Nothing here is a plugin surface, so no theme plugin can change the palette until the family work returns.
+
+## Amendment 2026-11-17 — page darkening is a bundled theme plugin
+
+The mechanism above stays host code, but the **master switch is now a plugin**: the bundled
+`page-dark` theme plugin. Activating it allows the host to darken pages; deactivating it removes
+the filter from every warm runtime and hides the per-tab command. Bundled plugins default to
+active, so an upgrade never silently loses darkening; only an explicit deactivation is stored
+(`disabledPlugins` in settings).
+
+This does not reintroduce colour-family plugins: `page-dark` ships no palette, tokens or
+executable code. It is a named capability with a state, visible in the Plugins page, which is what
+"everything is a plugin" means for a host-owned mechanism. A service definition still declares
+whether its site wants darkening (`pageDarkMode: off | auto`), and an instance may override it
+with `on` or `off`. Page darkening always follows the app theme: when Chirpdesk is light, no page
+is inverted, whatever the per-service policy says.
+

@@ -1,0 +1,11 @@
+{
+  "id": "page-dark",
+  "kind": "theme",
+  "name": "Page dark mode",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Darken pages that ignore your system theme. Only applies while Chirpdesk is dark, and yields to sites that ship their own night theme.",
+  "permissions": [],
+  "accent": "#3A4A63"
+}

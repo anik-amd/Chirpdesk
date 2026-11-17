@@ -26,6 +26,7 @@ public partial class PluginsPage : UserControl
     private readonly Func<ServiceDefinition, Task> _enable;
     private readonly Func<ServiceDefinition, Task> _addAccount;
     private readonly Func<ServiceDefinition, Task> _disable;
+    private readonly Func<string, bool, Task> _setPluginEnabled;
     private readonly Action _back;
     private AppSettings _settings;
 
@@ -38,6 +39,7 @@ public partial class PluginsPage : UserControl
         Func<ServiceDefinition, Task> enable,
         Func<ServiceDefinition, Task> addAccount,
         Func<ServiceDefinition, Task> disable,
+        Func<string, bool, Task> setPluginEnabled,
         Action back)
     {
         InitializeComponent();
@@ -49,6 +51,7 @@ public partial class PluginsPage : UserControl
         _enable = enable;
         _addAccount = addAccount;
         _disable = disable;
+        _setPluginEnabled = setPluginEnabled;
         _back = back;
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
@@ -145,6 +148,9 @@ public partial class PluginsPage : UserControl
 
         foreach (var plugin in _inventory.Where(item => !string.Equals(item.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal)))
         {
+            var toggleable = plugin.Kind is "theme" or "filter";
+            var pluginEnabled = !toggleable || PluginState.IsEnabled(_settings, plugin.Id);
+
             var card = new Border
             {
                 Style = (Style)FindResource("Card"),
@@ -156,7 +162,11 @@ public partial class PluginsPage : UserControl
             var content = new StackPanel();
 
             var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            header.Children.Add(UiIcons.Create("plugins", Token("CdAccent"), 28));
+            var icon = string.Equals(plugin.Id, PluginState.PageDarkId, StringComparison.OrdinalIgnoreCase)
+                ? UiIcons.Create("moon", Token("CdAccent"), 28)
+                : UiIcons.Create("plugins", Token("CdAccent"), 28);
+            icon.Opacity = pluginEnabled ? 1 : 0.45;
+            header.Children.Add(icon);
 
             var title = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
             title.Children.Add(new TextBlock
@@ -168,11 +178,11 @@ public partial class PluginsPage : UserControl
             });
             title.Children.Add(new TextBlock
             {
-                Text = string.Equals(plugin.Kind, "tool", StringComparison.Ordinal)
-                    ? "Active · bundled tool"
-                    : $"Installed · {plugin.Kind}",
+                Text = toggleable
+                    ? pluginEnabled ? $"Active · {plugin.Kind} plugin" : "Inactive"
+                    : "Active · bundled tool",
                 FontSize = 11,
-                Foreground = Token("CdTextMuted"),
+                Foreground = pluginEnabled ? Token("CdAccent") : Token("CdTextMuted"),
             });
             header.Children.Add(title);
             content.Children.Add(header);
@@ -186,7 +196,20 @@ public partial class PluginsPage : UserControl
                 Foreground = Token("CdTextMuted"),
                 TextWrapping = TextWrapping.Wrap,
                 MinHeight = 34,
+                Margin = toggleable ? new Thickness(0, 0, 0, 12) : new Thickness(0),
             });
+
+            if (toggleable)
+            {
+                var toggle = new Button
+                {
+                    Content = pluginEnabled ? "Deactivate" : "Activate",
+                    Width = 104,
+                    Style = (Style)FindResource(pluginEnabled ? "GhostButton" : "PillButton"),
+                };
+                toggle.Click += async (_, _) => await RunPlugin(plugin.Id, !pluginEnabled);
+                content.Children.Add(toggle);
+            }
 
             card.Child = content;
             PluginsPanel.Children.Add(card);
@@ -203,6 +226,20 @@ public partial class PluginsPage : UserControl
         catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException or ArgumentException)
         {
             _log.Error($"plugins page: action failed for '{definition.Id}'", ex);
+            MessageBox.Show(ex.Message, "Plugins", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task RunPlugin(string pluginId, bool enabled)
+    {
+        try
+        {
+            await _setPluginEnabled(pluginId, enabled);
+            Reload();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException or ArgumentException)
+        {
+            _log.Error($"plugins page: could not toggle '{pluginId}'", ex);
             MessageBox.Show(ex.Message, "Plugins", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

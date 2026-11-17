@@ -16,7 +16,7 @@ public static partial class DefinitionValidator
     private static readonly string[] NotificationModes =
         [ServiceDefinition.NativeMode, ServiceDefinition.ShimMode, ServiceDefinition.TitleOnlyMode];
     private static readonly string[] PageDarkModes =
-        [ServiceDefinition.PageDarkOff, ServiceDefinition.PageDarkAuto];
+        [ServiceDefinition.PageDarkOff, ServiceDefinition.PageDarkAuto, ServiceDefinition.PageDarkOn];
 
     [GeneratedRegex("^[a-z0-9][a-z0-9-]{0,31}$", RegexOptions.CultureInvariant)]
     private static partial Regex IdPattern();

@@ -38,6 +38,13 @@ internal static partial class SettingsValidator
             settings.ReclaimedBytes = 0;
         }
 
+        // A bad plugin id is ignored, never fatal: the plugin simply stays active.
+        settings.DisabledPlugins = (settings.DisabledPlugins ?? [])
+            .Select(id => id?.Trim().ToLowerInvariant() ?? string.Empty)
+            .Where(IsValidId)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
         foreach (var instance in settings.Services)
         {
             if (string.IsNullOrWhiteSpace(instance.ProfileId))
@@ -51,6 +58,7 @@ internal static partial class SettingsValidator
             {
                 null or "" => null,
                 "auto" => "auto",
+                "on" => "on",
                 "off" => "off",
                 _ => "off",
             };

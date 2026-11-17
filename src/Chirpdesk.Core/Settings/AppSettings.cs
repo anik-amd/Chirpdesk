@@ -31,5 +31,11 @@ public sealed class AppSettings
     /// <summary>Running total of bytes reclaimed by trims; display only.</summary>
     public long ReclaimedBytes { get; set; }
 
+    /// <summary>
+    /// Non-service plugins the user turned off. Bundled plugins are active until listed here,
+    /// so a new bundled plugin works after an upgrade without a migration step.
+    /// </summary>
+    public List<string> DisabledPlugins { get; set; } = [];
+
     public List<ServiceInstance> Services { get; set; } = [];
 }

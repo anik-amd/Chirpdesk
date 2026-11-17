@@ -178,6 +178,18 @@ public class DefinitionValidatorTests
     }
 
     [Fact]
+    public void A_forced_page_dark_mode_is_accepted()
+    {
+        var definition = Valid();
+        definition.PageDarkMode = " ON ";
+
+        DefinitionValidator.Normalize(definition);
+
+        Assert.Equal(ServiceDefinition.PageDarkOn, definition.PageDarkMode);
+        Assert.DoesNotContain(DefinitionValidator.Validate(definition), e => e.Contains("page dark mode", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Normalize_falls_back_to_safe_choices()
     {
         var definition = new ServiceDefinition { NotificationMode = "magic", PageDarkMode = "force" };
