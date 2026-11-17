@@ -1,5 +1,7 @@
 # Phase 1 — Command Bar, definitions, multi-service
 
+**Status:** Tasks 1–2 complete (2026-11-17, `2d705c9`). Next: Task 3, shipped definitions and the catalog. Tasks 4+ need the app running for verification.
+
 Continues `docs/plans/2026-11-16-phase-0-spine.md`. Do not start until phase 0's soak, reboot row and toast-click row are ticked: this phase multiplies every one of those behaviours by the number of services.
 
 Read before writing code: `PLAN.md` §5.1, §6, §11, §12; ADR 0002 (bar and keys), ADR 0005 (one environment per profile), ADR 0007 (data-only plugins).
