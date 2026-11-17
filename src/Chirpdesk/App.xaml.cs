@@ -160,6 +160,7 @@ public partial class App : Application
         {
             UpdateBusyFor(_registry.Active);
             RefreshServiceRail();
+            UpdateTrayStatus();
         };
         RefreshServiceRail();
 
@@ -328,11 +329,13 @@ public partial class App : Application
 
         service.ShortcutRequested += OnServiceShortcutRequested;
         service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
+        service.UnreadChanged += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateTrayStatus));
 
         await service.ApplyThemeAsync(dark);
         await _registry!.AddAsync(service);
         _registry.Activate(service.InstanceId);
         RefreshServiceRail();
+        UpdateTrayStatus();
 
         if (show)
         {
@@ -1507,6 +1510,7 @@ public partial class App : Application
 
         _log?.Info($"closed tab '{instanceId}'");
         RefreshServiceRail();
+        UpdateTrayStatus();
 
         if (_registry.Active is not null)
         {
@@ -1666,9 +1670,16 @@ public partial class App : Application
         try
         {
             var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            var unread = _registry?.Order
+                .Select(id => _registry.Find(id)?.UnreadCount ?? 0)
+                .Sum() ?? 0;
+
+            _tray.IconSource = TrayIconFactory.CreateIcon(unread > 0);
+
+            var title = unread > 0 ? $"Chirpdesk - {unread} unread" : "Chirpdesk";
             _tray.ToolTipText = settings.DndUntil is { } until && until > DateTimeOffset.UtcNow
-                ? $"Chirpdesk — DND until {until.ToLocalTime():HH:mm}"
-                : "Chirpdesk";
+                ? $"{title} - DND until {until.ToLocalTime():HH:mm}"
+                : title;
         }
         catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
         {
@@ -1965,6 +1976,7 @@ public partial class App : Application
 
         store.Save(settings);
         RefreshServiceRail();
+        UpdateTrayStatus();
         _log.Info($"plugin '{definition.Id}' turned off; sessions preserved");
     }
 

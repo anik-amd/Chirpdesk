@@ -351,6 +351,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// <summary>Raised when <see cref="IsNavigating"/> changes; the host filters by active tab.</summary>
     public event EventHandler? NavigationStateChanged;
 
+    /// <summary>Raised when the unread count changes; the tray aggregates it.</summary>
+    public event EventHandler? UnreadChanged;
+
     private void SetNavigating(bool navigating)
     {
         if (IsNavigating == navigating)
@@ -843,6 +846,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         }
 
         _log.Info($"unread {count} for '{_instance.InstanceId}'");
+        UnreadChanged?.Invoke(this, EventArgs.Empty);
 
         if (count > previous && count > 0 && _gate?.IsOpen == true)
         {

@@ -44,7 +44,19 @@ internal static class TrayIconFactory
 
     public static ImageSource CreateIcon(bool unread)
     {
-        var name = unread ? "chirpdesk-tray-unread.ico" : "chirpdesk-tray.ico";
+        if (unread)
+        {
+            return _unread ??= LoadIcon("chirpdesk-tray-unread.ico");
+        }
+
+        return _normal ??= LoadIcon("chirpdesk-tray.ico");
+    }
+
+    private static BitmapFrame? _normal;
+    private static BitmapFrame? _unread;
+
+    private static BitmapFrame LoadIcon(string name)
+    {
         var uri = new Uri(
             $"pack://application:,,,/Chirpdesk;component/Assets/{name}",
             UriKind.Absolute);
