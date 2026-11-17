@@ -13,8 +13,6 @@ public partial class HostWindow : Window
     {
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
-        StateChanged += (_, _) => MaximizeButton.Content =
-            WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
     }
 
     public nint Handle => new WindowInteropHelper(this).Handle;
@@ -111,8 +109,37 @@ public partial class HostWindow : Window
     /// <summary>Close means hide: the product is a tray app and the webviews must survive.</summary>
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
-    private void ToggleMaximize() =>
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    /// <summary>
+    /// Sizes the window to the work area instead of letting the shell maximise a
+    /// <c>WindowStyle=None</c> window, which pushes the custom title bar off-screen. Bounds are
+    /// remembered so restoring returns to exactly where the user had it.
+    /// </summary>
+    private void ToggleMaximize()
+    {
+        if (_restore is null)
+        {
+            _restore = new Rect(Left, Top, Width, Height);
+
+            var area = SystemParameters.WorkArea;
+            Left = area.Left;
+            Top = area.Top;
+            Width = area.Width;
+            Height = area.Height;
+            MaximizeButton.Content = "\uE923";
+        }
+        else
+        {
+            var bounds = _restore.Value;
+            Left = bounds.Left;
+            Top = bounds.Top;
+            Width = bounds.Width;
+            Height = bounds.Height;
+            _restore = null;
+            MaximizeButton.Content = "\uE922";
+        }
+    }
+
+    private Rect? _restore;
 
     private void OnSourceInitialized(object? sender, EventArgs e) => WindowChrome.MakeToolWindow(Handle);
 
