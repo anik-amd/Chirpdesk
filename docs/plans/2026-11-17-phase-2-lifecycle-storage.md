@@ -80,6 +80,8 @@ The unit is the **profile**, never the instance. Report **Data** (`Cookies`, `Lo
 
 ## Task 5: Orphan scan and Recycle Bin (TDD)
 
+**Status:** complete (2026-11-17). `OrphanScanner` reports unreferenced profile folders and the fixed known app roots only, skipping reparse points and running owners. `KnownRoots`/`ProcessProbe` build the allowlist; `RecycleBin` uses `SHFileOperation` with `FOF_ALLOWUNDO`; `OrphanDeleter` re-verifies that a profile is a direct child of the profiles root or that the path is an exact known root. Recycle Bin restore still needs one human check.
+
 **Files:**
 - Create: `src/Chirpdesk.Core/Storage/OrphanScanner.cs`, `KnownRoots.cs`
 - Create: `src/Chirpdesk/Interop/RecycleBin.cs`, `src/Chirpdesk/Storage/ProcessProbe.cs`
