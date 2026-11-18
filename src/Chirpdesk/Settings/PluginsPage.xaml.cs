@@ -94,6 +94,8 @@ public partial class PluginsPage : UserControl
                 .ToList();
             var enabled = instances.Any(instance => instance.Enabled);
             var active = instances.Count(instance => instance.Enabled);
+            var installedPlugin = _inventory.FirstOrDefault(item =>
+                string.Equals(item.Id, definition.Id, StringComparison.Ordinal));
 
             var card = new Border
             {
@@ -140,16 +142,28 @@ public partial class PluginsPage : UserControl
                 FontSize = 12,
                 Foreground = Token("CdTextMuted"),
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 12),
+                Margin = new Thickness(0, 0, 0, 8),
                 MinHeight = 34,
             });
 
-            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            if (installedPlugin?.Source is { } serviceSource)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = $"v{serviceSource.Version} · {serviceSource.RepositoryUrl}",
+                    FontSize = 10,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                });
+            }
+
+            var actions = new WrapPanel();
             var primary = new Button
             {
                 Content = enabled ? "Add account" : "Activate",
                 Width = 104,
-                Margin = new Thickness(0, 0, 8, 0),
+                Margin = new Thickness(0, 0, 6, 6),
                 Style = (Style)FindResource("PillButton"),
             };
             primary.Click += async (_, _) => await Run(enabled ? _addAccount : _enable, definition);
@@ -161,9 +175,74 @@ public partial class PluginsPage : UserControl
                 Width = 86,
                 IsEnabled = enabled,
                 Style = (Style)FindResource("GhostButton"),
+                Margin = new Thickness(0, 0, 6, 6),
             };
             off.Click += async (_, _) => await Run(_disable, definition);
             actions.Children.Add(off);
+
+            if (installedPlugin is { Bundled: false } installedService)
+            {
+                var serviceUpdate = FindUpdate(installedService);
+                if (serviceUpdate is { } candidate)
+                {
+                    var updateButton = new Button
+                    {
+                        Content = $"Update to {candidate.Plugin.Version}",
+                        Style = (Style)FindResource("PillButton"),
+                        Padding = new Thickness(10, 5, 10, 5),
+                        Margin = new Thickness(0, 0, 6, 6),
+                    };
+                    updateButton.Click += async (_, _) =>
+                    {
+                        RepositoryStatus.Text = $"Updating {definition.Name}…";
+                        var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
+                        RepositoryStatus.Text = result.Message;
+                        if (result.Ok)
+                        {
+                            _reloadPlugins();
+                        }
+                    };
+                    actions.Children.Add(updateButton);
+                }
+
+                if (RepositoryService.HasBackup(installedService.Id))
+                {
+                    var rollback = new Button
+                    {
+                        Content = "Roll back",
+                        Style = (Style)FindResource("GhostButton"),
+                        Padding = new Thickness(10, 5, 10, 5),
+                        Margin = new Thickness(0, 0, 6, 6),
+                    };
+                    rollback.Click += async (_, _) =>
+                    {
+                        var result = await _repositories.RollbackAsync(installedService.Id);
+                        RepositoryStatus.Text = result.Message;
+                        if (result.Ok)
+                        {
+                            _reloadPlugins();
+                        }
+                    };
+                    actions.Children.Add(rollback);
+                }
+
+                var uninstall = new Button
+                {
+                    Content = "Uninstall",
+                    Style = (Style)FindResource("GhostButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                uninstall.Click += async (_, _) =>
+                {
+                    if (await _uninstallPlugin(installedService.Id))
+                    {
+                        _removedPlugins.Add(installedService.Id);
+                        _reloadPlugins();
+                    }
+                };
+                actions.Children.Add(uninstall);
+            }
 
             content.Children.Add(actions);
             card.Child = content;
