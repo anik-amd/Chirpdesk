@@ -1419,7 +1419,7 @@ public partial class App : Application
                 ? _catalog?.Find(definitionId)?.Aliases
                 : null;
 
-            var state = _registry.StateOf(instance.InstanceId).ToString().ToLowerInvariant();
+            var state = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm ? "open" : "closed";
             candidates.Add(new SearchCandidate(
                 instance.InstanceId,
                 AccountAwareName(settings, instance, resolved.Name),
@@ -1454,7 +1454,7 @@ public partial class App : Application
                     $"Close {definition.Name}",
                     SearchKind.Command,
                     (definition.Aliases ?? []).Append("plugin").Append("deactivate").ToList(),
-                    State: "active",
+                    State: "open",
                     Accent: definition.Accent,
                     Initial: InitialOf(definition.Name),
                     DefinitionId: definition.Id));
@@ -1466,7 +1466,7 @@ public partial class App : Application
                 definition.Name,
                 SearchKind.Cold,
                 (definition.Aliases ?? []).Append("plugin").Append("off").ToList(),
-                State: "inactive",
+                State: "closed",
                 Accent: definition.Accent,
                 Initial: InitialOf(definition.Name),
                 DefinitionId: definition.Id));
@@ -1583,7 +1583,7 @@ public partial class App : Application
                 _searchCandidates
                     .Where(candidate =>
                         (candidate.Kind == SearchKind.Warm && candidate.State == "open")
-                        || candidate.State == "inactive")
+                        || candidate.State == "closed")
                     .ToList())
             : SearchIndex.Rank(_barState.Query, _searchCandidates);
         _barState.ShowResults(ranked.Select(candidate => candidate.Id).ToList(), keepSelected);
@@ -1835,9 +1835,9 @@ public partial class App : Application
                 var name = candidate?.Name ?? runtime?.Name ?? id;
 
                 if (!string.IsNullOrWhiteSpace(candidate?.State)
-                    && candidate.State is not ("open" or "inactive" or "active"))
+                    && candidate.State is not "open")
                 {
-                    name = $"{name} · {candidate.State}";
+                    name = $"{name} \u00b7 {(candidate.State == "closed" ? "Closed" : candidate.State)}";
                 }
 
                 var accent = candidate?.Accent ?? AccentOf(runtime?.DefinitionId ?? candidate?.DefinitionId);
@@ -1857,7 +1857,7 @@ public partial class App : Application
                         : ServiceIcons.Create(definitionId, name, accent, 22),
                 };
 
-                if (candidate?.State is "inactive" or "plugin off")
+                if (candidate?.State is "closed")
                 {
                     icon.Opacity = 0.35;
                 }
