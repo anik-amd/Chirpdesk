@@ -781,14 +781,15 @@ internal sealed class SelfTest
         var hwnd = _host.Handle;
         var toolWindow = WindowChrome.IsToolWindow(hwnd);
         var appWindow = WindowChrome.IsAppWindow(hwnd);
+        var taskbarHidden = TaskbarList.IsHidden(hwnd);
         var visible = NativeMethods.IsWindowVisible(hwnd);
         var hasRect = NativeMethods.GetWindowRect(hwnd, out var rect);
         var offScreen = hasRect && rect.Left <= -30_000 && rect.Top <= -30_000;
 
         Check(
             "window-hidden",
-            toolWindow && !appWindow && visible && offScreen,
-            $"toolwindow={toolWindow} appwindow={appWindow} visible={visible} at={rect.Left},{rect.Top}");
+            appWindow && !toolWindow && taskbarHidden && visible && offScreen,
+            $"toolwindow={toolWindow} appwindow={appWindow} taskbarHidden={taskbarHidden} visible={visible} at={rect.Left},{rect.Top}");
     }
 
     /// <summary>Re-launches the app: it must see the mutex and exit without a window.</summary>

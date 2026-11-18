@@ -125,6 +125,7 @@ public partial class App : Application
         // WebView2 in it. Neither needs the tray icon.
         _host = new HostWindow();
         _host.Show();
+        TaskbarList.Remove(_host.Handle);
         _host.KeyDown += OnHostKeyDown;
         InstallKeyboardHook();
         _host.Closing += OnHostClosing;

@@ -77,7 +77,6 @@ internal static class NativeMethods
     internal const uint MonitorDefaultToNearest = 0x0000_0002;
     internal const int DwmwaWindowCornerPreference = 33;
     internal const int DwmWindowCornerRound = 2;
-    internal const int DwmwaTransitionsForcedDisabled = 3;
 
     [DllImport("user32.dll")]
     internal static extern nint MonitorFromWindow(nint hWnd, uint flags);

@@ -558,7 +558,7 @@ public partial class HostWindow : Window
     /// </summary>
     public bool ShowForUser()
     {
-        WindowChrome.MakeAppWindow(Handle);
+        TaskbarList.Add(Handle);
 
         if (WindowState == WindowState.Minimized)
         {
@@ -579,6 +579,10 @@ public partial class HostWindow : Window
             _railHoverTimer.Start();
         }
 
+        // The startup show is deliberately non-activating so boot cannot steal focus. A
+        // user-requested show is the opposite: activate from the first frame or Windows
+        // skips the native DWM transition on the very window that is being revealed.
+        ShowActivated = true;
         Show();
         Activate();
 
@@ -591,11 +595,11 @@ public partial class HostWindow : Window
     public void HideToBackground()
     {
         _railHoverTimer.Stop();
+        TaskbarList.Remove(Handle);
 
         Hide();
         Opacity = 1;
         BeginAnimation(OpacityProperty, null);
-        WindowChrome.MakeToolWindow(Handle);
     }
 
     private int _visibilityToken;
@@ -683,7 +687,7 @@ public partial class HostWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
-        WindowChrome.MakeToolWindow(Handle);
+        TaskbarList.Remove(Handle);
 
         if (PresentationSource.FromVisual(this) is HwndSource source)
         {
@@ -704,13 +708,6 @@ public partial class HostWindow : Window
                 Handle,
                 NativeMethods.DwmwaWindowCornerPreference,
                 ref preference,
-                sizeof(int));
-
-            var disabled = 0;
-            _ = NativeMethods.DwmSetWindowAttribute(
-                Handle,
-                NativeMethods.DwmwaTransitionsForcedDisabled,
-                ref disabled,
                 sizeof(int));
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
