@@ -88,6 +88,57 @@ public partial class PluginsPage : UserControl
         }
     }
 
+    private void OnShowInstalled(object sender, RoutedEventArgs e)
+    {
+        if (InstalledTab is null || BrowseTab is null)
+        {
+            return;
+        }
+
+        InstalledTab.Visibility = Visibility.Visible;
+        BrowseTab.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnShowBrowse(object sender, RoutedEventArgs e)
+    {
+        if (InstalledTab is null || BrowseTab is null)
+        {
+            return;
+        }
+
+        InstalledTab.Visibility = Visibility.Collapsed;
+        BrowseTab.Visibility = Visibility.Visible;
+        RenderAvailablePlugins();
+
+        // A cache hit costs nothing, so opening Browse is also the moment to fill in any
+        // repository that has not been read this session.
+        foreach (var repository in _settings.Repositories.Where(item => !_synced.ContainsKey(item.Url)).ToList())
+        {
+            _ = SyncRepositoryAsync(repository, trustNewKey: true);
+        }
+    }
+
+    /// <summary>
+    /// Shows a repository name beside an install path. A source record is written only by the
+    /// repository installer, so a null source means the plugin came with the app or the user
+    /// dropped it into the plugins folder.
+    /// </summary>
+    private string SourceLabel(InstalledPlugin? plugin)
+    {
+        if (plugin?.Source is { } source)
+        {
+            var repository = _settings.Repositories.FirstOrDefault(item =>
+                string.Equals(item.Url, source.RepositoryUrl, StringComparison.OrdinalIgnoreCase));
+            var name = repository?.Name;
+
+            return string.IsNullOrWhiteSpace(name)
+                ? source.RepositoryUrl
+                : $"{name} · {source.RepositoryUrl}";
+        }
+
+        return plugin?.Bundled == true ? "Bundled with Chirpdesk" : "Installed locally";
+    }
+
     /// <summary>
     /// Rebuilds the installed-plugin cards. A sync refreshes the available list on its own, but
     /// the cards carry their own update and rollback buttons, so a new index has to rebuild them.
@@ -155,11 +206,15 @@ public partial class PluginsPage : UserControl
                 MinHeight = 34,
             });
 
-            if (installedPlugin?.Source is { } serviceSource)
+            var serviceVersion = installedPlugin?.Version;
+
+            if (installedPlugin is not null)
             {
                 content.Children.Add(new TextBlock
                 {
-                    Text = $"v{serviceSource.Version} · {serviceSource.RepositoryUrl}",
+                    Text = string.IsNullOrWhiteSpace(serviceVersion)
+                        ? SourceLabel(installedPlugin)
+                        : $"v{serviceVersion} · {SourceLabel(installedPlugin)}",
                     FontSize = 10,
                     Foreground = Token("CdTextMuted"),
                     TextWrapping = TextWrapping.Wrap,
@@ -189,7 +244,7 @@ public partial class PluginsPage : UserControl
             off.Click += async (_, _) => await Run(_disable, definition);
             actions.Children.Add(off);
 
-            if (installedPlugin is { Bundled: false } installedService)
+            if (installedPlugin is { } installedService)
             {
                 var serviceUpdate = FindUpdate(installedService);
                 if (serviceUpdate is { } candidate)
@@ -214,43 +269,46 @@ public partial class PluginsPage : UserControl
                     actions.Children.Add(updateButton);
                 }
 
-                if (RepositoryService.HasBackup(installedService.Id))
+                if (!installedService.Bundled)
                 {
-                    var rollback = new Button
+                    if (RepositoryService.HasBackup(installedService.Id))
                     {
-                        Content = "Roll back",
+                        var rollback = new Button
+                        {
+                            Content = "Roll back",
+                            Style = (Style)FindResource("GhostButton"),
+                            Padding = new Thickness(10, 5, 10, 5),
+                            Margin = new Thickness(0, 0, 6, 6),
+                        };
+                        rollback.Click += async (_, _) =>
+                        {
+                            var result = await _repositories.RollbackAsync(installedService.Id);
+                            RepositoryStatus.Text = result.Message;
+                            if (result.Ok)
+                            {
+                                _reloadPlugins();
+                            }
+                        };
+                        actions.Children.Add(rollback);
+                    }
+
+                    var uninstall = new Button
+                    {
+                        Content = "Uninstall",
                         Style = (Style)FindResource("GhostButton"),
                         Padding = new Thickness(10, 5, 10, 5),
                         Margin = new Thickness(0, 0, 6, 6),
                     };
-                    rollback.Click += async (_, _) =>
+                    uninstall.Click += async (_, _) =>
                     {
-                        var result = await _repositories.RollbackAsync(installedService.Id);
-                        RepositoryStatus.Text = result.Message;
-                        if (result.Ok)
+                        if (await _uninstallPlugin(installedService.Id))
                         {
+                            _removedPlugins.Add(installedService.Id);
                             _reloadPlugins();
                         }
                     };
-                    actions.Children.Add(rollback);
+                    actions.Children.Add(uninstall);
                 }
-
-                var uninstall = new Button
-                {
-                    Content = "Uninstall",
-                    Style = (Style)FindResource("GhostButton"),
-                    Padding = new Thickness(10, 5, 10, 5),
-                    Margin = new Thickness(0, 0, 6, 6),
-                };
-                uninstall.Click += async (_, _) =>
-                {
-                    if (await _uninstallPlugin(installedService.Id))
-                    {
-                        _removedPlugins.Add(installedService.Id);
-                        _reloadPlugins();
-                    }
-                };
-                actions.Children.Add(uninstall);
             }
 
             content.Children.Add(actions);
@@ -311,13 +369,13 @@ public partial class PluginsPage : UserControl
                 Margin = toggleable ? new Thickness(0, 0, 0, 12) : new Thickness(0),
             });
 
-            if (!string.IsNullOrWhiteSpace(plugin.Version) || plugin.Source is not null)
+            if (!string.IsNullOrWhiteSpace(plugin.Version) || plugin.Source is not null || plugin.Bundled)
             {
                 content.Children.Add(new TextBlock
                 {
-                    Text = plugin.Source is { } source
-                        ? $"v{plugin.Version} · {source.RepositoryUrl}"
-                        : $"v{plugin.Version} · locally installed",
+                    Text = string.IsNullOrWhiteSpace(plugin.Version)
+                        ? SourceLabel(plugin)
+                        : $"v{plugin.Version} · {SourceLabel(plugin)}",
                     FontSize = 10,
                     Foreground = Token("CdTextMuted"),
                     TextWrapping = TextWrapping.Wrap,
@@ -340,31 +398,31 @@ public partial class PluginsPage : UserControl
                 actions.Children.Add(toggle);
             }
 
+            var update = FindUpdate(plugin);
+            if (update is { } candidate)
+            {
+                var updateButton = new Button
+                {
+                    Content = $"Update to {candidate.Plugin.Version}",
+                    Style = (Style)FindResource("PillButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                updateButton.Click += async (_, _) =>
+                {
+                    RepositoryStatus.Text = $"Updating {plugin.Name}…";
+                    var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
+                    RepositoryStatus.Text = result.Message;
+                    if (result.Ok)
+                    {
+                        _reloadPlugins();
+                    }
+                };
+                actions.Children.Add(updateButton);
+            }
+
             if (!plugin.Bundled)
             {
-                var update = FindUpdate(plugin);
-                if (update is { } candidate)
-                {
-                    var updateButton = new Button
-                    {
-                        Content = $"Update to {candidate.Plugin.Version}",
-                        Style = (Style)FindResource("PillButton"),
-                        Padding = new Thickness(10, 5, 10, 5),
-                        Margin = new Thickness(0, 0, 6, 6),
-                    };
-                    updateButton.Click += async (_, _) =>
-                    {
-                        RepositoryStatus.Text = $"Updating {plugin.Name}…";
-                        var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
-                        RepositoryStatus.Text = result.Message;
-                        if (result.Ok)
-                        {
-                            _reloadPlugins();
-                        }
-                    };
-                    actions.Children.Add(updateButton);
-                }
-
                 if (RepositoryService.HasBackup(plugin.Id))
                 {
                     var rollback = new Button
@@ -412,6 +470,10 @@ public partial class PluginsPage : UserControl
             card.Child = content;
             PluginsPanel.Children.Add(card);
         }
+
+        InstalledSummary.Text = PluginsPanel.Children.Count == 0
+            ? "No plugins installed yet. Browse a repository or drop a plugin into the plugins folder."
+            : $"{PluginsPanel.Children.Count} plugin(s) installed · activate or deactivate without losing profiles.";
     }
 
     private (RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)? FindUpdate(InstalledPlugin installed)
@@ -478,7 +540,7 @@ public partial class PluginsPage : UserControl
 
         if (_settings.Repositories.Count == 0)
         {
-            RepositoryStatus.Text = "No repositories configured.";
+            RepositoryStatus.Text = "No repositories configured. Add a repository to browse its plugins.";
             return;
         }
 
@@ -493,6 +555,24 @@ public partial class PluginsPage : UserControl
 
             rendered++;
             var app = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0, 0);
+            var repositoryName = string.IsNullOrWhiteSpace(repository.Name) ? repository.Url : repository.Name;
+
+            AvailablePluginsPanel.Children.Add(new TextBlock
+            {
+                Text = repositoryName,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Token("CdText"),
+                Margin = new Thickness(0, rendered == 1 ? 0 : 16, 0, 1),
+            });
+            AvailablePluginsPanel.Children.Add(new TextBlock
+            {
+                Text = repository.Url,
+                FontSize = 10,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8),
+            });
 
             foreach (var plugin in index.Plugins)
             {
@@ -510,7 +590,9 @@ public partial class PluginsPage : UserControl
                     Style = (Style)FindResource("Card"),
                     Margin = new Thickness(0, 0, 0, 8),
                     Padding = new Thickness(12),
+                    Cursor = System.Windows.Input.Cursors.Hand,
                 };
+                row.MouseLeftButtonUp += (_, _) => OpenPluginDetails(repository, index, plugin);
 
                 var content = new Grid();
                 content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -533,38 +615,39 @@ public partial class PluginsPage : UserControl
                 });
                 text.Children.Add(new TextBlock
                 {
+                    Text = $"From {repositoryName}",
+                    FontSize = 11,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 3, 0, 0),
+                });
+                text.Children.Add(new TextBlock
+                {
                     Text = !compatible
                         ? reason
                         : upToDate
                             ? "Installed and up to date."
                             : updateAvailable
                                 ? $"Installed {installedVersion} · update available."
-                                : $"From {repository.Name ?? repository.Url}",
+                                : "Not installed.",
                     FontSize = 11,
                     Foreground = compatible ? Token("CdAccent") : Token("CdTextMuted"),
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 3, 0, 0),
+                    Margin = new Thickness(0, 2, 0, 0),
                 });
                 content.Children.Add(text);
 
-                var install = new Button
+                var details = new Button
                 {
-                    Content = !compatible
-                        ? "Unsupported"
-                        : upToDate
-                            ? "Installed"
-                            : updateAvailable
-                                ? "Update"
-                                : "Install",
-                    IsEnabled = compatible && !upToDate,
-                    Style = (Style)FindResource("PillButton"),
+                    Content = "Details",
+                    Style = (Style)FindResource("GhostButton"),
                     Padding = new Thickness(12, 6, 12, 6),
                     Margin = new Thickness(14, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
-                install.Click += (_, _) => OpenInstallConsent(repository, index, plugin);
-                Grid.SetColumn(install, 1);
-                content.Children.Add(install);
+                details.Click += (_, _) => OpenPluginDetails(repository, index, plugin);
+                Grid.SetColumn(details, 1);
+                content.Children.Add(details);
 
                 row.Child = content;
                 AvailablePluginsPanel.Children.Add(row);
@@ -573,7 +656,7 @@ public partial class PluginsPage : UserControl
 
         RepositoryStatus.Text = rendered == 0
             ? $"{_settings.Repositories.Count} repository(ies) configured. Sync one to see plugins."
-            : $"Showing plugins from {rendered} synced repository(ies).";
+            : $"Showing plugins from {rendered} synced repository(ies). Select a plugin to inspect it.";
     }
 
     private void RenderManageRepositories()
@@ -860,17 +943,49 @@ public partial class PluginsPage : UserControl
         await SyncRepositoryAsync(repository, trustNewKey: true);
     }
 
-    private void OpenInstallConsent(RepositorySetting repository, RepositoryIndex index, RepositoryPlugin plugin)
+    private void OpenPluginDetails(RepositorySetting repository, RepositoryIndex index, RepositoryPlugin plugin)
     {
-        _pendingInstall = (repository, index, plugin);
-        ConsentTitle.Text = $"Install {plugin.Name} {plugin.Version}?";
+        var app = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0, 0);
+        var compatible = RepositoryCompatibility.IsCompatible(plugin, app, out var reason);
+        var installed = _inventory.FirstOrDefault(item =>
+            string.Equals(item.Id, plugin.Id, StringComparison.Ordinal));
+        var installedVersion = installed?.Version;
+        var upToDate = string.Equals(installedVersion, plugin.Version, StringComparison.Ordinal);
+        var update = installed is not null && !upToDate;
+        var canInstall = compatible && !upToDate;
+
+        _pendingInstall = canInstall ? (repository, index, plugin) : null;
+
+        ConsentTitle.Text = $"{plugin.Name} {plugin.Version}";
         ConsentBody.Children.Clear();
 
-        AddConsentLine("Source", string.IsNullOrWhiteSpace(repository.Name) ? repository.Url : repository.Name);
-        AddConsentLine("Version", plugin.Version);
+        ConsentPrimaryButton.Content = upToDate ? "Installed" : update ? "Update" : "Install";
+        ConsentPrimaryButton.Visibility = canInstall ? Visibility.Visible : Visibility.Collapsed;
+        ConsentSecondaryButton.Content = canInstall ? "Cancel" : "Close";
+
+        if (!string.IsNullOrWhiteSpace(installed?.Description))
+        {
+            ConsentBody.Children.Add(new TextBlock
+            {
+                Text = installed.Description,
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 10),
+            });
+        }
+
+        AddConsentLine("Source", string.IsNullOrWhiteSpace(repository.Name)
+            ? repository.Url
+            : $"{repository.Name} · {repository.Url}");
+        AddConsentLine("Version", update
+            ? $"{plugin.Version} (installed: {installedVersion})"
+            : plugin.Version);
         AddConsentLine("Kind", plugin.Kind);
+        AddConsentLine("Compatibility", compatible ? $"Supported on Chirpdesk {app}" : reason);
+        AddConsentLine("Archive", $"{plugin.Size:N0} bytes · {plugin.Sha256}");
         AddConsentLine("Repository key", repository.KeyFingerprint);
-        AddConsentLine("Archive SHA-256", plugin.Sha256);
+
 
         var alternatives = FindAlternativeSources(repository, plugin.Id);
 
@@ -951,6 +1066,7 @@ public partial class PluginsPage : UserControl
     {
         if (_pendingInstall is not { } pending)
         {
+            ConsentLayer.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -998,7 +1114,7 @@ public partial class PluginsPage : UserControl
             Padding = new Thickness(10, 5, 10, 5),
             Margin = new Thickness(0, 0, 6, 6),
         };
-        button.Click += (_, _) => OpenInstallConsent(repository, index, plugin);
+        button.Click += (_, _) => OpenPluginDetails(repository, index, plugin);
         return button;
     }
 
@@ -1058,6 +1174,7 @@ public partial class PluginsPage : UserControl
         _store.Save(_settings);
         _synced.Remove(repository.Url);
         _keyChanges.Remove(repository.Url);
+        RenderPluginCards();
         RenderAvailablePlugins();
         RenderManageRepositories();
     }

@@ -44,15 +44,46 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="PluginTab" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource CdTextMuted}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Segment"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="0,0,0,2"
+                                Padding="10,6,10,8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource CdAccent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource CdText}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource CdText}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid x:Name="RootGrid" Margin="28,22,28,22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,18">
+        <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -70,52 +101,49 @@
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                <Button Content="Add Plugins Repo"
-                        Style="{StaticResource PillButton}"
-                        Padding="14,8"
-                        Click="OnOpenAddRepository" />
-                <Button Content="Manage plugin repos"
-                        Style="{StaticResource GhostButton}"
-                        Padding="14,8"
-                        Margin="8,0,0,0"
-                        Click="OnOpenManageRepositories" />
                 <Button Content="Back"
                         Style="{StaticResource GhostButton}"
                         Padding="14,8"
-                        Margin="8,0,0,0"
                         Click="OnBack" />
             </StackPanel>
         </Grid>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
+            <RadioButton x:Name="InstalledTabButton"
+                         Content="Installed"
+                         GroupName="PluginsTabs"
+                         IsChecked="True"
+                         Style="{StaticResource PluginTab}"
+                         Checked="OnShowInstalled" />
+            <RadioButton x:Name="BrowseTabButton"
+                         Content="Browse"
+                         GroupName="PluginsTabs"
+                         Style="{StaticResource PluginTab}"
+                         Checked="OnShowBrowse" />
+        </StackPanel>
+
+        <ScrollViewer x:Name="InstalledTab" Grid.Row="2" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Installed" Style="{StaticResource Heading}" Margin="0,0,0,12" />
+                        <TextBlock Text="Installed plugins" Style="{StaticResource Heading}" Margin="0,0,0,6" />
+                        <TextBlock x:Name="InstalledSummary"
+                                   Style="{StaticResource MutedText}"
+                                   Text="Services, themes and filters on this machine."
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14" />
                         <WrapPanel x:Name="PluginsPanel" Orientation="Horizontal" />
                     </StackPanel>
                 </Border>
 
                 <Border Style="{StaticResource Card}" Margin="0,20,0,0">
                     <StackPanel>
-                        <TextBlock Text="Available from repositories" Style="{StaticResource Heading}" Margin="0,0,0,8" />
-                        <TextBlock Text="Sync a repository from Manage plugin repos to see its compatible plugins here."
+                        <TextBlock Text="Plugin folder" Style="{StaticResource Heading}" Margin="0,0,0,10" />
+                        <TextBlock Text="User-installed plugins live here. Repository installs write to the same folder and keep a source record for updates."
                                    FontSize="12"
                                    Foreground="{DynamicResource CdTextMuted}"
                                    TextWrapping="Wrap"
-                                   Margin="0,0,0,10" />
-                        <TextBlock x:Name="RepositoryStatus"
-                                   Style="{StaticResource MutedText}"
-                                   Text="No repositories configured."
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,8" />
-                        <StackPanel x:Name="AvailablePluginsPanel" />
-                    </StackPanel>
-                </Border>
-
-                <Border Style="{StaticResource Card}" Margin="0,20,0,0">
-                    <StackPanel>
-                        <TextBlock Text="Browse" Style="{StaticResource Heading}" Margin="0,0,0,12" />
+                                   Margin="0,0,0,12" />
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Open plugins folder" Style="{StaticResource GhostButton}" Click="OnOpenPluginsFolder" />
                         </StackPanel>
@@ -124,9 +152,61 @@
             </StackPanel>
         </ScrollViewer>
 
+        <ScrollViewer x:Name="BrowseTab" Grid.Row="2" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <StackPanel>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Repositories"
+                                       Style="{StaticResource Heading}"
+                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button Content="Add repository"
+                                        Style="{StaticResource PillButton}"
+                                        Padding="14,8"
+                                        Click="OnOpenAddRepository" />
+                                <Button Content="Manage repositories"
+                                        Style="{StaticResource GhostButton}"
+                                        Padding="14,8"
+                                        Margin="8,0,0,0"
+                                        Click="OnOpenManageRepositories" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="A repository is a static HTTPS folder with a signed index. Chirpdesk verifies the index and every archive before installing."
+                                   FontSize="12"
+                                   Foreground="{DynamicResource CdTextMuted}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10" />
+                        <TextBlock x:Name="RepositoryStatus"
+                                   Style="{StaticResource MutedText}"
+                                   Text="No repositories configured."
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,4" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}" Margin="0,20,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Browse plugins" Style="{StaticResource Heading}" Margin="0,0,0,6" />
+                        <TextBlock Text="Select a plugin to see its source, version, permissions and hash before installing."
+                                   FontSize="12"
+                                   Foreground="{DynamicResource CdTextMuted}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10" />
+                        <StackPanel x:Name="AvailablePluginsPanel" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+
         <!-- Modal overlay: stays inside the plugins page, so the title bar and window never change. -->
         <Grid x:Name="ModalLayer"
-              Grid.RowSpan="2"
+              Grid.RowSpan="3"
               Panel.ZIndex="50"
               Background="#99000000"
               Visibility="Collapsed">
@@ -211,7 +291,7 @@
         <!-- Consent is separate from repository management: it is the last gate before code-adjacent
              content from a third-party repo is written to the user plugin root. -->
         <Grid x:Name="ConsentLayer"
-              Grid.RowSpan="2"
+              Grid.RowSpan="3"
               Panel.ZIndex="60"
               Background="#99000000"
               Visibility="Collapsed">
@@ -243,11 +323,13 @@
                     </ScrollViewer>
 
                     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                        <Button Content="Cancel"
+                        <Button x:Name="ConsentSecondaryButton"
+                                Content="Cancel"
                                 Style="{StaticResource GhostButton}"
                                 Padding="14,7"
                                 Click="OnCancelConsent" />
-                        <Button Content="Install"
+                        <Button x:Name="ConsentPrimaryButton"
+                                Content="Install"
                                 Style="{StaticResource PillButton}"
                                 Padding="14,8"
                                 Margin="8,0,0,0"
