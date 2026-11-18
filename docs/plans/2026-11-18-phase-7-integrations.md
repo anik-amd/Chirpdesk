@@ -1,12 +1,15 @@
 # Phase 7 - Out-of-process integrations
 
-**Status:** designed (2026-11-18); tasks 1 and 2 are implemented. ADR 0016 and
-`docs/integrations.md` are the contract; the tasks below are ordered so every step is testable
-without a real messenger helper. Task 1 landed the integration manifest/codec/loader, the
-integration-only permission matrix, kind-aware archive policies and the missing `TryInspect`
-enforcement before extraction. Task 2 landed length-prefixed framing, the JSON-RPC 2.0 envelope
-parser and writer, the closed method allowlist with permission mapping, and bounded payload
-readers for every helper and host method.
+**Status:** designed (2026-11-18); tasks 1, 2, the Core half of task 3 and the install half of
+task 6 are implemented. ADR 0016 and `docs/integrations.md` are the contract. Task 1 landed the
+integration manifest/codec/loader, the integration-only permission matrix, kind-aware archive
+policies and the missing `TryInspect` enforcement before extraction. Task 2 landed
+length-prefixed framing, the JSON-RPC 2.0 envelope parser and writer, the closed method allowlist
+with permission mapping, and bounded payload readers. Task 3 has the Core session engine
+(handshake, dispatch, timeouts, restart backoff, crash handling) with 12 tests, plus the Windows
+launcher with a kill-on-close job object, first-instance named pipe and NUL-drained stdout. Task 6
+has install-time integration validation and the executable hash recorded in the source sidecar.
+The stub helper exists at `tests/helpers/StubIntegration`; live launch and UI wiring remain.
 
 **ADR:** 0007 (data plugins, code out-of-process), 0016 (this boundary)
 **Plan:** `PLAN.md` §4.1, phase 7 row

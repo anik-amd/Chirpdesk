@@ -96,8 +96,8 @@ try {
             continue
         }
 
-        if ($kind -in @('tool', 'integration')) {
-            Write-Warning "Skipping $($folder.Name): $kind plugins are bundled-only in v1"
+        if ($kind -eq 'tool') {
+            Write-Warning "Skipping $($folder.Name): tool plugins are bundled-only in v1"
             continue
         }
 

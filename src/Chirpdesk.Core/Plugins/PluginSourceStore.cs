@@ -8,7 +8,8 @@ public sealed record PluginSource(
     string KeyFingerprint,
     string Version,
     string Sha256,
-    DateTimeOffset InstalledAt);
+    DateTimeOffset InstalledAt,
+    string? ExecutableSha256 = null);
 
 /// <summary>
 /// A small sidecar file, never part of the manifest schema. It lets the Plugins page show the

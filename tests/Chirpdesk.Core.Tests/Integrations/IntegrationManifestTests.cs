@@ -1,4 +1,5 @@
 using Chirpdesk.Core.Integrations;
+using Chirpdesk.Core.Plugins;
 
 namespace Chirpdesk.Core.Tests.Integrations;
 
@@ -131,6 +132,42 @@ public sealed class IntegrationManifestTests : IDisposable
 
         Assert.Null(manifest);
         Assert.Contains(errors, item => item.Contains("empty", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_install_validator_pins_the_executable_hash()
+    {
+        var folder = Folder("install");
+        File.WriteAllText(Path.Combine(folder, "integration.json"), ValidJson);
+        File.WriteAllBytes(Path.Combine(folder, "helper.exe"), [0x4D, 0x5A, 0x01]);
+
+        var entry = new RepositoryPlugin { Id = "telegram-tdlib", Kind = "integration", Name = "Telegram" };
+
+        Assert.True(
+            IntegrationInstallValidator.TryValidate(folder, entry, out var hash, out var error),
+            error);
+        Assert.Equal(64, hash.Length);
+        Assert.NotEqual(0, hash.Trim('0').Length);
+    }
+
+    [Fact]
+    public void The_install_validator_requires_integration_json()
+    {
+        var folder = Folder("install-missing");
+        var entry = new RepositoryPlugin { Id = "telegram-tdlib", Kind = "integration", Name = "Telegram" };
+
+        Assert.False(IntegrationInstallValidator.TryValidate(folder, entry, out _, out var error));
+        Assert.Contains("integration.json", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_install_validator_refuses_a_foreign_kind()
+    {
+        var folder = Folder("install-kind");
+        var entry = new RepositoryPlugin { Id = "telegram-tdlib", Kind = "theme", Name = "Theme" };
+
+        Assert.False(IntegrationInstallValidator.TryValidate(folder, entry, out _, out var error));
+        Assert.Contains("not an integration", error, StringComparison.Ordinal);
     }
 
     [Fact]

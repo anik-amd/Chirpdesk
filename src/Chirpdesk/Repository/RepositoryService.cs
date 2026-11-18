@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Net.Http;
 using Chirpdesk.Core.Logging;
+using Chirpdesk.Core.Integrations;
 using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 
@@ -239,6 +240,18 @@ internal sealed class RepositoryService
                 return new RepositoryInstallResult(false, "plugin.json does not match the signed index entry.");
             }
 
+            string? executableSha256 = null;
+
+            if (string.Equals(manifest.Kind, PluginLoader.IntegrationKind, StringComparison.Ordinal))
+            {
+                if (!IntegrationInstallValidator.TryValidate(extracted, plugin, out var hash, out var integrationError))
+                {
+                    return new RepositoryInstallResult(false, integrationError);
+                }
+
+                executableSha256 = hash;
+            }
+
             var target = Path.Combine(AppPaths.UserPluginsDirectory, manifest.Id);
             var backup = Path.Combine(AppPaths.PluginBackupsRoot, manifest.Id);
             var isUpdate = Directory.Exists(target);
@@ -262,7 +275,8 @@ internal sealed class RepositoryService
                     repository.KeyFingerprint,
                     manifest.Version,
                     plugin.Sha256,
-                    DateTimeOffset.UtcNow));
+                    DateTimeOffset.UtcNow,
+                    executableSha256));
             }
             catch
             {

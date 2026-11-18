@@ -47,5 +47,8 @@ jobs:
           python -m pip install --quiet jsonschema==4.26.0
           python scripts/validate-schemas.py
 
+      - name: Build test helper
+        run: dotnet build tests/helpers/StubIntegration/StubIntegration.csproj -c Release
+
       - name: Unit tests
         run: dotnet test --no-build -c Release --filter "Category!=Integration" --logger "console;verbosity=normal"
