@@ -58,6 +58,12 @@ desktop session.
 - Turn the plugin off: runtimes sleep, sessions are not signed out. Turn it on again: the session should still be there.
 - Tray → Settings must show the same page, not a popup.
 
+## About and repositories
+
+- Sidebar **About** opens a page with the app version, creator, repository link, build credits and license links.
+- Plugins page: **Add Plugins Repo** opens the add modal with URL instructions; **Manage plugin repos** lists each repo with Update, Edit, Delete and Trust new key.
+- A synced repo shows only compatible plugins; unsupported entries remain visible with their reason.
+
 ## Command palette
 
 - `Ctrl+K` opens the **Command palette** with a real text caret. Type normally; `Ctrl+A`, copy/cut/paste, Home/End, Delete and mouse selection work. `Up`/`Down` and `Tab` move the list, `Enter` activates, `Esc` goes back.

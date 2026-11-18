@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Chirpdesk.About;
 using Chirpdesk.CommandBar;
 using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.CommandBar;
@@ -53,6 +54,7 @@ public partial class App : Application
     private IReadOnlyList<ThemePack> _themePacks = Array.Empty<ThemePack>();
     private SettingsPage? _settingsPage;
     private PluginsPage? _pluginsPage;
+    private AboutPage? _aboutPage;
     private OnboardingPage? _onboarding;
     private bool _firstRun;
     private CommandBarView? _bar;
@@ -146,6 +148,7 @@ public partial class App : Application
         _host.RailAddRequested += (_, _) => _ = OpenSearchBarAsync();
         _host.RailPluginsRequested += (_, _) => OpenPlugins();
         _host.RailSettingsRequested += (_, _) => OpenSettings();
+        _host.RailAboutRequested += (_, _) => OpenAbout();
 
         if (options.SelfTest)
         {
@@ -193,6 +196,10 @@ public partial class App : Application
             if (options.Page.Equals("plugins", StringComparison.OrdinalIgnoreCase))
             {
                 OpenPlugins();
+            }
+            else if (options.Page.Equals("about", StringComparison.OrdinalIgnoreCase))
+            {
+                OpenAbout();
             }
             else
             {
@@ -1264,6 +1271,10 @@ public partial class App : Application
         candidates.Add(new SearchCandidate(
             "command:plugins", "Plugins & services", SearchKind.Command,
             ["plugins", "plugin", "add", "services"], State: null, Accent: "#275949", Initial: "P"));
+        candidates.Add(new SearchCandidate(
+            "command:about", "About Chirpdesk", SearchKind.Command,
+            ["about", "version", "license", "licenses", "credits", "source"], State: null,
+            Accent: "#5E5A60", Initial: "A"));
 
         // Only meaningful with a current tab and while the page-dark plugin is active.
         if (_registry.Active is { } active
@@ -1408,6 +1419,12 @@ public partial class App : Application
             return;
         }
 
+        if (string.Equals(selected, "command:about", StringComparison.Ordinal))
+        {
+            OpenAbout();
+            return;
+        }
+
         if (string.Equals(selected, "command:page-dark", StringComparison.Ordinal))
         {
             _ = TogglePageDarkModeAsync();
@@ -1509,6 +1526,7 @@ public partial class App : Application
                 {
                     "command:settings" => UiIcons.Create("settings", accentBrush, 22),
                     "command:plugins" => UiIcons.Create("plugins", accentBrush, 22),
+                    "command:about" => UiIcons.Create("info", accentBrush, 22),
                     "command:page-dark" => UiIcons.Create("moon", accentBrush, 22),
                     "command:blocking" => UiIcons.Create("shield", accentBrush, 22),
                     _ => definitionId is null
@@ -2107,6 +2125,17 @@ public partial class App : Application
 
         ShowPage(_settingsPage);
         _settingsPage.Reload();
+    }
+
+    private void OpenAbout()
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        _aboutPage ??= new AboutPage(ClosePage);
+        ShowPage(_aboutPage);
     }
 
     private void OpenPlugins()

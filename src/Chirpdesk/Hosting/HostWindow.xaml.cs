@@ -120,6 +120,7 @@ public partial class HostWindow : Window
         RailActions.Children.Add(RailAction("search", "Command palette (Ctrl+K)", (_, _) => RailSearchRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("plugins", "Plugins & services", (_, _) => RailPluginsRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("settings", "Settings", (_, _) => RailSettingsRequested?.Invoke(this, EventArgs.Empty)));
+        RailActions.Children.Add(RailAction("info", "About Chirpdesk", (_, _) => RailAboutRequested?.Invoke(this, EventArgs.Empty)));
     }
 
     public void SetRailMode(string? mode)
@@ -356,6 +357,7 @@ public partial class HostWindow : Window
     public event EventHandler? RailAddRequested;
     public event EventHandler? RailPluginsRequested;
     public event EventHandler? RailSettingsRequested;
+    public event EventHandler? RailAboutRequested;
 
     /// <summary>Set from settings; minimize hides to the tray instead of the taskbar.</summary>
     public bool MinimizeToTray { get; set; }

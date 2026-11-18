@@ -32,6 +32,7 @@ public partial class PluginsPage : UserControl
     private readonly RepositoryService _repositories;
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
+    private RepositorySetting? _editingRepository;
     private AppSettings _settings;
 
     internal PluginsPage(
@@ -68,7 +69,7 @@ public partial class PluginsPage : UserControl
     {
         _settings = _store.Load();
         PluginsPanel.Children.Clear();
-        RenderRepositories();
+        RenderAvailablePlugins();
 
         foreach (var repository in _settings.Repositories
             .Where(item => item.AutoUpdate
@@ -259,9 +260,8 @@ public partial class PluginsPage : UserControl
         }
     }
 
-    private void RenderRepositories()
+    private void RenderAvailablePlugins()
     {
-        RepositoriesPanel.Children.Clear();
         AvailablePluginsPanel.Children.Clear();
 
         if (_settings.Repositories.Count == 0)
@@ -270,26 +270,114 @@ public partial class PluginsPage : UserControl
             return;
         }
 
-        RepositoryStatus.Text = $"{_settings.Repositories.Count} repository(ies) configured.";
+        var rendered = 0;
+
+        foreach (var repository in _settings.Repositories)
+        {
+            if (!_synced.TryGetValue(repository.Url, out var index))
+            {
+                continue;
+            }
+
+            rendered++;
+            var app = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0, 0);
+
+            foreach (var plugin in index.Plugins)
+            {
+                var compatible = RepositoryCompatibility.IsCompatible(plugin, app, out var reason);
+                var row = new Border
+                {
+                    Style = (Style)FindResource("Card"),
+                    Margin = new Thickness(0, 0, 0, 8),
+                    Padding = new Thickness(12),
+                };
+
+                var content = new Grid();
+                content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                var text = new StackPanel();
+                text.Children.Add(new TextBlock
+                {
+                    Text = $"{plugin.Name}  {plugin.Version}",
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Token("CdText"),
+                });
+                text.Children.Add(new TextBlock
+                {
+                    Text = $"{plugin.Kind} · {(plugin.Permissions is { Count: > 0 } ? string.Join(", ", plugin.Permissions) : "no permissions")}",
+                    FontSize = 11,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                text.Children.Add(new TextBlock
+                {
+                    Text = compatible ? $"From {repository.Name ?? repository.Url}" : reason,
+                    FontSize = 11,
+                    Foreground = compatible ? Token("CdAccent") : Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 3, 0, 0),
+                });
+                content.Children.Add(text);
+
+                var install = new Button
+                {
+                    Content = compatible ? "Install" : "Unsupported",
+                    IsEnabled = compatible,
+                    Style = (Style)FindResource("PillButton"),
+                    Padding = new Thickness(12, 6, 12, 6),
+                    Margin = new Thickness(14, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                install.Click += async (_, _) => await InstallPluginAsync(repository, index, plugin);
+                Grid.SetColumn(install, 1);
+                content.Children.Add(install);
+
+                row.Child = content;
+                AvailablePluginsPanel.Children.Add(row);
+            }
+        }
+
+        RepositoryStatus.Text = rendered == 0
+            ? $"{_settings.Repositories.Count} repository(ies) configured. Sync one to see plugins."
+            : $"Showing plugins from {rendered} synced repository(ies).";
+    }
+
+    private void RenderManageRepositories()
+    {
+        ManageRepositoriesPanel.Children.Clear();
+
+        if (_settings.Repositories.Count == 0)
+        {
+            ManageRepositoriesPanel.Children.Add(new TextBlock
+            {
+                Text = "No repositories yet. Use Add Plugins Repo to add one.",
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 8, 0, 8),
+            });
+            return;
+        }
 
         foreach (var repository in _settings.Repositories.ToList())
         {
-            var card = new Border
+            var row = new Border
             {
                 Style = (Style)FindResource("Card"),
-                Margin = new Thickness(0, 0, 0, 10),
+                Margin = new Thickness(0, 0, 0, 8),
                 Padding = new Thickness(12),
             };
 
             var content = new StackPanel();
-            var title = new TextBlock
+            content.Children.Add(new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(repository.Name) ? repository.Url : repository.Name,
-                FontSize = 14,
+                FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = Token("CdText"),
-            };
-            content.Children.Add(title);
+            });
             content.Children.Add(new TextBlock
             {
                 Text = repository.Url,
@@ -304,39 +392,8 @@ public partial class PluginsPage : UserControl
                     : $"Key {repository.KeyFingerprint}",
                 FontSize = 11,
                 Foreground = Token("CdAccent"),
-                Margin = new Thickness(0, 4, 0, 8),
+                Margin = new Thickness(0, 3, 0, 6),
             });
-
-            var auto = new CheckBox
-            {
-                Content = "Auto-update",
-                IsChecked = repository.AutoUpdate,
-                Style = (Style)FindResource("CdSwitch"),
-                Margin = new Thickness(0, 0, 0, 8),
-            };
-            auto.Checked += (_, _) => SetRepositoryAutoUpdate(repository, true);
-            auto.Unchecked += (_, _) => SetRepositoryAutoUpdate(repository, false);
-            content.Children.Add(auto);
-
-            var actions = new StackPanel { Orientation = Orientation.Horizontal };
-            var sync = new Button
-            {
-                Content = "Sync",
-                Style = (Style)FindResource("PillButton"),
-                Padding = new Thickness(12, 6, 12, 6),
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-            sync.Click += async (_, _) => await SyncRepositoryAsync(repository, trustNewKey: true);
-            actions.Children.Add(sync);
-
-            var remove = new Button
-            {
-                Content = "Remove",
-                Style = (Style)FindResource("GhostButton"),
-                Padding = new Thickness(12, 6, 12, 6),
-            };
-            remove.Click += (_, _) => RemoveRepository(repository);
-            actions.Children.Add(remove);
 
             if (_keyChanges.TryGetValue(repository.Url, out var pendingKey))
             {
@@ -346,90 +403,116 @@ public partial class PluginsPage : UserControl
                     FontSize = 11,
                     Foreground = Token("CdAccent"),
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 8, 0, 6),
+                    Margin = new Thickness(0, 4, 0, 6),
                 });
+            }
 
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            var update = new Button
+            {
+                Content = "Update",
+                Style = (Style)FindResource("PillButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+            };
+            update.Click += async (_, _) => await SyncRepositoryAsync(repository, trustNewKey: true);
+            actions.Children.Add(update);
+
+            var edit = new Button
+            {
+                Content = "Edit",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+            };
+            edit.Click += (_, _) => OpenEditRepository(repository);
+            actions.Children.Add(edit);
+
+            if (_keyChanges.TryGetValue(repository.Url, out var trustKey))
+            {
                 var trust = new Button
                 {
                     Content = "Trust new key",
                     Style = (Style)FindResource("PillButton"),
-                    Padding = new Thickness(12, 6, 12, 6),
-                    Margin = new Thickness(0, 0, 8, 0),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 0),
                 };
-                trust.Click += async (_, _) => await TrustRepositoryAsync(repository, pendingKey.Pem, pendingKey.Fingerprint);
+                trust.Click += async (_, _) => await TrustRepositoryAsync(repository, trustKey.Pem, trustKey.Fingerprint);
                 actions.Children.Add(trust);
             }
 
+            var delete = new Button
+            {
+                Content = "Delete",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+            };
+            delete.Click += (_, _) => RemoveRepository(repository);
+            actions.Children.Add(delete);
             content.Children.Add(actions);
-            card.Child = content;
-            RepositoriesPanel.Children.Add(card);
-
-            if (_synced.TryGetValue(repository.Url, out var index))
-            {
-                RenderAvailablePlugins(repository, index);
-            }
-        }
-    }
-
-    private void RenderAvailablePlugins(RepositorySetting repository, RepositoryIndex index)
-    {
-        var app = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0, 0);
-
-        foreach (var plugin in index.Plugins)
-        {
-            var compatible = RepositoryCompatibility.IsCompatible(plugin, app, out var reason);
-            var row = new Border
-            {
-                Style = (Style)FindResource("Card"),
-                Margin = new Thickness(0, 0, 0, 8),
-                Padding = new Thickness(12),
-            };
-
-            var content = new StackPanel();
-            content.Children.Add(new TextBlock
-            {
-                Text = $"{plugin.Name}  {plugin.Version}",
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Token("CdText"),
-            });
-            content.Children.Add(new TextBlock
-            {
-                Text = $"{plugin.Kind} · {(plugin.Permissions is { Count: > 0 } ? string.Join(", ", plugin.Permissions) : "no permissions")}",
-                FontSize = 11,
-                Foreground = Token("CdTextMuted"),
-                TextWrapping = TextWrapping.Wrap,
-            });
-
-            if (!compatible)
-            {
-                content.Children.Add(new TextBlock
-                {
-                    Text = reason,
-                    FontSize = 11,
-                    Foreground = Token("CdTextMuted"),
-                    Margin = new Thickness(0, 4, 0, 0),
-                });
-            }
-
-            var install = new Button
-            {
-                Content = compatible ? "Install" : "Unsupported",
-                IsEnabled = compatible,
-                Style = (Style)FindResource("PillButton"),
-                Padding = new Thickness(12, 6, 12, 6),
-                Margin = new Thickness(0, 8, 0, 0),
-            };
-            install.Click += async (_, _) => await InstallPluginAsync(repository, index, plugin);
-            content.Children.Add(install);
             row.Child = content;
-            AvailablePluginsPanel.Children.Add(row);
+            ManageRepositoriesPanel.Children.Add(row);
         }
     }
 
-    private async void OnAddRepository(object sender, RoutedEventArgs e)
+    private void OnOpenAddRepository(object sender, RoutedEventArgs e)
     {
-        var url = RepositoryUrlBox.Text.Trim();
+        _editingRepository = null;
+        ModalTitle.Text = "Add plugins repository";
+        ModalDescription.Text = "Point at a static HTTPS folder containing index.json, index.json.sig and key.pem. The key is pinned on first sync.";
+        ModalRepositoryUrl.Text = string.Empty;
+        AddRepositoryForm.Visibility = Visibility.Visible;
+        ManageRepositoryList.Visibility = Visibility.Collapsed;
+        ModalPrimaryButton.Content = "Add repository";
+        ModalPrimaryButton.Visibility = Visibility.Visible;
+        ModalLayer.Visibility = Visibility.Visible;
+        ModalRepositoryUrl.Focus();
+    }
+
+    private void OnOpenManageRepositories(object sender, RoutedEventArgs e)
+    {
+        _editingRepository = null;
+        ModalTitle.Text = "Plugin repositories";
+        ModalDescription.Text = "Add, edit, update or remove the static repositories Chirpdesk can install from.";
+        AddRepositoryForm.Visibility = Visibility.Collapsed;
+        ManageRepositoryList.Visibility = Visibility.Visible;
+        ModalPrimaryButton.Content = "Add new";
+        ModalPrimaryButton.Visibility = Visibility.Visible;
+        ModalSecondaryButton.Content = "Close";
+        RenderManageRepositories();
+        ModalLayer.Visibility = Visibility.Visible;
+    }
+
+    private void OpenEditRepository(RepositorySetting repository)
+    {
+        _editingRepository = repository;
+        ModalTitle.Text = "Edit repository";
+        ModalDescription.Text = "Changing the URL fetches a new index and re-pins the key on the next sync.";
+        ModalRepositoryUrl.Text = repository.Url;
+        AddRepositoryForm.Visibility = Visibility.Visible;
+        ManageRepositoryList.Visibility = Visibility.Collapsed;
+        ModalPrimaryButton.Content = "Save changes";
+        ModalPrimaryButton.Visibility = Visibility.Visible;
+        ModalSecondaryButton.Content = "Cancel";
+        ModalLayer.Visibility = Visibility.Visible;
+        ModalRepositoryUrl.Focus();
+    }
+
+    private void OnCloseModal(object sender, RoutedEventArgs e)
+    {
+        ModalLayer.Visibility = Visibility.Collapsed;
+        _editingRepository = null;
+    }
+
+    private async void OnSaveRepository(object sender, RoutedEventArgs e)
+    {
+        if (ModalPrimaryButton.Content as string == "Add new")
+        {
+            OnOpenAddRepository(sender, e);
+            return;
+        }
+
+        var url = ModalRepositoryUrl.Text.Trim();
 
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
@@ -438,16 +521,40 @@ public partial class PluginsPage : UserControl
             return;
         }
 
-        if (_settings.Repositories.Any(item => string.Equals(item.Url, url, StringComparison.OrdinalIgnoreCase)))
+        if (_editingRepository is null
+            && _settings.Repositories.Any(item => string.Equals(item.Url, url, StringComparison.OrdinalIgnoreCase)))
         {
             RepositoryStatus.Text = "That repository is already added.";
             return;
         }
 
-        var repository = new RepositorySetting { Url = url };
-        _settings.Repositories.Add(repository);
+        RepositorySetting repository;
+
+        if (_editingRepository is null)
+        {
+            repository = new RepositorySetting { Url = url };
+            _settings.Repositories.Add(repository);
+        }
+        else
+        {
+            repository = _editingRepository;
+
+            if (!string.Equals(repository.Url, url, StringComparison.OrdinalIgnoreCase))
+            {
+                var oldUrl = repository.Url;
+                repository.Url = url;
+                repository.Name = string.Empty;
+                repository.PublicKeyPem = string.Empty;
+                repository.KeyFingerprint = string.Empty;
+                repository.LastSync = null;
+                _synced.Remove(oldUrl);
+                _keyChanges.Remove(oldUrl);
+            }
+        }
+
         _store.Save(_settings);
-        RepositoryUrlBox.Clear();
+        _editingRepository = null;
+        ModalLayer.Visibility = Visibility.Collapsed;
         await SyncRepositoryAsync(repository, trustNewKey: true);
     }
 
@@ -466,12 +573,16 @@ public partial class PluginsPage : UserControl
             }
 
             RepositoryStatus.Text = result.Message;
-            RenderRepositories();
+            RenderAvailablePlugins();
+            if (ModalLayer.Visibility == Visibility.Visible)
+            {
+                RenderManageRepositories();
+            }
+
             return;
         }
 
         _keyChanges.Remove(repository.Url);
-
         repository.Name = result.Index.Name;
         repository.PublicKeyPem = result.PublicKeyPem ?? repository.PublicKeyPem;
         repository.KeyFingerprint = result.Fingerprint ?? repository.KeyFingerprint;
@@ -479,7 +590,11 @@ public partial class PluginsPage : UserControl
         _store.Save(_settings);
         _synced[repository.Url] = result.Index;
         RepositoryStatus.Text = result.Message;
-        RenderRepositories();
+        RenderAvailablePlugins();
+        if (ModalLayer.Visibility == Visibility.Visible)
+        {
+            RenderManageRepositories();
+        }
     }
 
     private async Task TrustRepositoryAsync(RepositorySetting repository, string publicKeyPem, string fingerprint)
@@ -496,17 +611,9 @@ public partial class PluginsPage : UserControl
     {
         RepositoryStatus.Text = $"Installing {plugin.Name}…";
         var result = await _repositories.InstallAsync(repository, index, plugin);
-        RepositoryStatus.Text = result.Message;
-        if (result.Ok)
-        {
-            RepositoryStatus.Text += " Restart Chirpdesk to load it.";
-        }
-    }
-
-    private void SetRepositoryAutoUpdate(RepositorySetting repository, bool enabled)
-    {
-        repository.AutoUpdate = enabled;
-        _store.Save(_settings);
+        RepositoryStatus.Text = result.Ok
+            ? result.Message + " Restart Chirpdesk to load it."
+            : result.Message;
     }
 
     private void RemoveRepository(RepositorySetting repository)
@@ -514,7 +621,15 @@ public partial class PluginsPage : UserControl
         _settings.Repositories.RemoveAll(item => string.Equals(item.Url, repository.Url, StringComparison.OrdinalIgnoreCase));
         _store.Save(_settings);
         _synced.Remove(repository.Url);
-        RenderRepositories();
+        _keyChanges.Remove(repository.Url);
+        RenderAvailablePlugins();
+        RenderManageRepositories();
+    }
+
+    private void SetRepositoryAutoUpdate(RepositorySetting repository, bool enabled)
+    {
+        repository.AutoUpdate = enabled;
+        _store.Save(_settings);
     }
 
     private void OnOpenPluginsFolder(object sender, RoutedEventArgs e)

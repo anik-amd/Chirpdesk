@@ -3,13 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="{DynamicResource CdCanvas}">
 
-    <Grid Margin="28,22,28,22">
+    <Grid x:Name="RootGrid" Margin="28,22,28,22">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,30">
+        <Grid Grid.Row="0" Margin="0,0,0,18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -26,7 +26,22 @@
                 </StackPanel>
             </StackPanel>
 
-            <Button Grid.Column="1" Content="Back" Style="{StaticResource GhostButton}" VerticalAlignment="Top" Click="OnBack" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button Content="Add Plugins Repo"
+                        Style="{StaticResource PillButton}"
+                        Padding="14,8"
+                        Click="OnOpenAddRepository" />
+                <Button Content="Manage plugin repos"
+                        Style="{StaticResource GhostButton}"
+                        Padding="14,8"
+                        Margin="8,0,0,0"
+                        Click="OnOpenManageRepositories" />
+                <Button Content="Back"
+                        Style="{StaticResource GhostButton}"
+                        Padding="14,8"
+                        Margin="8,0,0,0"
+                        Click="OnBack" />
+            </StackPanel>
         </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -40,32 +55,18 @@
 
                 <Border Style="{StaticResource Card}" Margin="0,20,0,0">
                     <StackPanel>
-                        <TextBlock Text="Repositories" Style="{StaticResource Heading}" Margin="0,0,0,8" />
-                        <TextBlock Text="Add a static HTTPS repository. Its index must be signed; the key fingerprint is pinned on first sync."
+                        <TextBlock Text="Available from repositories" Style="{StaticResource Heading}" Margin="0,0,0,8" />
+                        <TextBlock Text="Sync a repository from Manage plugin repos to see its compatible plugins here."
                                    FontSize="12"
                                    Foreground="{DynamicResource CdTextMuted}"
                                    TextWrapping="Wrap"
-                                   Margin="0,0,0,12" />
-                        <StackPanel Orientation="Horizontal">
-                            <TextBox x:Name="RepositoryUrlBox"
-                                     Width="420"
-                                     Height="34"
-                                     Padding="8,4"
-                                     VerticalContentAlignment="Center"
-                                     AutomationProperties.Name="Repository URL" />
-                            <Button Content="Add repository"
-                                    Style="{StaticResource PillButton}"
-                                    Padding="14,8"
-                                    Margin="8,0,0,0"
-                                    Click="OnAddRepository" />
-                        </StackPanel>
+                                   Margin="0,0,0,10" />
                         <TextBlock x:Name="RepositoryStatus"
                                    Style="{StaticResource MutedText}"
                                    Text="No repositories configured."
                                    TextWrapping="Wrap"
-                                   Margin="0,10,0,0" />
-                        <StackPanel x:Name="RepositoriesPanel" Margin="0,12,0,0" />
-                        <StackPanel x:Name="AvailablePluginsPanel" Margin="0,12,0,0" />
+                                   Margin="0,0,0,8" />
+                        <StackPanel x:Name="AvailablePluginsPanel" />
                     </StackPanel>
                 </Border>
 
@@ -79,5 +80,89 @@
                 </Border>
             </StackPanel>
         </ScrollViewer>
+
+        <!-- Modal overlay: stays inside the plugins page, so the title bar and window never change. -->
+        <Grid x:Name="ModalLayer"
+              Grid.RowSpan="2"
+              Panel.ZIndex="50"
+              Background="#99000000"
+              Visibility="Collapsed">
+            <Border Width="560"
+                    MaxHeight="620"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource CdPalette}"
+                    BorderBrush="{DynamicResource CdRule}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="24">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="ModalTitle"
+                               Text="Add plugins repository"
+                               FontFamily="{StaticResource CdDisplayFont}"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource CdText}" />
+
+                    <TextBlock x:Name="ModalDescription"
+                               Grid.Row="1"
+                               Text="Point at a static HTTPS folder containing index.json, index.json.sig and key.pem. The key is pinned on first sync."
+                               FontSize="12"
+                               Foreground="{DynamicResource CdTextMuted}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,16" />
+
+                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <StackPanel x:Name="AddRepositoryForm">
+                                <TextBlock Text="Repository URL"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource CdText}"
+                                           Margin="0,0,0,6" />
+                                <TextBox x:Name="ModalRepositoryUrl"
+                                         Height="36"
+                                         Padding="9,5"
+                                         VerticalContentAlignment="Center"
+                                         Background="{DynamicResource CdSurfaceAlt}"
+                                         Foreground="{DynamicResource CdText}"
+                                         BorderBrush="{DynamicResource CdRule}"
+                                         AutomationProperties.Name="Repository URL" />
+                                <TextBlock Text="Examples: a GitHub Pages folder, an S3 static site, or any HTTPS host. No query string or credentials."
+                                           FontSize="11"
+                                           Foreground="{DynamicResource CdTextMuted}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,6,0,0" />
+                            </StackPanel>
+
+                            <StackPanel x:Name="ManageRepositoryList" Visibility="Collapsed">
+                                <StackPanel x:Name="ManageRepositoriesPanel" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Button x:Name="ModalSecondaryButton"
+                                Content="Cancel"
+                                Style="{StaticResource GhostButton}"
+                                Padding="14,7"
+                                Click="OnCloseModal" />
+                        <Button x:Name="ModalPrimaryButton"
+                                Content="Add repository"
+                                Style="{StaticResource PillButton}"
+                                Padding="14,8"
+                                Margin="8,0,0,0"
+                                Click="OnSaveRepository" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
