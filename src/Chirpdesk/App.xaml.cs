@@ -2755,6 +2755,7 @@ public partial class App : Application
             }
         }
 
+        _ = _integrations?.SyncAsync(_installedPlugins);
         _log.Info($"plugin '{pluginId}' {(enabled ? "activated" : "deactivated")}");
     }
 

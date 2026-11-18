@@ -21,12 +21,6 @@ public static class RepositoryCompatibility
             return false;
         }
 
-        if (string.Equals(plugin.Kind, "integration", StringComparison.Ordinal))
-        {
-            reason = "integration plugins are not installable in v1";
-            return false;
-        }
-
         if (plugin.MinAppVersion is not null
             && Version.TryParse(plugin.MinAppVersion, out var minimum)
             && Normalize(appVersion) < Normalize(minimum))

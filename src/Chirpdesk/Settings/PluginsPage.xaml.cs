@@ -315,7 +315,7 @@ public partial class PluginsPage : UserControl
 
         foreach (var plugin in _inventory.Where(item => !string.Equals(item.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal) && !_removedPlugins.Contains(item.Id)))
         {
-            var toggleable = plugin.Kind is "theme" or "filter";
+            var toggleable = plugin.Kind is "theme" or "filter" or PluginLoader.IntegrationKind;
             var pluginEnabled = !toggleable || PluginState.IsEnabled(_settings, plugin.Id);
 
             var card = new Border
@@ -1340,6 +1340,8 @@ public partial class PluginsPage : UserControl
         "storage" => "own a profile directory (bundled only)",
         "inject-js" => "run JavaScript in the page origin (not granted in v1)",
         "process" => "start a helper process (integration only)",
+        "unread" => "set its unread badge count",
+        "commands" => "declare command-bar entries and receive the text you type",
         _ => "unknown permission; installation will be refused",
     };
 

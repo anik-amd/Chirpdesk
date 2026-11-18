@@ -157,6 +157,13 @@ internal sealed class IntegrationRuntimeHost
             return;
         }
 
+        if (!VerifyExecutable(entry))
+        {
+            entry.Session.Fail("helper changed on disk");
+            RaiseStatus(pluginId);
+            return;
+        }
+
         await entry.Session.StartAsync(cancellationToken).ConfigureAwait(false);
         RaiseStatus(pluginId);
     }
@@ -214,6 +221,13 @@ internal sealed class IntegrationRuntimeHost
         if (entry is null)
         {
             return IntegrationCommandResult.Failure("integration is not installed or is disabled");
+        }
+
+        if (entry.Session.State != IntegrationState.Running && !VerifyExecutable(entry))
+        {
+            entry.Session.Fail("helper changed on disk");
+            RaiseStatus(pluginId);
+            return IntegrationCommandResult.Failure("helper changed on disk");
         }
 
         if (entry.Session.State != IntegrationState.Running)
@@ -304,7 +318,7 @@ internal sealed class IntegrationRuntimeHost
         }
 
         var permissions = new HashSet<string>(pluginManifest.Permissions ?? [], StringComparer.Ordinal);
-        var entry = new Entry(plugin.Id, plugin.Name, plugin.Version ?? string.Empty, manifest);
+        var entry = new Entry(plugin.Id, plugin.Name, plugin.Version ?? string.Empty, manifest, executable, source.ExecutableSha256);
 
         entry.Session = new IntegrationSession(
             manifest,
@@ -323,6 +337,28 @@ internal sealed class IntegrationRuntimeHost
         entry.Session.StateChanged += (_, changed) => OnState(entry, changed);
 
         return entry;
+    }
+
+    private bool VerifyExecutable(Entry entry)
+    {
+        try
+        {
+            using var stream = File.OpenRead(entry.ExecutablePath);
+            var actual = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+
+            if (!string.Equals(actual, entry.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                _log.Warn($"integration '{entry.PluginId}' executable changed on disk; refusing to launch");
+                return false;
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"integration '{entry.PluginId}' executable is unreadable: {ex.Message}");
+            return false;
+        }
     }
 
     private void StartEntry(Entry entry) =>
@@ -377,7 +413,13 @@ internal sealed class IntegrationRuntimeHost
 
     private void RaiseStatus(string pluginId) => StatusChanged?.Invoke(pluginId);
 
-    private sealed class Entry(string pluginId, string pluginName, string version, IntegrationManifest manifest)
+    private sealed class Entry(
+        string pluginId,
+        string pluginName,
+        string version,
+        IntegrationManifest manifest,
+        string executablePath,
+        string expectedSha256)
     {
         public string PluginId { get; } = pluginId;
 
@@ -386,6 +428,10 @@ internal sealed class IntegrationRuntimeHost
         public string Version { get; } = version;
 
         public IntegrationManifest Manifest { get; } = manifest;
+
+        public string ExecutablePath { get; } = executablePath;
+
+        public string ExpectedSha256 { get; } = expectedSha256;
 
         public IntegrationSession Session { get; set; } = null!;
 

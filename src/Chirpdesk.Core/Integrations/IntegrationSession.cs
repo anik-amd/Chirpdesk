@@ -200,6 +200,13 @@ public sealed class IntegrationSession : IAsyncDisposable
         }
     }
 
+    /// <summary>Marks the session unusable without starting a process (e.g. a changed executable).</summary>
+    public void Fail(string reason)
+    {
+        _stopRequested = true;
+        SetState(IntegrationState.Error, reason);
+    }
+
     public async Task<bool> PingAsync(CancellationToken cancellationToken = default)
     {
         if (State != IntegrationState.Running)

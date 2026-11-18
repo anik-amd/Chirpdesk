@@ -74,12 +74,11 @@ public sealed class RepositoryTests : IDisposable
     }
 
     [Fact]
-    public void Integration_plugins_are_not_installable()
+    public void Integration_plugins_are_compatible_after_phase_7()
     {
         var plugin = new RepositoryPlugin { ApiVersion = 1, Kind = "integration" };
 
-        Assert.False(RepositoryCompatibility.IsCompatible(plugin, new Version(0, 1, 0), out var reason));
-        Assert.Contains("integration", reason);
+        Assert.True(RepositoryCompatibility.IsCompatible(plugin, new Version(0, 1, 0), out var reason), reason);
     }
 
     [Fact]
