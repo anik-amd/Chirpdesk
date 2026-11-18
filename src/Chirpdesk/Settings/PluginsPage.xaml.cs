@@ -31,6 +31,7 @@ public partial class PluginsPage : UserControl
     private readonly Action _back;
     private readonly RepositoryService _repositories;
     private readonly Func<string, Task<bool>> _uninstallPlugin;
+    private readonly Action _reloadPlugins;
     private readonly HashSet<string> _removedPlugins = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
@@ -49,7 +50,8 @@ public partial class PluginsPage : UserControl
         Func<string, bool, Task> setPluginEnabled,
         Action back,
         RepositoryService repositories,
-        Func<string, Task<bool>> uninstallPlugin)
+        Func<string, Task<bool>> uninstallPlugin,
+        Action reloadPlugins)
     {
         InitializeComponent();
         _catalog = catalog;
@@ -64,6 +66,7 @@ public partial class PluginsPage : UserControl
         _back = back;
         _repositories = repositories;
         _uninstallPlugin = uninstallPlugin;
+        _reloadPlugins = reloadPlugins;
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
@@ -264,9 +267,11 @@ public partial class PluginsPage : UserControl
                     {
                         RepositoryStatus.Text = $"Updating {plugin.Name}…";
                         var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
-                        RepositoryStatus.Text = result.Ok
-                            ? result.Message + " Restart Chirpdesk to load it."
-                            : result.Message;
+                        RepositoryStatus.Text = result.Message;
+                        if (result.Ok)
+                        {
+                            _reloadPlugins();
+                        }
                     };
                     actions.Children.Add(updateButton);
                 }
@@ -284,6 +289,10 @@ public partial class PluginsPage : UserControl
                     {
                         var result = await _repositories.RollbackAsync(plugin.Id);
                         RepositoryStatus.Text = result.Message;
+                        if (result.Ok)
+                        {
+                            _reloadPlugins();
+                        }
                     };
                     actions.Children.Add(rollback);
                 }
@@ -300,7 +309,7 @@ public partial class PluginsPage : UserControl
                     if (await _uninstallPlugin(plugin.Id))
                     {
                         _removedPlugins.Add(plugin.Id);
-                        Reload();
+                        _reloadPlugins();
                     }
                 };
                 actions.Children.Add(uninstall);
@@ -399,6 +408,14 @@ public partial class PluginsPage : UserControl
             foreach (var plugin in index.Plugins)
             {
                 var compatible = RepositoryCompatibility.IsCompatible(plugin, app, out var reason);
+                var installed = _inventory.FirstOrDefault(item =>
+                    string.Equals(item.Id, plugin.Id, StringComparison.Ordinal));
+                var installedVersion = installed?.Version;
+                var upToDate = string.Equals(installedVersion, plugin.Version, StringComparison.Ordinal);
+                var updateAvailable = installedVersion is not null
+                    && Version.TryParse(installedVersion, out var current)
+                    && Version.TryParse(plugin.Version, out var available)
+                    && available > current;
                 var row = new Border
                 {
                     Style = (Style)FindResource("Card"),
@@ -427,7 +444,13 @@ public partial class PluginsPage : UserControl
                 });
                 text.Children.Add(new TextBlock
                 {
-                    Text = compatible ? $"From {repository.Name ?? repository.Url}" : reason,
+                    Text = !compatible
+                        ? reason
+                        : upToDate
+                            ? "Installed and up to date."
+                            : updateAvailable
+                                ? $"Installed {installedVersion} · update available."
+                                : $"From {repository.Name ?? repository.Url}",
                     FontSize = 11,
                     Foreground = compatible ? Token("CdAccent") : Token("CdTextMuted"),
                     TextWrapping = TextWrapping.Wrap,
@@ -437,8 +460,14 @@ public partial class PluginsPage : UserControl
 
                 var install = new Button
                 {
-                    Content = compatible ? "Install" : "Unsupported",
-                    IsEnabled = compatible,
+                    Content = !compatible
+                        ? "Unsupported"
+                        : upToDate
+                            ? "Installed"
+                            : updateAvailable
+                                ? "Update"
+                                : "Install",
+                    IsEnabled = compatible && !upToDate,
                     Style = (Style)FindResource("PillButton"),
                     Padding = new Thickness(12, 6, 12, 6),
                     Margin = new Thickness(14, 0, 0, 0),
@@ -725,9 +754,11 @@ public partial class PluginsPage : UserControl
     {
         RepositoryStatus.Text = $"Installing {plugin.Name}…";
         var result = await _repositories.InstallAsync(repository, index, plugin);
-        RepositoryStatus.Text = result.Ok
-            ? result.Message + " Restart Chirpdesk to load it."
-            : result.Message;
+        RepositoryStatus.Text = result.Message;
+        if (result.Ok)
+        {
+            _reloadPlugins();
+        }
     }
 
     private void RemoveRepository(RepositorySetting repository)

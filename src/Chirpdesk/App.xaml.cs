@@ -2127,6 +2127,44 @@ public partial class App : Application
         _settingsPage.Reload();
     }
 
+    /// <summary>
+    /// Rebuilds every data-plugin view after a repository install, update, rollback or uninstall.
+    /// The live WebViews and settings are untouched; only the catalogue and page models change.
+    /// </summary>
+    private void ReloadPluginCatalog()
+    {
+        if (_log is null)
+        {
+            return;
+        }
+
+        _catalog = PluginCatalog.Load(_log);
+        _panels = PluginCatalog.LoadPanels(_log);
+        _installedPlugins = PluginCatalog.LoadInstalled(_log);
+        _filterPacks = PluginCatalog.LoadFilters(_log);
+        _themePacks = PluginCatalog.LoadThemes(_log);
+
+        if (_registry is not null)
+        {
+            var packs = EnabledFilterPacks();
+            foreach (var id in _registry.Order)
+            {
+                _registry.Find(id)?.SetFilterPacks(packs);
+            }
+        }
+
+        _settingsPage = null;
+        _pluginsPage = null;
+        ApplyTheme();
+        RefreshServiceRail();
+        UpdateTrayStatus();
+
+        if (_host?.IsPageOpen == true)
+        {
+            Dispatcher.BeginInvoke(new Action(OpenPlugins));
+        }
+    }
+
     private void OpenAbout()
     {
         if (_host is null)
@@ -2159,7 +2197,8 @@ public partial class App : Application
                 SetPluginEnabledAsync,
                 ClosePage,
                 _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log),
-                UninstallPluginAsync);
+                UninstallPluginAsync,
+                ReloadPluginCatalog);
         }
 
         ShowPage(_pluginsPage);

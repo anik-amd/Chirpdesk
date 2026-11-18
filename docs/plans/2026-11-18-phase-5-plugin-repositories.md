@@ -7,8 +7,8 @@ zip-slip/executable rejection all have unit tests. The official registry key is 
 `key.pem` pinning, archive verification/installation into the user plugin root, and a
 Repositories section on the Plugins page. Installs write a source sidecar, keep the previous
 version for rollback, and expose Update, Roll back and Recycle-Bin Uninstall. A successful
-install is disabled by default and asks for a restart. Still open: the full manual matrix and a
-live public-registry end-to-end run.
+install is disabled by default and the catalogue reloads immediately. Still open: the full
+manual matrix and a live public-registry end-to-end run.
 
 **ADR:** 0007 (data plugins), 0008 (signed static repositories)
 
