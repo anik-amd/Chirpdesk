@@ -121,6 +121,27 @@ public sealed class RepositoryTests : IDisposable
     }
 
     [Fact]
+    public void A_plugin_source_round_trips_and_a_bad_file_fails_open()
+    {
+        Directory.CreateDirectory(_dir);
+        var source = new PluginSource(
+            "https://example.test/registry/",
+            "ecdsa-p256:0000000000000000",
+            "1.2.3",
+            "b1946ac92492d2347c6235b4d2611184c7d3a6d7a8c9b0c1d2e3f40506070809",
+            DateTimeOffset.UtcNow);
+
+        Assert.True(PluginSourceStore.TryWrite(_dir, source));
+        var read = PluginSourceStore.TryRead(_dir);
+        Assert.NotNull(read);
+        Assert.Equal(source.RepositoryUrl, read.RepositoryUrl);
+        Assert.Equal(source.Version, read.Version);
+
+        File.WriteAllText(Path.Combine(_dir, PluginSourceStore.FileName), "{ not json");
+        Assert.Null(PluginSourceStore.TryRead(_dir));
+    }
+
+    [Fact]
     public void Extraction_stays_beneath_the_destination()
     {
         Directory.CreateDirectory(_dir);

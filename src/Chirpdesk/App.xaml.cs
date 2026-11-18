@@ -2158,7 +2158,8 @@ public partial class App : Application
                 DisablePluginAsync,
                 SetPluginEnabledAsync,
                 ClosePage,
-                _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log));
+                _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log),
+                UninstallPluginAsync);
         }
 
         ShowPage(_pluginsPage);
@@ -2407,6 +2408,25 @@ public partial class App : Application
 
         runtime.SetBlockingEnabled(!string.Equals(next, "off", StringComparison.OrdinalIgnoreCase), EnabledFilterPacks());
         _log.Info($"blocking for '{runtime.InstanceId}' set to {next}");
+    }
+
+    /// <summary>Uninstalls a user plugin to the Recycle Bin; bundled plugins are not touched.</summary>
+    private Task<bool> UninstallPluginAsync(string pluginId)
+    {
+        var path = Path.Combine(AppPaths.UserPluginsDirectory, pluginId);
+
+        if (!Directory.Exists(path))
+        {
+            return Task.FromResult(false);
+        }
+
+        var moved = Interop.RecycleBin.Send(path, _log!);
+        if (moved)
+        {
+            _log?.Info($"plugin uninstalled to Recycle Bin: {pluginId}");
+        }
+
+        return Task.FromResult(moved);
     }
 
     /// <summary>

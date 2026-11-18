@@ -30,6 +30,8 @@ public partial class PluginsPage : UserControl
     private readonly Func<string, bool, Task> _setPluginEnabled;
     private readonly Action _back;
     private readonly RepositoryService _repositories;
+    private readonly Func<string, Task<bool>> _uninstallPlugin;
+    private readonly HashSet<string> _removedPlugins = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
     private RepositorySetting? _editingRepository;
@@ -46,7 +48,8 @@ public partial class PluginsPage : UserControl
         Func<ServiceDefinition, Task> disable,
         Func<string, bool, Task> setPluginEnabled,
         Action back,
-        RepositoryService repositories)
+        RepositoryService repositories,
+        Func<string, Task<bool>> uninstallPlugin)
     {
         InitializeComponent();
         _catalog = catalog;
@@ -60,6 +63,7 @@ public partial class PluginsPage : UserControl
         _setPluginEnabled = setPluginEnabled;
         _back = back;
         _repositories = repositories;
+        _uninstallPlugin = uninstallPlugin;
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
@@ -162,7 +166,7 @@ public partial class PluginsPage : UserControl
             PluginsPanel.Children.Add(card);
         }
 
-        foreach (var plugin in _inventory.Where(item => !string.Equals(item.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal)))
+        foreach (var plugin in _inventory.Where(item => !string.Equals(item.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal) && !_removedPlugins.Contains(item.Id)))
         {
             var toggleable = plugin.Kind is "theme" or "filter";
             var pluginEnabled = !toggleable || PluginState.IsEnabled(_settings, plugin.Id);
@@ -215,21 +219,131 @@ public partial class PluginsPage : UserControl
                 Margin = toggleable ? new Thickness(0, 0, 0, 12) : new Thickness(0),
             });
 
+            if (!string.IsNullOrWhiteSpace(plugin.Version) || plugin.Source is not null)
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = plugin.Source is { } source
+                        ? $"v{plugin.Version} · {source.RepositoryUrl}"
+                        : $"v{plugin.Version} · locally installed",
+                    FontSize = 10,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                });
+            }
+
+            var actions = new WrapPanel();
+
             if (toggleable)
             {
                 var toggle = new Button
                 {
                     Content = pluginEnabled ? "Deactivate" : "Activate",
-                    Width = 104,
                     Style = (Style)FindResource(pluginEnabled ? "GhostButton" : "PillButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
                 };
                 toggle.Click += async (_, _) => await RunPlugin(plugin.Id, !pluginEnabled);
-                content.Children.Add(toggle);
+                actions.Children.Add(toggle);
+            }
+
+            if (!plugin.Bundled)
+            {
+                var update = FindUpdate(plugin);
+                if (update is { } candidate)
+                {
+                    var updateButton = new Button
+                    {
+                        Content = $"Update to {candidate.Plugin.Version}",
+                        Style = (Style)FindResource("PillButton"),
+                        Padding = new Thickness(10, 5, 10, 5),
+                        Margin = new Thickness(0, 0, 6, 6),
+                    };
+                    updateButton.Click += async (_, _) =>
+                    {
+                        RepositoryStatus.Text = $"Updating {plugin.Name}…";
+                        var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
+                        RepositoryStatus.Text = result.Ok
+                            ? result.Message + " Restart Chirpdesk to load it."
+                            : result.Message;
+                    };
+                    actions.Children.Add(updateButton);
+                }
+
+                if (RepositoryService.HasBackup(plugin.Id))
+                {
+                    var rollback = new Button
+                    {
+                        Content = "Roll back",
+                        Style = (Style)FindResource("GhostButton"),
+                        Padding = new Thickness(10, 5, 10, 5),
+                        Margin = new Thickness(0, 0, 6, 6),
+                    };
+                    rollback.Click += async (_, _) =>
+                    {
+                        var result = await _repositories.RollbackAsync(plugin.Id);
+                        RepositoryStatus.Text = result.Message;
+                    };
+                    actions.Children.Add(rollback);
+                }
+
+                var uninstall = new Button
+                {
+                    Content = "Uninstall",
+                    Style = (Style)FindResource("GhostButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                uninstall.Click += async (_, _) =>
+                {
+                    if (await _uninstallPlugin(plugin.Id))
+                    {
+                        _removedPlugins.Add(plugin.Id);
+                        Reload();
+                    }
+                };
+                actions.Children.Add(uninstall);
+            }
+
+            if (actions.Children.Count > 0)
+            {
+                content.Children.Add(actions);
             }
 
             card.Child = content;
             PluginsPanel.Children.Add(card);
         }
+    }
+
+    private (RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)? FindUpdate(InstalledPlugin installed)
+    {
+        if (installed.Source is null
+            || !Version.TryParse(installed.Version, out var current))
+        {
+            return null;
+        }
+
+        foreach (var repository in _settings.Repositories)
+        {
+            if (!string.Equals(repository.Url, installed.Source.RepositoryUrl, StringComparison.OrdinalIgnoreCase)
+                || !_synced.TryGetValue(repository.Url, out var index))
+            {
+                continue;
+            }
+
+            var candidate = index.Plugins.FirstOrDefault(item =>
+                string.Equals(item.Id, installed.Id, StringComparison.Ordinal)
+                && Version.TryParse(item.Version, out var available)
+                && available > current);
+
+            if (candidate is not null)
+            {
+                return (repository, index, candidate);
+            }
+        }
+
+        return null;
     }
 
     private async Task Run(Func<ServiceDefinition, Task> action, ServiceDefinition definition)

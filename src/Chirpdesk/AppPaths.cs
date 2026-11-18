@@ -20,6 +20,9 @@ public static class AppPaths
     /// <summary>Signed repository index cache. Safe to clear at any time.</summary>
     public static string RepositoryCacheRoot => Path.Combine(DataRoot, "repositories");
 
+    /// <summary>Previous repository-installed plugin versions, outside the live plugin scan root.</summary>
+    public static string PluginBackupsRoot => Path.Combine(DataRoot, "plugin-backups");
+
     public static string LogsRoot => Path.Combine(LocalRoot, "logs");
 
     /// <summary>Bundled plugins that travel beside the executable. Trusted by install location.</summary>

@@ -211,30 +211,42 @@ internal sealed class RepositoryService
             }
 
             var target = Path.Combine(AppPaths.UserPluginsDirectory, manifest.Id);
-            var backup = target + ".old-" + Guid.NewGuid().ToString("N");
+            var backup = Path.Combine(AppPaths.PluginBackupsRoot, manifest.Id);
+
+            if (Directory.Exists(backup))
+            {
+                Directory.Delete(backup, recursive: true);
+            }
 
             if (Directory.Exists(target))
             {
+                Directory.CreateDirectory(AppPaths.PluginBackupsRoot);
                 Directory.Move(target, backup);
             }
 
             try
             {
                 Directory.Move(extracted, target);
+                PluginSourceStore.TryWrite(target, new PluginSource(
+                    repository.Url,
+                    repository.KeyFingerprint,
+                    manifest.Version,
+                    plugin.Sha256,
+                    DateTimeOffset.UtcNow));
             }
             catch
             {
+                if (Directory.Exists(target))
+                {
+                    Directory.Delete(target, recursive: true);
+                }
+
                 if (Directory.Exists(backup))
                 {
                     Directory.Move(backup, target);
                 }
 
                 throw;
-            }
-
-            if (Directory.Exists(backup))
-            {
-                Directory.Delete(backup, recursive: true);
             }
 
             var settings = _store.Load();
@@ -252,6 +264,51 @@ internal sealed class RepositoryService
         finally
         {
             TryDeleteDirectory(staging);
+        }
+    }
+
+    public static bool HasBackup(string pluginId) =>
+        Directory.Exists(Path.Combine(AppPaths.PluginBackupsRoot, pluginId));
+
+    public async Task<RepositoryInstallResult> RollbackAsync(string pluginId, CancellationToken cancellationToken = default)
+    {
+        var target = Path.Combine(AppPaths.UserPluginsDirectory, pluginId);
+        var backup = Path.Combine(AppPaths.PluginBackupsRoot, pluginId);
+
+        if (!Directory.Exists(backup))
+        {
+            return new RepositoryInstallResult(false, "No previous version is available.");
+        }
+
+        var current = target + ".rollback-" + Guid.NewGuid().ToString("N");
+
+        try
+        {
+            if (Directory.Exists(target))
+            {
+                Directory.Move(target, current);
+            }
+
+            Directory.Move(backup, target);
+
+            if (Directory.Exists(current))
+            {
+                Directory.Delete(current, recursive: true);
+            }
+
+            _log.Info($"rolled back plugin '{pluginId}'");
+            await Task.CompletedTask;
+            return new RepositoryInstallResult(true, "Previous version restored. Restart Chirpdesk.", pluginId);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            if (!Directory.Exists(target) && Directory.Exists(current))
+            {
+                Directory.Move(current, target);
+            }
+
+            _log.Error($"plugin rollback failed for '{pluginId}'", ex);
+            return new RepositoryInstallResult(false, "Could not restore the previous version.");
         }
     }
 

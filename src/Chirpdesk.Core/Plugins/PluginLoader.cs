@@ -17,7 +17,9 @@ public sealed record InstalledPlugin(
     string Name,
     string? Description,
     string? Accent,
-    bool Bundled);
+    bool Bundled,
+    string? Version = null,
+    PluginSource? Source = null);
 
 /// <summary>What one scan produced. Errors are per plugin, never fatal (invariant 8).</summary>
 public sealed record PluginLoadResult(
@@ -179,7 +181,9 @@ public static partial class PluginLoader
                     manifest.Name,
                     manifest.Description,
                     manifest.Accent,
-                    root.Bundled);
+                    root.Bundled,
+                    manifest.Version,
+                    root.Bundled ? null : PluginSourceStore.TryRead(folder));
 
                 if (installed.TryGetValue(manifest.Id, out var existing) && existing.Bundled && !root.Bundled)
                 {
