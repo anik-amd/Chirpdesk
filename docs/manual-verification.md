@@ -66,6 +66,18 @@ desktop session.
 - **Manage repositories** lists each repo with Update, Edit, Delete, Trust new key and the auto-update switch.
 - A synced repo shows only compatible plugins; unsupported entries remain visible with their reason.
 
+## Integrations (phase 7)
+
+- A signed integration installs only after the second consent screen; **Install integration** stays disabled until the checkbox is ticked.
+- The integration card shows the helper state and Start, Stop and Restart. Stop removes the helper process and clears its badge; Start brings it back without reinstalling.
+- The helper's notification appears as a Windows toast; the body never appears in `chirpdesk.log`.
+- The helper's unread count adds to the tray total and clears when the helper stops or the app exits.
+- Type the declared command in `Ctrl+K` (for the stub: `Stub`): it reaches the helper and a failure is logged without taking the app down.
+- Tamper with the installed `stub-integration.exe` and restart: the helper refuses to launch and the card shows an error.
+- Kill the helper in Task Manager: the card shows the restart backoff, then either Running or a final error.
+- Uninstall: the helper stops, the folder goes to the Recycle Bin, and the data folder is offered for removal.
+- Updating an integration stops the old helper first; if permissions or the executable changed, the second consent appears again.
+
 ## Command palette
 
 - `Ctrl+K` opens the **Command palette** with a real text caret. Type normally; `Ctrl+A`, copy/cut/paste, Home/End, Delete and mouse selection work. `Up`/`Down` and `Tab` move the list, `Enter` activates, `Esc` goes back.
