@@ -127,7 +127,9 @@ try {
         plugins = @($entries | Sort-Object { $_['id'] })
     }
 
-    $indexJson = $index | ConvertTo-Json -Depth 8
+    # LF, not the Windows default: the signature covers exact bytes and the registry must
+    # survive Git checkout unchanged. .gitattributes marks registry/** as -text.
+    $indexJson = ($index | ConvertTo-Json -Depth 8) -replace "`r`n", "`n"
     $indexBytes = [Text.Encoding]::UTF8.GetBytes($indexJson)
 
     [IO.File]::WriteAllBytes((Join-Path $out 'index.json'), $indexBytes)
