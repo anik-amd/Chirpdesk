@@ -11,8 +11,11 @@ launcher with a kill-on-close job object, first-instance named pipe and NUL-drai
 has install-time integration validation and the executable hash recorded in the source sidecar.
 The stub helper lives at `tests/helpers/StubIntegration`; `--integration-smoke=<folder>` launches it
 through the real Windows launcher and proved handshake, notify, unread, command and stop live with
-no orphan process. Remaining: the app runtime wiring (toasts, badge, cards, commands) and the
-second consent screen.
+no orphan process. The app runtime is wired: sessions start for enabled integrations at boot and after a
+catalogue reload, notifications go through the gated toast sink, unread counts add to the tray,
+the plugin card exposes Start/Stop/Restart, the second consent screen gates installation, and
+argument-free declared commands appear in the command bar. Text commands still need an argument
+surface. Manual rows and the TDLib helper remain.
 
 **ADR:** 0007 (data plugins, code out-of-process), 0016 (this boundary)
 **Plan:** `PLAN.md` §4.1, phase 7 row

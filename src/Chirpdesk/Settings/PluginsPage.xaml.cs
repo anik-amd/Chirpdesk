@@ -3,10 +3,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Chirpdesk.Core.Definitions;
+using Chirpdesk.Core.Integrations;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Hosting;
+using Chirpdesk.Integrations;
 using Chirpdesk.Repository;
 using Chirpdesk.Ui;
 
@@ -32,11 +34,13 @@ public partial class PluginsPage : UserControl
     private readonly RepositoryService _repositories;
     private readonly Func<string, Task<bool>> _uninstallPlugin;
     private readonly Action _reloadPlugins;
+    private readonly IntegrationRuntimeHost? _integrations;
     private readonly HashSet<string> _removedPlugins = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
     private RepositorySetting? _editingRepository;
     private (RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)? _pendingInstall;
+    private bool _integrationConsentConfirmed;
     private AppSettings _settings;
 
     internal PluginsPage(
@@ -52,7 +56,8 @@ public partial class PluginsPage : UserControl
         Action back,
         RepositoryService repositories,
         Func<string, Task<bool>> uninstallPlugin,
-        Action reloadPlugins)
+        Action reloadPlugins,
+        IntegrationRuntimeHost? integrations = null)
     {
         InitializeComponent();
         _catalog = catalog;
@@ -68,6 +73,7 @@ public partial class PluginsPage : UserControl
         _repositories = repositories;
         _uninstallPlugin = uninstallPlugin;
         _reloadPlugins = reloadPlugins;
+        _integrations = integrations;
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
@@ -90,6 +96,9 @@ public partial class PluginsPage : UserControl
             _ = SyncRepositoryAsync(repository, trustNewKey: true);
         }
     }
+
+    /// <summary>Called by the runtime when a helper changes state while the page is open.</summary>
+    public void RefreshIntegrationStatus() => Reload();
 
     private void OnShowInstalled(object sender, RoutedEventArgs e)
     {
@@ -371,6 +380,41 @@ public partial class PluginsPage : UserControl
                 });
             }
 
+            var integrationStatus = string.Equals(plugin.Kind, PluginLoader.IntegrationKind, StringComparison.Ordinal)
+                ? _integrations?.StatusOf(plugin.Id)
+                : null;
+
+            if (string.Equals(plugin.Kind, PluginLoader.IntegrationKind, StringComparison.Ordinal))
+            {
+                var statusText = integrationStatus is null
+                    ? "Helper not running."
+                    : integrationStatus.State switch
+                    {
+                        IntegrationState.Running => "Helper running.",
+                        IntegrationState.Starting => "Helper starting.",
+                        IntegrationState.Stopping => "Helper stopping.",
+                        IntegrationState.Error => $"Helper error: {integrationStatus.Error}",
+                        _ => "Helper stopped.",
+                    };
+
+                if (integrationStatus?.HelperStatus is { Length: > 0 } helperStatus
+                    && integrationStatus.State == IntegrationState.Running)
+                {
+                    statusText += $" {helperStatus}";
+                }
+
+                content.Children.Add(new TextBlock
+                {
+                    Text = statusText,
+                    FontSize = 11,
+                    Foreground = integrationStatus?.State == IntegrationState.Error
+                        ? Token("CdText")
+                        : Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 8),
+                });
+            }
+
             var actions = new WrapPanel();
 
             if (toggleable)
@@ -384,6 +428,49 @@ public partial class PluginsPage : UserControl
                 };
                 toggle.Click += async (_, _) => await RunPlugin(plugin.Id, !pluginEnabled);
                 actions.Children.Add(toggle);
+            }
+
+            if (string.Equals(plugin.Kind, PluginLoader.IntegrationKind, StringComparison.Ordinal)
+                && _integrations is not null)
+            {
+                var state = integrationStatus?.State;
+
+                var start = new Button
+                {
+                    Content = "Start",
+                    IsEnabled = state is null or IntegrationState.Stopped or IntegrationState.Error,
+                    Style = (Style)FindResource("PillButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                start.Click += async (_, _) => await RunIntegrationAsync(() => _integrations.StartAsync(plugin.Id));
+                actions.Children.Add(start);
+
+                var stop = new Button
+                {
+                    Content = "Stop",
+                    IsEnabled = state is IntegrationState.Running or IntegrationState.Starting,
+                    Style = (Style)FindResource("GhostButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                stop.Click += async (_, _) => await RunIntegrationAsync(() => _integrations.StopAsync(plugin.Id));
+                actions.Children.Add(stop);
+
+                var restart = new Button
+                {
+                    Content = "Restart",
+                    IsEnabled = state is IntegrationState.Running or IntegrationState.Error,
+                    Style = (Style)FindResource("GhostButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                restart.Click += async (_, _) => await RunIntegrationAsync(async () =>
+                {
+                    await _integrations.StopAsync(plugin.Id);
+                    await _integrations.StartAsync(plugin.Id);
+                });
+                actions.Children.Add(restart);
             }
 
             var update = FindUpdate(plugin);
@@ -414,6 +501,7 @@ public partial class PluginsPage : UserControl
                     };
                     rollback.Click += async (_, _) =>
                     {
+                        await StopIntegrationAsync(plugin.Id);
                         var result = await _repositories.RollbackAsync(plugin.Id);
                         RepositoryStatus.Text = result.Message;
                         if (result.Ok)
@@ -433,6 +521,8 @@ public partial class PluginsPage : UserControl
                 };
                 uninstall.Click += async (_, _) =>
                 {
+                    await StopIntegrationAsync(plugin.Id);
+
                     if (await _uninstallPlugin(plugin.Id))
                     {
                         _removedPlugins.Add(plugin.Id);
@@ -935,11 +1025,13 @@ public partial class PluginsPage : UserControl
         var canInstall = compatible && !upToDate;
 
         _pendingInstall = canInstall ? (repository, index, plugin) : null;
+        _integrationConsentConfirmed = false;
 
         ConsentTitle.Text = $"{plugin.Name} {plugin.Version}";
         ConsentBody.Children.Clear();
 
         ConsentPrimaryButton.Content = upToDate ? "Installed" : update ? "Update" : "Install";
+        ConsentPrimaryButton.IsEnabled = true;
         ConsentPrimaryButton.Visibility = canInstall ? Visibility.Visible : Visibility.Collapsed;
         ConsentSecondaryButton.Content = canInstall ? "Cancel" : "Close";
 
@@ -1039,6 +1131,7 @@ public partial class PluginsPage : UserControl
     private void OnCancelConsent(object sender, RoutedEventArgs e)
     {
         _pendingInstall = null;
+        _integrationConsentConfirmed = false;
         ConsentLayer.Visibility = Visibility.Collapsed;
     }
 
@@ -1050,9 +1143,122 @@ public partial class PluginsPage : UserControl
             return;
         }
 
+        if (string.Equals(pending.Plugin.Kind, PluginLoader.IntegrationKind, StringComparison.Ordinal))
+        {
+            if (!_integrationConsentConfirmed)
+            {
+                ShowIntegrationConsent(pending.Plugin);
+                return;
+            }
+        }
+
         _pendingInstall = null;
+        _integrationConsentConfirmed = false;
         ConsentLayer.Visibility = Visibility.Collapsed;
         await InstallPluginAsync(pending.Repository, pending.Index, pending.Plugin);
+    }
+
+    /// <summary>
+    /// The second gate for an integration. The normal sheet describes data; this one says plainly
+    /// that a separate program will run with the user's own file access, and it cannot be
+    /// dismissed with the primary button until the checkbox is ticked.
+    /// </summary>
+    private void ShowIntegrationConsent(RepositoryPlugin plugin)
+    {
+        _integrationConsentConfirmed = false;
+        ConsentTitle.Text = $"Run {plugin.Name} as a separate program?";
+        ConsentBody.Children.Clear();
+
+        ConsentBody.Children.Add(new TextBlock
+        {
+            Text = $"{plugin.Name} installs an executable that Chirpdesk starts as its own process. "
+                + "It is not sandboxed: it runs with your Windows account's file access and can use the network. "
+                + "Chirpdesk only passes it a data folder and a private pipe.",
+            FontSize = 12,
+            Foreground = Token("CdText"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12),
+        });
+
+        ConsentBody.Children.Add(new TextBlock
+        {
+            Text = "Permissions",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Token("CdText"),
+            Margin = new Thickness(0, 0, 0, 4),
+        });
+
+        if (plugin.Permissions is not { Count: > 0 })
+        {
+            ConsentBody.Children.Add(new TextBlock
+            {
+                Text = "The helper declares no host permissions. It can still work on its own network.",
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+            });
+        }
+        else
+        {
+            foreach (var permission in plugin.Permissions)
+            {
+                ConsentBody.Children.Add(new TextBlock
+                {
+                    Text = $"• {permission}: {PermissionDescription(permission)}",
+                    FontSize = 12,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 2, 0, 2),
+                });
+            }
+        }
+
+        var repository = _pendingInstall?.Repository;
+        AddConsentLine("Source", repository is null
+            ? plugin.Id
+            : string.IsNullOrWhiteSpace(repository.Name)
+                ? repository.Url
+                : $"{repository.Name} · {repository.Url}");
+        AddConsentLine("Plugin", $"{plugin.Id} {plugin.Version}");
+        AddConsentLine("Repository key", repository?.KeyFingerprint);
+        AddConsentLine("Archive SHA-256", plugin.Sha256);
+
+        ConsentBody.Children.Add(new TextBlock
+        {
+            Text = @"The helper's session data lives in %APPDATA%\Chirpdesk\integrations\" + plugin.Id
+                + ". Uninstall offers to remove it.",
+            FontSize = 11,
+            Foreground = Token("CdTextMuted"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 10, 0, 10),
+        });
+
+        var checkbox = new CheckBox
+        {
+            Content = "I understand this runs a separate program with my file access.",
+            Foreground = Token("CdText"),
+            FontSize = 12,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+
+        ConsentBody.Children.Add(checkbox);
+        checkbox.Checked += (_, _) =>
+        {
+            _integrationConsentConfirmed = true;
+            ConsentPrimaryButton.IsEnabled = true;
+        };
+        checkbox.Unchecked += (_, _) =>
+        {
+            _integrationConsentConfirmed = false;
+            ConsentPrimaryButton.IsEnabled = false;
+        };
+
+        ConsentPrimaryButton.Content = "Install integration";
+        ConsentPrimaryButton.IsEnabled = false;
+        ConsentPrimaryButton.Visibility = Visibility.Visible;
+        ConsentSecondaryButton.Content = "Cancel";
+        ConsentLayer.Visibility = Visibility.Visible;
     }
 
     private List<(RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)> FindAlternativeSources(
@@ -1140,6 +1346,7 @@ public partial class PluginsPage : UserControl
     private async Task InstallPluginAsync(RepositorySetting repository, RepositoryIndex index, RepositoryPlugin plugin)
     {
         RepositoryStatus.Text = $"Installing {plugin.Name}…";
+        await StopIntegrationAsync(plugin.Id);
         var result = await _repositories.InstallAsync(repository, index, plugin);
         RepositoryStatus.Text = result.Message;
         if (result.Ok)
@@ -1180,6 +1387,38 @@ public partial class PluginsPage : UserControl
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
             _log.Warn($"could not open the plugins folder: {ex.Message}");
+        }
+    }
+
+    private async Task RunIntegrationAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException or ObjectDisposedException)
+        {
+            _log.Error("plugins page: integration action failed", ex);
+            MessageBox.Show(ex.Message, "Integration", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        Reload();
+    }
+
+    private async Task StopIntegrationAsync(string pluginId)
+    {
+        if (_integrations is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _integrations.RemoveAsync(pluginId);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+            _log.Warn($"could not stop integration '{pluginId}': {ex.Message}");
         }
     }
 

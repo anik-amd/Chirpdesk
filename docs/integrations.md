@@ -128,7 +128,7 @@ helper is stopped. `notify` without the permission is `-32603` and is not retrie
 | Method | Params | Notes |
 |---|---|---|
 | `ping` | none | Liveness; 2 s timeout |
-| `command` | `id`, `argument` (≤500 when the command takes text) | Only a declared id is accepted; 10 s timeout; result `{ "ok": true, "message": "..." }` or `{ "ok": false, "message": "..." }` |
+| `command` | `id`, `argument` (≤500 when the command takes text) | Only a declared id is accepted; 10 s timeout; result `{ "ok": true, "message": "..." }` or `{ "ok": false, "message": "..." }`. The command bar lists argument-free commands today; text commands wait for an argument surface. |
 | `shutdown` | none | Sent on stop, then 3 s grace before kill |
 
 There is no generic `invoke`, no reflection, and no host callback that exposes a path or a handle.
@@ -157,11 +157,12 @@ disabled ──enable──▶ starting ──initialize──▶ running
 
 Installing an integration shows the normal plugin details sheet, then a second screen:
 
-- executable name and SHA-256, repository key fingerprint, plugin version;
-- the permissions in plain words, and the declared commands;
+- plugin id and version, repository key fingerprint and archive SHA-256 (the executable name is
+  only known after the archive is downloaded, so it is not claimed before install);
+- the declared permissions in plain words;
 - the data folder path, and that the helper can use the network;
 - the statement that it runs with the user's own file access and is not sandboxed by Chirpdesk;
-- a checkbox that must be ticked before **Install** enables.
+- a checkbox that must be ticked before **Install integration** enables.
 
 Updates that change the executable hash, the permission set or the command list require the
 second screen again. Uninstall offers to move the helper's data directory to the Recycle Bin,

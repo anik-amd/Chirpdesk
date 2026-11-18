@@ -56,6 +56,7 @@ public partial class App : Application
     private IReadOnlyList<ThemePack> _themePacks = Array.Empty<ThemePack>();
     private SettingsPage? _settingsPage;
     private PluginsPage? _pluginsPage;
+    private IntegrationRuntimeHost? _integrations;
     private AboutPage? _aboutPage;
     private OnboardingPage? _onboarding;
     private bool _firstRun;
@@ -173,6 +174,34 @@ public partial class App : Application
         _tray = TrayIconFactory.Create(OpenHost, HideHost, OpenSettings, Quit);
         _host.Attach(_tray);
 
+        var integrationSettings = new SettingsStore(AppPaths.SettingsFile, _log!);
+        var integrationToasts = new GatedToastSink(
+            new ToastService(_log!, id => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (id?.StartsWith("integration:", StringComparison.Ordinal) == true)
+                {
+                    OpenPlugins();
+                }
+                else
+                {
+                    ShowHostFor(id);
+                }
+            }))),
+            integrationSettings,
+            _log!);
+
+        _integrations = new IntegrationRuntimeHost(
+            _log!,
+            integrationToasts,
+            action => Dispatcher.BeginInvoke(action),
+            typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0",
+            integrationSettings);
+
+        _integrations.UnreadChanged += () => Dispatcher.BeginInvoke(new Action(UpdateTrayStatus));
+        _integrations.StatusChanged += _ =>
+            Dispatcher.BeginInvoke(new Action(() => _pluginsPage?.RefreshIntegrationStatus()));
+        _ = _integrations.SyncAsync(_installedPlugins);
+
         _bar = new CommandBarView();
         _host.SetCommandBar(_bar);
         _bar.QueryChanged += OnBarQueryChanged;
@@ -259,6 +288,15 @@ public partial class App : Application
         }
 
         _tray?.Dispose();
+
+        try
+        {
+            _integrations?.StopAllAsync().Wait(TimeSpan.FromSeconds(2));
+        }
+        catch (Exception ex) when (ex is AggregateException or InvalidOperationException)
+        {
+            _log?.Warn($"integration shutdown: {ex.Message}");
+        }
 
         try
         {
@@ -1373,6 +1411,28 @@ public partial class App : Application
                 Initial: "D"));
         }
 
+        // Declared integration commands. Text commands wait for an argument surface, so only
+        // argument-free commands are listed today.
+        if (_integrations is not null)
+        {
+            foreach (var (pluginId, pluginName, command) in _integrations.Commands())
+            {
+                if (!string.Equals(command.Argument, "none", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                candidates.Add(new SearchCandidate(
+                    $"integration:{pluginId}:{command.Id}",
+                    $"{pluginName}: {command.Title}",
+                    SearchKind.Command,
+                    [pluginName, "integration", command.Id, command.Title],
+                    State: null,
+                    Accent: "#3B5A72",
+                    Initial: InitialOf(command.Title)));
+            }
+        }
+
         // Per-tab blocking switch; only when a tab is active.
         if (_registry.Active is { } blockingTab)
         {
@@ -1459,6 +1519,20 @@ public partial class App : Application
 
         if (mode == BarMode.Search)
         {
+            if (id.StartsWith("integration:", StringComparison.Ordinal))
+            {
+                var rest = id["integration:".Length..];
+                var separator = rest.IndexOf(':', StringComparison.Ordinal);
+
+                if (separator > 0)
+                {
+                    _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..]);
+                }
+
+                _log?.Info($"command bar integration command committed via Ctrl+{index + 1}");
+                return;
+            }
+
             ClosePage();
             _ = ActivateServiceAsync(id);
             _log?.Info($"command bar search committed '{id}' via Ctrl+{index + 1}");
@@ -1515,6 +1589,19 @@ public partial class App : Application
             return;
         }
 
+        if (selected.StartsWith("integration:", StringComparison.Ordinal))
+        {
+            var rest = selected["integration:".Length..];
+            var separator = rest.IndexOf(':', StringComparison.Ordinal);
+
+            if (separator > 0)
+            {
+                _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..]);
+            }
+
+            return;
+        }
+
         if (selected.StartsWith("plugin:", StringComparison.Ordinal))
         {
             var definition = _catalog?.Find(selected["plugin:".Length..]);
@@ -1542,6 +1629,28 @@ public partial class App : Application
         ClosePage();
         _ = ActivateServiceAsync(selected);
         _log?.Info($"command bar search committed '{selected}'");
+    }
+
+    private async Task RunIntegrationCommandAsync(string pluginId, string commandId)
+    {
+        if (_integrations is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _integrations.SendCommandAsync(pluginId, commandId, null);
+
+            if (!result.Ok)
+            {
+                _log?.Warn($"integration command '{pluginId}/{commandId}' failed: {result.Error}");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException)
+        {
+            _log?.Warn($"integration command '{pluginId}/{commandId}' failed: {ex.Message}");
+        }
     }
 
     private static string? HostOf(string? url) =>
@@ -2094,9 +2203,9 @@ public partial class App : Application
         try
         {
             var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
-            var unread = _registry?.Order
+            var unread = (_registry?.Order
                 .Select(id => _registry.Find(id)?.UnreadCount ?? 0)
-                .Sum() ?? 0;
+                .Sum() ?? 0) + (_integrations?.UnreadTotal ?? 0);
 
             _tray.IconSource = TrayIconFactory.CreateIcon(unread > 0);
 
@@ -2221,6 +2330,7 @@ public partial class App : Application
         _installedPlugins = PluginCatalog.LoadInstalled(_log);
         _filterPacks = PluginCatalog.LoadFilters(_log);
         _themePacks = PluginCatalog.LoadThemes(_log);
+        _ = _integrations?.SyncAsync(_installedPlugins);
 
         if (_registry is not null)
         {
@@ -2276,7 +2386,8 @@ public partial class App : Application
                 ClosePage,
                 _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log),
                 UninstallPluginAsync,
-                ReloadPluginCatalog);
+                ReloadPluginCatalog,
+                _integrations);
         }
 
         ShowPage(_pluginsPage);
