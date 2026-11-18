@@ -1,9 +1,21 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-18T11:30:59.9605871+00:00",
+  "generated": "2026-11-18T18:07:57.8161216+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
+    {
+      "id": "bluesky",
+      "kind": "service",
+      "name": "Bluesky",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "c5a32b3d2eb60e0c90318d2ef55e2a691d611fb556e315b19ac76e8c0894b6bb",
+      "size": 521,
+      "url": "plugins/bluesky-1.0.0.zip",
+      "permissions": []
+    },
     {
       "id": "catppuccin",
       "kind": "theme",
@@ -14,6 +26,18 @@
       "sha256": "a87fd03f2a5e72fb4d8692ae9d96f4ef00f2b4caebbed42f5cb088632b31422a",
       "size": 571,
       "url": "plugins/catppuccin-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "discord",
+      "kind": "service",
+      "name": "Discord",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "f5157467cf56c43cc02e58ffcc7ed8396166224cb01e5c067c2a55b5dd0c6963",
+      "size": 555,
+      "url": "plugins/discord-1.0.0.zip",
       "permissions": []
     },
     {
@@ -64,6 +88,30 @@
       "sha256": "2b0ef86ff74ab6b428c3df96a3f98c760e0edf45422288b1e571835d1e97d296",
       "size": 542,
       "url": "plugins/instagram-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "linkedin",
+      "kind": "service",
+      "name": "LinkedIn",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "f837c3a44cb5150f05b201c20a1781ba2f74652af95ff9f154fe8542502de8ce",
+      "size": 534,
+      "url": "plugins/linkedin-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "mastodon",
+      "kind": "service",
+      "name": "Mastodon",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "542007116ceb77be60ec17083a438c29f161039d45b3185f3383eeead96d9b0d",
+      "size": 560,
+      "url": "plugins/mastodon-1.0.0.zip",
       "permissions": []
     },
     {

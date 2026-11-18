@@ -345,9 +345,7 @@ public partial class PluginsPage : UserControl
             var content = new StackPanel();
 
             var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            var icon = string.Equals(plugin.Id, PluginState.PageDarkId, StringComparison.OrdinalIgnoreCase)
-                ? UiIcons.Create("moon", Token("CdAccent"), 28)
-                : UiIcons.Create("plugins", Token("CdAccent"), 28);
+            var icon = PluginGlyph(plugin.Id, plugin.Kind, plugin.Name, plugin.Accent, 28);
             icon.Opacity = pluginEnabled ? 1 : 0.45;
             header.Children.Add(icon);
 
@@ -740,13 +738,7 @@ public partial class PluginsPage : UserControl
         var content = new StackPanel();
 
         var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        var icon = plugin.Kind switch
-        {
-            PluginLoader.ServiceKind => ServiceIcons.Create(plugin.Id, plugin.Name, null, 32),
-            "theme" => UiIcons.Create("moon", Token("CdAccent"), 30),
-            "filter" => UiIcons.Create("shield", Token("CdAccent"), 30),
-            _ => UiIcons.Create("plugins", Token("CdAccent"), 30),
-        };
+        var icon = PluginGlyph(plugin.Id, plugin.Kind, plugin.Name, null, 32);
         icon.Opacity = compatible ? 1 : 0.45;
         header.Children.Add(icon);
 
@@ -1483,6 +1475,44 @@ public partial class PluginsPage : UserControl
             _log.Warn($"could not open the folder: {ex.Message}");
         }
     }
+
+    private FrameworkElement PluginGlyph(string id, string kind, string name, string? accent, double size)
+    {
+        if (string.Equals(kind, PluginLoader.ServiceKind, StringComparison.Ordinal))
+        {
+            return ServiceIcons.Create(id, name, accent ?? BrandAccent(id), size);
+        }
+
+        return id switch
+        {
+            PluginState.CatppuccinId => UiIcons.Create("palette", Token("CdAccent"), size),
+            PluginState.PageDarkId => UiIcons.Create("moon", Token("CdAccent"), size),
+            "filters-core" => UiIcons.Create("shield", Token("CdAccent"), size),
+            "tool-cleaner" => UiIcons.Create("broom", Token("CdAccent"), size),
+            _ => kind switch
+            {
+                "theme" => UiIcons.Create("palette", Token("CdAccent"), size),
+                "filter" => UiIcons.Create("shield", Token("CdAccent"), size),
+                "tool" => UiIcons.Create("broom", Token("CdAccent"), size),
+                _ => UiIcons.Create("plugins", Token("CdAccent"), size),
+            },
+        };
+    }
+
+    private static string BrandAccent(string id) => id.ToLowerInvariant() switch
+    {
+        "whatsapp" => "#25D366",
+        "telegram" => "#26A5E4",
+        "messenger" => "#0099FF",
+        "facebook" => "#1877F2",
+        "instagram" => "#E4405F",
+        "element" => "#0DBD8B",
+        "discord" => "#5865F2",
+        "linkedin" => "#0A66C2",
+        "bluesky" => "#1185FE",
+        "mastodon" => "#6364FF",
+        _ => "#2F5A4C",
+    };
 
     private void OnClosePluginSettings(object sender, RoutedEventArgs e) =>
         PluginSettingsLayer.Visibility = Visibility.Collapsed;

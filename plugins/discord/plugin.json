@@ -1,0 +1,11 @@
+{
+  "id": "discord",
+  "kind": "service",
+  "name": "Discord",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Discord web app. Activate to add an account; voice and screen share use the standard browser permissions.",
+  "permissions": [],
+  "accent": "#5865F2"
+}

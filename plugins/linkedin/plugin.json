@@ -1,0 +1,11 @@
+{
+  "id": "linkedin",
+  "kind": "service",
+  "name": "LinkedIn",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "LinkedIn messaging. Activate to add an account.",
+  "permissions": [],
+  "accent": "#0A66C2"
+}

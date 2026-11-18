@@ -1,0 +1,11 @@
+{
+  "url": "https://www.linkedin.com/messaging/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": [
+    "linkedin"
+  ],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

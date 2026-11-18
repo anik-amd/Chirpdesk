@@ -1,0 +1,11 @@
+{
+  "url": "https://discord.com/app",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": [
+    "discord"
+  ],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

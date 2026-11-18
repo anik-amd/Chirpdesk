@@ -1,0 +1,11 @@
+{
+  "url": "https://bsky.app/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": [
+    "bsky"
+  ],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

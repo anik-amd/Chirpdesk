@@ -1,0 +1,12 @@
+{
+  "url": "https://mastodon.social/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": [
+    "mastodon",
+    "masto"
+  ],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}
