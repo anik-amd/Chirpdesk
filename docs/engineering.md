@@ -67,7 +67,7 @@ After each phase task, request review with the **Requesting Code Review** skill:
 ## Secrets and sensitive data
 
 - No signing keys, tokens or certificates in the repo or CI logs. The ECDSA private key lives off-repo; only the public SPKI key ships.
-- The repo stays private until v1; even then, no user data, no crash dumps with session data.
+- The repository is public; even so, no user data, no crash dumps with session data. Security reports go through GitHub private vulnerability reporting, not public issues.
 - Filter packs and cosmetic packs are data; they must not contain site cookies or tokens.
 
 ## Versioning and releases

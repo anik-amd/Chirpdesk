@@ -3,7 +3,7 @@
 **All your conversations.**
 
 Status: **planning complete, implementation not started.**
-License: MIT. Repo: private until v1 works.
+License: MIT. Repo: public.
 Target: Windows 10 1809+ / Windows 11, x64 and arm64.
 
 **Document map**
@@ -761,7 +761,7 @@ Dev environment: local only, .NET 8 SDK, no Visual Studio, no full Windows SDK, 
 
 Decided:
 
-- License **MIT**; repo stays **private** until v1 works.
+- License **MIT**; the repository is public.
 - Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
 - One Command Bar for navigation, commands and theme switching.
 - **Plugin-shaped architecture**: shipped service **definitions**, themes (with dark+light variants), filter packs and bundled tool panels are plugins with one manifest; data-only in v1; code only out-of-process, phase 7. **A site exists only as a service plugin; running it is an instance in `settings.json` (ADR 0011).**

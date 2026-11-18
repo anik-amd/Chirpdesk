@@ -119,3 +119,10 @@ folder to `dist/`.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+
+## Security
+
+Updates and plugin repositories are signed. The private signing keys stay offline; only the
+pinned public keys ship in the app. Report vulnerabilities through GitHub private vulnerability
+reporting as described in [SECURITY.md](SECURITY.md), not in a public issue.
