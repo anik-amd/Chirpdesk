@@ -80,10 +80,17 @@ while (true)
         var id = envelope.Params.TryGetProperty("id", out var idElement)
             ? idElement.GetString()
             : "unknown";
+        var argument = envelope.Params.TryGetProperty("argument", out var argumentElement)
+            && argumentElement.ValueKind == JsonValueKind.String
+            ? argumentElement.GetString()
+            : null;
+        var message = string.IsNullOrEmpty(argument)
+            ? $"stub ran {id}"
+            : $"stub ran {id}: {argument}";
 
         await IntegrationFraming.WriteAsync(
             pipe,
-            JsonRpcCodec.Response(envelope.Id, new { ok = true, message = $"stub ran {id}" }));
+            JsonRpcCodec.Response(envelope.Id, new { ok = true, message }));
         continue;
     }
 

@@ -383,13 +383,22 @@ public partial class App : Application
             var note = await notification.Task.WaitAsync(TimeSpan.FromSeconds(10));
             var count = await unread.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var command = await session.SendCommandAsync("open", null);
+            var textCommand = await session.SendCommandAsync("send", "smoke text");
+            var emptyText = await session.SendCommandAsync("send", null);
             await session.StopAsync();
 
             ConsoleBridge.Write(
                 $"integration smoke: started={started} notify='{note.Title}' body={!string.IsNullOrEmpty(note.Body)} "
-                + $"unread={count} command={command.Ok}/{command.Message} final={session.State}");
+                + $"unread={count} command={command.Ok}/{command.Message} text={textCommand.Ok}/{textCommand.Message} "
+                + $"emptyTextRefused={!emptyText.Ok} final={session.State}");
 
-            Terminate(started == IntegrationState.Running && command.Ok ? 0 : 5);
+            var ok = started == IntegrationState.Running
+                && command.Ok
+                && textCommand.Ok
+                && textCommand.Message?.Contains("smoke text", StringComparison.Ordinal) == true
+                && !emptyText.Ok;
+
+            Terminate(ok ? 0 : 5);
         }
         catch (Exception ex)
         {
