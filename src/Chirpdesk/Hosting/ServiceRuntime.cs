@@ -538,6 +538,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             _log,
             _instance.InstanceId,
             _instance.Name,
+            _instance.DefinitionId,
             HostOf(_instance.Url),
             _startedAt);
 
@@ -877,14 +878,20 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         var shownBefore = _bridge?.Shown ?? 0;
         var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
 
-        while (!_disposed && _gate is { IsOpen: false } && DateTimeOffset.UtcNow < deadline)
+        while (!_disposed && DateTimeOffset.UtcNow < deadline)
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            if (!(_gate?.ShouldSuppress() ?? true))
+            {
+                break;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
         }
 
         await Task.Delay(TimeSpan.FromSeconds(3));
 
         if (_disposed
+            || UnreadCount <= 0
             || (_bridge?.Shown ?? 0) != shownBefore
             || (_gate?.ShouldSuppress() ?? true)
             || _fallbackDedupe is null
@@ -894,7 +901,11 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         }
 
         _log.Info($"title-only fallback toast for '{_instance.InstanceId}'");
-        _toast.Show(new ToastMessage(_instance.Name, "New message", null, _instance.InstanceId));
+        _toast.Show(new ToastMessage(
+            _instance.Name,
+            "New message",
+            ToastIcons.ForService(_instance.DefinitionId, _instance.Name),
+            _instance.InstanceId));
     }
 
     private static string? HostOf(string? url) =>
