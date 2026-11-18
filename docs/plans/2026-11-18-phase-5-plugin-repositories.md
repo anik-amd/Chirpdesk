@@ -3,7 +3,12 @@
 **Status:** in progress (2026-11-18). The core policy is in place: signed index model and parser,
 P-256 signature verification, key fingerprints, compatibility filtering, archive limits and
 zip-slip/executable rejection all have unit tests. The official registry key is pinned in
-`RepositoryKeys`. The sync/install service and the Plugins page repository UI are still open.
+`RepositoryKeys`. A first repository slice is wired: settings rows, HTTPS sync with first-use
+`key.pem` pinning, archive verification/installation into the user plugin root, and a
+Repositories section on the Plugins page. A successful install is disabled by default and asks
+for a restart before the new plugin appears in the catalogue. Still open: 24 h cache, changed-key
+re-trust UI, uninstall/source tracking, automatic updates, signed registry release tooling and
+the full manual matrix.
 
 **ADR:** 0007 (data plugins), 0008 (signed static repositories)
 

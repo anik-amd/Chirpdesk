@@ -21,6 +21,7 @@ using Chirpdesk.Interop;
 using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
 using Chirpdesk.Onboarding;
+using Chirpdesk.Repository;
 using Chirpdesk.Settings;
 using Chirpdesk.Theming;
 using Chirpdesk.Ui;
@@ -65,6 +66,7 @@ public partial class App : Application
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
     private UpdateService? _updates;
+    private RepositoryService? _repositories;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -81,6 +83,7 @@ public partial class App : Application
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
         _updates = new UpdateService(_log);
         _updates.Cleanup();
+        _repositories = new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log);
         _registry = new ServiceRegistry(_log);
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
@@ -2125,7 +2128,8 @@ public partial class App : Application
                 AddAccountAsync,
                 DisablePluginAsync,
                 SetPluginEnabledAsync,
-                ClosePage);
+                ClosePage,
+                _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log));
         }
 
         ShowPage(_pluginsPage);

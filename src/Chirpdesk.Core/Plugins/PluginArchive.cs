@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Cryptography;
 
 namespace Chirpdesk.Core.Plugins;
 
@@ -45,6 +46,49 @@ public static class PluginArchive
         }
 
         return !ExecutableExtensions.Contains(Path.GetExtension(normalized));
+    }
+
+    /// <summary>Checks the exact signed size and SHA-256 of a downloaded archive.</summary>
+    public static bool VerifyPayload(string path, long size, string sha256, out string error)
+    {
+        error = string.Empty;
+
+        if (!File.Exists(path))
+        {
+            error = "downloaded archive is missing";
+            return false;
+        }
+
+        if (sha256 is not { Length: 64 } || !sha256.All(Uri.IsHexDigit))
+        {
+            error = "signed sha256 is not 64 hex characters";
+            return false;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+
+            if (stream.Length != size)
+            {
+                error = $"archive size {stream.Length} does not match {size}";
+                return false;
+            }
+
+            var actual = Convert.ToHexString(SHA256.HashData(stream));
+            if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                error = "archive sha256 does not match the signed index";
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = $"could not read the archive: {ex.Message}";
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>Inspects an archive without extracting it. Directory entries are allowed.</summary>

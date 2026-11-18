@@ -378,11 +378,11 @@ Plugin management is built-in shell UI, never a tool action.
 
 ## 13. Plugin repositories
 
-A repo is a static HTTPS directory with `index.json` and `index.json.sig` (ECDSA P-256 over the exact bytes). Each entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`.
+A repo is a static HTTPS directory with `index.json`, `index.json.sig` (ECDSA P-256 over the exact index bytes), and `key.pem` (the public SPKI key used for first-use pinning). Each entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`. On first sync the app fetches `key.pem`, checks that the index `keyFingerprint` matches it, and stores the key; later syncs use the stored key and block on a mismatch.
 
 Install order, aborting on any failure: fetch index + signature → verify against the pinned repo key → skip incompatible entries → download archive, verify `sha256` **from the signed index** and `size` → unpack rejecting absolute paths, `..`, reparse points and zip-slip → validate `plugin.json` + payload → move into `%APPDATA%\Chirpdesk\plugins\<id>\` → enable only if the user asked.
 
-TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. Limits: ≤ 5 MB / ≤ 200 files, no executables. Installed plugins work offline; the index is cached for 24 h. Two repos offering one id require an explicit choice per id.
+TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. The Plugins page has a Repositories section for adding, syncing and removing a repository; installed repository plugins are installed disabled and need an explicit enable. Limits: ≤ 5 MB / ≤ 200 files, no executables. Installed plugins work offline; the index is cached for 24 h. Two repos offering one id require an explicit choice per id.
 
 ## 14. Commands
 

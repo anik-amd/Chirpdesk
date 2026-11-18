@@ -64,6 +64,21 @@ public static partial class PluginLoader
         "tools", "read-storage", "trim-cache", "storage",
     };
 
+    /// <summary>
+    /// Validates a plugin that has just been extracted from a repository. The caller compares
+    /// the returned manifest id/kind/version with the signed index before moving the folder into
+    /// the live plugin root.
+    /// </summary>
+    public static PluginManifest? ReadInstalledManifest(
+        string folder,
+        out IReadOnlyList<string> errors)
+    {
+        var problems = new List<string>();
+        var manifest = ReadManifest(folder, NameOf(folder), bundled: false, problems);
+        errors = problems;
+        return manifest;
+    }
+
     public static PluginLoadResult LoadServiceDefinitions(IEnumerable<PluginScanRoot> roots, ILog? log = null)
     {
         ArgumentNullException.ThrowIfNull(roots);

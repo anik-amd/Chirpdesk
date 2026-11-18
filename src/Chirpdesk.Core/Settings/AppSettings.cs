@@ -56,4 +56,7 @@ public sealed class AppSettings
     public List<string> DisabledPlugins { get; set; } = [];
 
     public List<ServiceInstance> Services { get; set; } = [];
+
+    /// <summary>Static HTTPS plugin repositories the user added.</summary>
+    public List<RepositorySetting> Repositories { get; set; } = [];
 }

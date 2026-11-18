@@ -22,7 +22,21 @@ internal static partial class SettingsValidator
         // behaviour is on by default without forcing the user to reopen Settings.
         if (settings.SchemaVersion < 4)
         {
-            foreach (var instance in settings.Services)
+            settings.Repositories = (settings.Repositories ?? [])
+            .Where(repository => repository is not null)
+            .Select(repository => new RepositorySetting
+            {
+                Url = repository.Url?.Trim() ?? string.Empty,
+                Name = repository.Name?.Trim() ?? string.Empty,
+                PublicKeyPem = repository.PublicKeyPem?.Trim() ?? string.Empty,
+                KeyFingerprint = repository.KeyFingerprint?.Trim().ToLowerInvariant() ?? string.Empty,
+                AutoUpdate = repository.AutoUpdate,
+                LastSync = repository.LastSync,
+            })
+            .Where(repository => repository.Url.Length > 0)
+            .ToList();
+
+        foreach (var instance in settings.Services)
             {
                 instance.WarmAtBoot = true;
             }
