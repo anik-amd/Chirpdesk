@@ -94,6 +94,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = '${{ steps.version.outputs.version }}'
+
+          # A tag can already own a release when someone published by hand. Refuse instead of
+          # adding a second release for the same tag.
+          gh release view "v$version" --json tagName 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release v$version already exists; bump the version instead of reusing a tag."
+          }
+
           $notes = @'
           Draft release. Sign update.json from the uploaded installer, attach it, then publish.
           '@
