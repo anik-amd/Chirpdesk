@@ -7,7 +7,7 @@
     <SolidColorBrush x:Key="CdText" Color="#CDD6F4" />
     <SolidColorBrush x:Key="CdTextMuted" Color="#BAC2DE" />
     <SolidColorBrush x:Key="CdRule" Color="#45475A" />
-    <SolidColorBrush x:Key="CdAccent" Color="#CBA6F7" />
+    <SolidColorBrush x:Key="CdAccent" Color="#89B4FA" />
     <SolidColorBrush x:Key="CdAccentSoft" Color="#313244" />
     <SolidColorBrush x:Key="CdDanger" Color="#F38BA8" />
     <SolidColorBrush x:Key="CdOnAccent" Color="#1E1E2E" />
@@ -19,7 +19,7 @@
     <SolidColorBrush x:Key="CdPaletteMuted" Color="#BAC2DE" />
     <SolidColorBrush x:Key="CdPaletteRule" Color="#45475A" />
     <SolidColorBrush x:Key="CdPaletteSelection" Color="#313244" />
-    <SolidColorBrush x:Key="CdPaletteAccent" Color="#CBA6F7" />
+    <SolidColorBrush x:Key="CdPaletteAccent" Color="#89B4FA" />
     <SolidColorBrush x:Key="CdScrollThumb" Color="#585B70" />
     <SolidColorBrush x:Key="CdControlHover" Color="#313244" />
     <SolidColorBrush x:Key="CdScrim" Color="#99000000" />

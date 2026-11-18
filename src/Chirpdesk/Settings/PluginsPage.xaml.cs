@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Integrations;
@@ -43,6 +44,8 @@ public partial class PluginsPage : UserControl
     private readonly Func<string, Task> _closeInstance;
     private readonly Action _refreshShell;
     private ServiceDefinition? _pendingAccountDefinition;
+    private string? _pendingRenameInstanceId;
+    private string? _pendingRenameDefinitionId;
     private List<OrphanItem> _cleanerOrphans = [];
     private bool _cleanerScanned;
     private readonly HashSet<string> _removedPlugins = new(StringComparer.OrdinalIgnoreCase);
@@ -611,7 +614,7 @@ public partial class PluginsPage : UserControl
 
         InstalledSummary.Text = PluginsPanel.Children.Count == 0
             ? "No plugins installed yet. Browse a repository or drop a plugin into the plugins folder."
-            : $"{PluginsPanel.Children.Count} plugin(s) installed · activate or deactivate without losing profiles.";
+            : $"{PluginsPanel.Children.Count} plugin(s) installed · each keeps its profiles when opened, closed or disabled.";
     }
 
     private (RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)? FindUpdate(InstalledPlugin installed)
@@ -1536,10 +1539,32 @@ public partial class PluginsPage : UserControl
     private void OpenAccountNamePrompt(ServiceDefinition definition)
     {
         _pendingAccountDefinition = definition;
+        _pendingRenameInstanceId = null;
+        _pendingRenameDefinitionId = null;
+
         var count = _settings.Services.Count(item =>
             string.Equals(item.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase));
 
+        AccountNameTitle.Text = "Name this account";
+        AccountNameDescription.Text = "The name appears in the sidebar and the command bar.";
+        AccountNameConfirm.Content = "Add account";
         AccountNameBox.Text = count == 0 ? definition.Name : $"{definition.Name} {count + 1}";
+        AccountNameLayer.Visibility = Visibility.Visible;
+        AccountNameBox.Focus();
+        AccountNameBox.SelectAll();
+    }
+
+    private void OpenRenamePrompt(ServiceInstance instance, string serviceName)
+    {
+        _pendingAccountDefinition = null;
+        _pendingRenameInstanceId = instance.InstanceId;
+        _pendingRenameDefinitionId = instance.DefinitionId;
+
+        AccountNameTitle.Text = "Rename account";
+        AccountNameDescription.Text =
+            $"A new name for your {serviceName} account. It appears in the sidebar and the command bar.";
+        AccountNameConfirm.Content = "Save name";
+        AccountNameBox.Text = instance.Name;
         AccountNameLayer.Visibility = Visibility.Visible;
         AccountNameBox.Focus();
         AccountNameBox.SelectAll();
@@ -1548,15 +1573,50 @@ public partial class PluginsPage : UserControl
     private void OnCancelAccountName(object sender, RoutedEventArgs e)
     {
         _pendingAccountDefinition = null;
+        _pendingRenameInstanceId = null;
+        _pendingRenameDefinitionId = null;
         AccountNameLayer.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnAccountNameKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        OnConfirmAccountName(sender, new RoutedEventArgs());
     }
 
     private async void OnConfirmAccountName(object sender, RoutedEventArgs e)
     {
-        var definition = _pendingAccountDefinition;
         var name = AccountNameBox.Text.Trim();
 
-        if (definition is null || string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        if (_pendingRenameInstanceId is { } renameId)
+        {
+            var definitionId = _pendingRenameDefinitionId;
+            _pendingRenameInstanceId = null;
+            _pendingRenameDefinitionId = null;
+            AccountNameLayer.Visibility = Visibility.Collapsed;
+            RenameInstance(renameId, name);
+
+            if (definitionId is not null)
+            {
+                OpenServiceSettings(definitionId, _catalog.Find(definitionId)?.Name ?? "Service");
+            }
+
+            return;
+        }
+
+        var definition = _pendingAccountDefinition;
+
+        if (definition is null)
         {
             return;
         }
@@ -1607,27 +1667,15 @@ public partial class PluginsPage : UserControl
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var labels = new StackPanel();
-            var nameBox = new TextBox
+            labels.Children.Add(new TextBlock
             {
                 Text = instance.Name,
-                Width = 190,
+                MaxWidth = 240,
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 FontSize = 13,
                 FontWeight = FontWeights.SemiBold,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
                 Foreground = Token("CdText"),
-            };
-            nameBox.LostFocus += (_, _) => RenameInstance(instance.InstanceId, nameBox.Text);
-            nameBox.KeyDown += (_, args) =>
-            {
-                if (args.Key == System.Windows.Input.Key.Enter)
-                {
-                    RenameInstance(instance.InstanceId, nameBox.Text);
-                    System.Windows.Input.Keyboard.ClearFocus();
-                }
-            };
-            labels.Children.Add(nameBox);
+            });
             labels.Children.Add(new TextBlock
             {
                 Text = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm ? "Open" : "Closed",
@@ -1671,7 +1719,16 @@ public partial class PluginsPage : UserControl
                 _refreshShell();
                 OpenServiceSettings(definitionId, name);
             };
+            var rename = new Button
+            {
+                Content = "Rename",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+            };
+            rename.Click += (_, _) => OpenRenamePrompt(instance, name);
             actions.Children.Add(toggle);
+            actions.Children.Add(rename);
             actions.Children.Add(remove);
             Grid.SetColumn(actions, 1);
             header.Children.Add(actions);
@@ -1679,7 +1736,7 @@ public partial class PluginsPage : UserControl
 
             var switches = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
             switches.Children.Add(Switch(
-                "Warm at boot",
+                "Open at startup",
                 instance.WarmAtBoot,
                 value => SaveInstance(instance.InstanceId, item => item.WarmAtBoot = value)));
             switches.Children.Add(Switch(
@@ -1829,7 +1886,7 @@ public partial class PluginsPage : UserControl
             {
                 Text = $"{(names.Count > 0 ? string.Join(", ", names) : profile.ProfileId)}  ·  "
                     + $"data {Megabytes(profile.DataBytes)}, cache {Megabytes(profile.CacheBytes)}  ·  "
-                    + (warm ? "warm" : "cold"),
+                    + (warm ? "open" : "closed"),
                 FontSize = 11,
                 Foreground = Token("CdTextMuted"),
                 TextWrapping = TextWrapping.Wrap,

@@ -95,7 +95,7 @@ public partial class CommandBarView : UserControl
 
         Rows.ItemsSource = rows;
         Rows.SelectedIndex = highlight >= 0 && highlight < rows.Count ? highlight : -1;
-        EmptyText.Text = mode == BarMode.Search ? "No matches." : "No warm services.";
+        EmptyText.Text = mode == BarMode.Search ? "No matches." : "No open services.";
         EmptyText.Visibility = rows.Count == 0 && mode != BarMode.Argument
             ? Visibility.Visible
             : Visibility.Collapsed;

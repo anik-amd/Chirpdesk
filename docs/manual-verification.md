@@ -11,9 +11,9 @@ desktop session.
 
 ## Startup
 
-- Start Chirpdesk from the Start menu, the shortcut or the exe: the window appears as soon as the first pinned service is warm, within a few seconds.
+- Start Chirpdesk from the Start menu, the shortcut or the exe: the window appears as soon as the first pinned service is open, within a few seconds.
 - Start it again while it is hidden: the resident instance shows the same window; no second process stays alive.
-- Reboot with autostart on: no window, tray only; warm services appear after about 20 s.
+- Reboot with autostart on: no window, tray only; pinned services appear after about 20 s.
 - Settings → **Minimize to tray** on: the minimize button hides the desk to the tray; off sends it to the taskbar.
 - Settings → **Close to tray** on: the close button hides the desk; off quits the app and releases every profile.
 - `--selftest` no longer leaves its toast in Action Center; one left by an older build must be dismissed once.
@@ -32,7 +32,7 @@ desktop session.
 
 ## Sidebar
 
-- The sidebar lists every open chat. Open two accounts of one plugin: each icon gets a small 1 and 2 badge.
+- The sidebar lists every open chat. Open two accounts of one plugin: each icon gets the account initial as its badge, and hovering an item reveals a small themed close button. Both the item and close tooltips use the active palette, sit to the right of the rail, and never show a grey system tooltip under the cursor.
 - The **+** button opens the palette with the plugin list, so another service can be opened; the palette, plugins and settings icons in the rail open their surfaces directly.
 - Settings → Sidebar: **Always show**, **On left edge** and **Hide completely**. On hover, the rail animates its width from the left edge; the chat must not reflow or reload.
 - Switch between rail modes while a chat is open and confirm the rail animation does not steal keyboard focus from the page.
@@ -46,15 +46,15 @@ desktop session.
 ## Settings and plugins pages
 
 - Open `Ctrl+K` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
-- Switch the theme in Settings between light, dark and system: the page, palette and warm pages repaint immediately, with no restart and no flash of the old palette.
+- Switch the theme in Settings between light, dark and system: the page, palette and pages repaint immediately, with no restart and no flash of the old palette. Accents use Catppuccin Blue in every flavour, not a pink or off-palette hue.
 - In Appearance, pick a light palette (Latte) and a dark palette (Frappé, Macchiato or Mocha) separately. The light choice should apply while the app is light and the dark choice while it is dark.
 - Turn on a Windows contrast theme: Chirpdesk should repaint with system colours; toggling it back should restore the normal palette without a restart.
 - At 150 % scaling, check that plugin cards and service rows do not clip their descriptions or buttons.
 - Open `Ctrl+K` → **Plugins & services**: installed plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state. Plugins are broader than services: filter packs, themes and tools share the same ecosystem. Expect service plugins, the bundled `page-dark` theme, `catppuccin`, the `filters-core` filter pack and the bundled cleaner.
 - Toggle `page-dark` off: warm pages stop being inverted; toggle it on again and they invert without a restart.
 - Toggle `filters-core` off: the next page load has no ad rules; toggle it on again and rules return.
-- Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+K` afterwards.
-- Add a second account from the same plugin; both should appear in the palette with their own sessions.
+- Turn on **Messenger** (or Facebook): it should add the account, warm its page, and appear in `Ctrl+K` afterwards.
+- Add a second account from the same plugin; both should appear in the palette with their own sessions. Rename either one from the service settings sheet (Rename → Save name) and confirm the sidebar, sheet and command bar update.
 - Turn the plugin off: runtimes sleep, sessions are not signed out. Turn it on again: the session should still be there.
 - Tray → Settings must show the same page, not a popup.
 
@@ -86,7 +86,7 @@ desktop session.
 - Hold `Ctrl` and press `Tab` (or `Ctrl+Shift+Tab`): the same tab list appears and the highlight cycles; releasing `Ctrl` switches to the highlighted tab.
 - Type `plugin` to see plugin actions: closed service plugins open on Enter; open ones show `Close …`.
 - Service icons are real brand glyphs from Simple Icons (CC0); unread counts show at the right of each tab row.
-- Selecting a cold/asleep service wakes it without re-pairing.
+- Selecting a closed service opens it without re-pairing.
 
 ## Updates
 
@@ -98,7 +98,7 @@ desktop session.
 ## Autostart
 
 - Tray → Settings → tick autostart, reboot.
-- Expect no window at login; warm pinned services after about 20 s; notifications within 30 s.
+- Expect no window at login; pinned services open after about 20 s; notifications within 30 s.
 - Untick it and confirm the HKCU Run value is gone.
 
 ## DND and mute
@@ -123,7 +123,7 @@ desktop session.
 
 ## Measurements still owed
 
-- Three warm + one cold after reboot: RAM and disk, plus notifications within 30 s and no boot storm. An idle three-warm run already measured ~1.8 GB total (`docs/measurements.md`), so check whether boot and a cold service change the picture.
+- Three open + one closed after reboot: RAM and disk, plus notifications within 30 s and no boot storm. An idle three-warm run already measured ~1.8 GB total (`docs/measurements.md`), so check whether boot and a cold service change the picture.
 - Third account measurement (deferred on purpose).
 
 ## Known gaps

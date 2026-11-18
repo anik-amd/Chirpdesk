@@ -73,19 +73,19 @@ These run on the dev machine only; CI runs unit tests and compiles, never hosts 
 | 3 | Long idle | 8 h tray-hidden, test message still toasts |
 | 4 | Switch | `Ctrl+Tab` → 3 services → commit; half-typed text and scroll position survive |
 | 5 | Search | `Ctrl+K`, type `tel`, `Enter` → Telegram focused; `Ctrl+Tab` never enters search |
-| 6 | Cold service | selecting a cold service loads it, then it appears in cycle order |
+| 6 | Cold service | selecting a closed service opens it, then it appears in cycle order |
 | 7 | Blocking sanity | login, send, receive on WhatsApp/Messenger/Telegram with tier 1 + cosmetic on |
 | 8 | Blocking fail-open | corrupt the filter file → all services still log in |
 | 9 | Storage | trim reclaims > 0 bytes, session still valid afterwards |
 | 10 | Orphan scan | finds a seeded fake leftover, Recycle Bin restore works |
 | 11 | Change | settings dialogs apply without restart |
 | 12 | Theme and contrast | light/dark/system switches instantly; both ends readable at 100 % and 150 %; a Windows contrast theme repaints with system colours and restoring it repaints again |
-| 13 | Definition plugin | install a `service` plugin → its site appears, creating an instance gives it its own profile and it stays cold; a second instance of the same definition keeps a separate session; no URL-only add path exists |
+| 13 | Definition plugin | install a `service` plugin → its site appears, creating an instance gives it its own profile and it stays closed; a second instance of the same definition keeps a separate session; no URL-only add path exists |
 | 14 | Notification capability | each bundled service reports its mode (`native`/`shim`/`title-only`); a background message produces a toast in that mode and the mode is shown in Settings |
 | 15 | Tray entry | tray click shows the window when hidden, then `Ctrl+K` opens the palette; no global hotkey in v1 |
 | 16 | Tool panel | cleaner panel renders, trim reclaims bytes, a disabled/unknown action greys out with a reason and the panel still opens |
-| 17 | Multiple accounts | one definition, two instances: both warm with separate unread counts and toasts, signing one out leaves the other signed in; Messenger and Facebook are separate definitions and open their own sites |
-| 18 | Close tab | `Ctrl+W` closes the highlighted tab in the palette or the active tab when closed; the next tab takes over, the instance stays cold in settings, and the last tab hides the window |
+| 17 | Multiple accounts | one definition, two instances: both open with separate unread counts and toasts, signing one out leaves the other signed in; Messenger and Facebook are separate definitions and open their own sites |
+| 18 | Close tab | `Ctrl+W` closes the highlighted tab in the palette or the active tab when closed; the next tab takes over, the instance stays closed in settings, and the last tab hides the window |
 
 Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbers.
 

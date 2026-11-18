@@ -27,7 +27,7 @@
                        Foreground="{DynamicResource CdText}"
                        Margin="0,6,0,0" />
 
-            <TextBlock Text="Chirpdesk keeps your messengers warm in the background and turns their notifications into Windows toasts. The window only appears when you ask for it."
+            <TextBlock Text="Chirpdesk keeps your messengers ready in the background and turns their notifications into Windows toasts. The window only appears when you ask for it."
                        Style="{StaticResource MutedText}"
                        FontSize="14"
                        TextWrapping="Wrap"
@@ -113,7 +113,7 @@
                                        FontSize="14"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource CdText}" />
-                            <TextBlock Text="Closing the window keeps chats warm and quiet. Quit from the tray icon; nothing shows itself unless you ask."
+                            <TextBlock Text="Closing the window keeps chats open in the background and quiet. Quit from the tray icon; nothing shows itself unless you ask."
                                        Style="{StaticResource MutedText}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0" />

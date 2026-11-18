@@ -18,6 +18,39 @@
         <Setter Property="Foreground" Value="{DynamicResource CdTextMuted}" />
     </Style>
 
+    <!-- One tooltip for the whole shell: no system grey box, no text under the cursor. -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{DynamicResource CdPaletteText}" />
+        <Setter Property="FontFamily" Value="{StaticResource CdBodyFont}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="Placement" Value="Mouse" />
+        <Setter Property="HorizontalOffset" Value="14" />
+        <Setter Property="VerticalOffset" Value="14" />
+        <Setter Property="Padding" Value="9,5" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border x:Name="Tip"
+                            Background="{DynamicResource CdPaletteRaised}"
+                            BorderBrush="{DynamicResource CdPaletteRule}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="12"
+                                              ShadowDepth="2"
+                                              Opacity="0.3"
+                                              Color="#000000" />
+                        </Border.Effect>
+                        <ContentPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="Card" TargetType="Border">
         <Setter Property="Background" Value="{DynamicResource CdSurface}" />
         <Setter Property="BorderBrush" Value="{DynamicResource CdRule}" />

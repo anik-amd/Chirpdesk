@@ -31,7 +31,7 @@ The installer checks both and points you at the official download if one is miss
 2. Open **Plugins & services** and open WhatsApp, Telegram, Messenger or Facebook.
 3. Scan the QR code or sign in in the window that opens. Close the window when you are done.
 
-After that Chirpdesk lives in the tray. Closing the window keeps chats warm. Use **Quit** from the
+After that Chirpdesk lives in the tray. Closing the window keeps chats open in the background. Use **Quit** from the
 tray menu to stop it.
 
 ## Everyday use
@@ -52,8 +52,8 @@ commands.
 
 ## What it does
 
-- **Warm in the tray.** Services stay loaded so their WebSockets keep receiving messages. Pinned
-  services warm after login without showing a window.
+- **Ready in the tray.** Services stay loaded so their WebSockets keep receiving messages. Pinned
+  services open after login without showing a window.
 - **Windows toasts.** Real Action Center notifications with the service icon, dedupe and a short
   warm-up gate so a reconnect cannot replay a backlog.
 - **A minimal service sidebar.** Open chats sit on the left edge with a 1/2 badge when one plugin has

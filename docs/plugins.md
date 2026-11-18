@@ -14,7 +14,7 @@ This document is the authoring contract for humans and AI agents. It describes v
 | Instance (one account) | `settings.json` | no | selecting an installed definition |
 
 - A definition knows the site: URL, unread regex, notification mode, whether the page has its own dark theme.
-- An instance is one profile, one unread count, one warm/cold state. Two accounts of one site are two instances of one definition.
+- An instance is one profile, one unread count, one open/closed state. Two accounts of one site are two instances of one definition.
 - A row with `"definitionId": null` and an inline `url` is **legacy**: it still resolves, but nothing creates new ones.
 - Bundled plugins live in `<install>\plugins\`; user plugins in `%APPDATA%\Chirpdesk\plugins\<id>\`. Both are scanned identically; a user plugin with the same `id` shadows the bundled one.
 - Invalid plugins are skipped and logged, never fatal (invariant 8).
@@ -144,7 +144,7 @@ The app sets the profile's `prefers-color-scheme` to match the app theme before 
 - `off` — never touch the page. Use this when the site has its own dark theme (WhatsApp, Telegram). The site reacts to `prefers-color-scheme` itself.
 - `auto` — let the host measure the rendered page and apply an inverting filter **only if it is still light**. The measurement waits for an opaque background, re-checks for ~10 s, and yields to a theme that arrives after hydration.
 
-Darkening only ever happens while the app itself is dark. The bundled `page-dark` **theme plugin** is the master switch: deactivate it and no page is inverted, whatever a definition or instance says. Bundled plugins are active by default; the Plugins page toggles it. A per-instance override of `on` or `off` is allowed, but `on` still obeys the app theme.
+Darkening only ever happens while the app itself is dark. The bundled `page-dark` **theme plugin** is the master switch: disable it and no page is inverted, whatever a definition or instance says. Bundled plugins are active by default; the Plugins page toggles it. A per-instance override of `on` or `off` is allowed, but `on` still obeys the app theme.
 
 Do not set `auto` for a site known to follow the OS scheme: the host would only be second-guessing it. Never try to express dark mode as JavaScript; page-context JS is not a plugin permission (§9).
 
@@ -275,7 +275,7 @@ Validation: variant ids `^[a-z0-9-]{1,24}$`, unique; `mode` is `dark` or `light`
 
 `blockHosts` / `allowHosts` are host patterns; paths belong in `blockPaths`. A pack may only **add** to the auth/WebSocket allowlist, never remove from it, and the service's own origin is allowlisted by the host regardless.
 
-Bundled filter packs are active by default. Deactivating one on the Plugins page removes its rules from every warm tab immediately; re-activating restores them. The permanent allowlist and the per-tab `blocking: off` command are independent of any pack.
+Bundled filter packs are enabled by default. Disabling one on the Plugins page removes its rules from every open tab immediately; re-enabling restores them. The permanent allowlist and the per-tab `blocking: off` command are independent of any pack.
 
 ## 7.1 `themes.json` — palette flavours
 

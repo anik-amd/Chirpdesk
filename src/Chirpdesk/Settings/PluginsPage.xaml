@@ -306,12 +306,14 @@
                     CornerRadius="14"
                     Padding="24">
                 <StackPanel>
-                    <TextBlock Text="Name this account"
+                    <TextBlock x:Name="AccountNameTitle"
+                               Text="Name this account"
                                FontFamily="{StaticResource CdDisplayFont}"
                                FontSize="20"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource CdText}" />
-                    <TextBlock Text="The name appears in the sidebar and the command bar."
+                    <TextBlock x:Name="AccountNameDescription"
+                               Text="The name appears in the sidebar and the command bar."
                                FontSize="12"
                                Foreground="{DynamicResource CdTextMuted}"
                                TextWrapping="Wrap"
@@ -323,13 +325,15 @@
                              Background="{DynamicResource CdSurfaceAlt}"
                              Foreground="{DynamicResource CdText}"
                              BorderBrush="{DynamicResource CdRule}"
+                             KeyDown="OnAccountNameKeyDown"
                              AutomationProperties.Name="Account name" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
                         <Button Content="Cancel"
                                 Style="{StaticResource GhostButton}"
                                 Padding="14,7"
                                 Click="OnCancelAccountName" />
-                        <Button Content="Add account"
+                        <Button x:Name="AccountNameConfirm"
+                                Content="Add account"
                                 Style="{StaticResource PillButton}"
                                 Padding="14,8"
                                 Margin="8,0,0,0"

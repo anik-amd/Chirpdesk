@@ -1,6 +1,8 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Catppuccin Latte. The paper end of the palette. -->
+    <!-- Catppuccin Latte. Mauve is the accent here because Latte Blue is 4.34:1 on the
+         base, below the 4.5:1 the theme check requires; Mauve is the nearest official
+         accent that clears it. Dark flavours use Blue. -->
     <SolidColorBrush x:Key="CdCanvas" Color="#E6E9EF" />
     <SolidColorBrush x:Key="CdSurface" Color="#EFF1F5" />
     <SolidColorBrush x:Key="CdSurfaceAlt" Color="#DCE0E8" />

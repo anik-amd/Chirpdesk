@@ -14,8 +14,9 @@ namespace Chirpdesk.Notifications;
 /// </summary>
 internal static class ToastIcons
 {
-    private const int Size = 48;
-    private const double GlyphSize = 28;
+    private const int Canvas = 64;
+    private const double Circle = 40;
+    private const double GlyphSize = 24;
 
     public static string? ForService(string? definitionId, string serviceName, string? accent)
     {
@@ -31,7 +32,7 @@ internal static class ToastIcons
         {
             var folder = Path.Combine(AppPaths.LocalRoot, "toast-icons");
             Directory.CreateDirectory(folder);
-            var path = Path.Combine(folder, $"v3-{definitionId}-{key}.png");
+            var path = Path.Combine(folder, $"v4-{definitionId}-{key}.png");
 
             if (File.Exists(path))
             {
@@ -42,13 +43,18 @@ internal static class ToastIcons
 
             using (var context = visual.RenderOpen())
             {
-                context.DrawEllipse(new SolidColorBrush(color), null, new Point(Size / 2d, Size / 2d), Size / 2d, Size / 2d);
+                context.DrawEllipse(
+                    new SolidColorBrush(color),
+                    null,
+                    new Point(Canvas / 2d, Canvas / 2d),
+                    Circle / 2d,
+                    Circle / 2d);
 
                 var glyph = ServiceIcons.Image(definitionId, Brushes.White);
 
                 if (glyph is not null)
                 {
-                    var inset = (Size - GlyphSize) / 2;
+                    var inset = (Canvas - GlyphSize) / 2;
                     context.DrawImage(glyph, new Rect(inset, inset, GlyphSize, GlyphSize));
                 }
                 else
@@ -61,16 +67,16 @@ internal static class ToastIcons
                         CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight,
                         new Typeface("Segoe UI Semibold"),
-                        22,
+                        18,
                         Brushes.White,
                         1.0);
                     context.DrawText(
                         text,
-                        new Point((Size - text.Width) / 2, (Size - text.Height) / 2));
+                        new Point((Canvas - text.Width) / 2, (Canvas - text.Height) / 2));
                 }
             }
 
-            var bitmap = new RenderTargetBitmap(Size, Size, 96, 96, PixelFormats.Pbgra32);
+            var bitmap = new RenderTargetBitmap(Canvas, Canvas, 96, 96, PixelFormats.Pbgra32);
             bitmap.Render(visual);
 
             var encoder = new PngBitmapEncoder();

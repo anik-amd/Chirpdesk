@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -59,7 +60,7 @@ public partial class HostWindow : Window
             var button = new Button
             {
                 Style = (Style)FindResource("RailButton"),
-                ToolTip = entry.Name,
+                ToolTip = RailTip(entry.Name),
                 Background = string.Equals(entry.InstanceId, activeId, StringComparison.OrdinalIgnoreCase)
                     ? Palette("CdPaletteSelection")
                     : Brushes.Transparent,
@@ -107,11 +108,12 @@ public partial class HostWindow : Window
 
             var close = new Button
             {
-                Content = "\u00D7",
+                Content = "\uE711",
                 Style = (Style)FindResource("RailCloseButton"),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
-                ToolTip = "Close account",
+                Margin = new Thickness(0, -3, -3, 0),
+                ToolTip = RailTip($"Close {entry.Name}"),
                 Visibility = Visibility.Collapsed,
             };
             close.Click += (_, _) => RailServiceCloseRequested?.Invoke(this, entry.InstanceId);
@@ -339,13 +341,21 @@ public partial class HostWindow : Window
         var button = new Button
         {
             Style = (Style)FindResource("RailButton"),
-            ToolTip = tooltip,
+            ToolTip = RailTip(tooltip),
             Content = UiIcons.Create(icon, Palette(accent ? "CdPaletteAccent" : "CdPaletteText"), 20),
         };
         AutomationProperties.SetName(button, tooltip);
         button.Click += click;
         return button;
     }
+
+    private static ToolTip RailTip(string text) => new()
+    {
+        Content = text,
+        Placement = PlacementMode.Right,
+        HorizontalOffset = 8,
+        VerticalOffset = 0,
+    };
 
     private Brush Palette(string key) => (Brush)FindResource(key);
 

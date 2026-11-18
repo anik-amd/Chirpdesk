@@ -57,7 +57,7 @@
                                        FontSize="12"
                                        Foreground="{DynamicResource CdAccent}"
                                        Margin="0,2,0,12" />
-                            <TextBlock Text="Web messengers in one warm tray window. Each chat keeps its own WebView2 session, and notifications arrive as real Windows toasts."
+                            <TextBlock Text="Web messengers in one quiet tray window. Each chat keeps its own WebView2 session, and notifications arrive as real Windows toasts."
                                        FontSize="14"
                                        Foreground="{DynamicResource CdTextMuted}"
                                        TextWrapping="Wrap"
