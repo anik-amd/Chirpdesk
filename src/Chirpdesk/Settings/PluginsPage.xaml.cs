@@ -411,6 +411,23 @@ public partial class PluginsPage : UserControl
                         ? Token("CdText")
                         : Token("CdTextMuted"),
                     TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4),
+                });
+
+                var pluginFolder = Path.Combine(
+                    plugin.Bundled ? AppPaths.BundledPluginsDirectory : AppPaths.UserPluginsDirectory,
+                    plugin.Id);
+                var manifest = PluginLoader.ReadInstalledManifest(pluginFolder, out _);
+                var permissions = manifest?.Permissions is { Count: > 0 } declared
+                    ? string.Join(", ", declared)
+                    : "none";
+
+                content.Children.Add(new TextBlock
+                {
+                    Text = $"Host permissions: {permissions}",
+                    FontSize = 10,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 0, 0, 8),
                 });
             }
@@ -471,6 +488,17 @@ public partial class PluginsPage : UserControl
                     await _integrations.StartAsync(plugin.Id);
                 });
                 actions.Children.Add(restart);
+
+                var dataFolder = new Button
+                {
+                    Content = "Data folder",
+                    Style = (Style)FindResource("GhostButton"),
+                    Padding = new Thickness(10, 5, 10, 5),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                dataFolder.Click += (_, _) =>
+                    OpenFolder(Path.Combine(AppPaths.DataRoot, "integrations", plugin.Id));
+                actions.Children.Add(dataFolder);
             }
 
             var update = FindUpdate(plugin);
@@ -1374,9 +1402,11 @@ public partial class PluginsPage : UserControl
         _store.Save(_settings);
     }
 
-    private void OnOpenPluginsFolder(object sender, RoutedEventArgs e)
+    private void OnOpenPluginsFolder(object sender, RoutedEventArgs e) =>
+        OpenFolder(AppPaths.UserPluginsDirectory);
+
+    private void OpenFolder(string path)
     {
-        var path = AppPaths.UserPluginsDirectory;
         Directory.CreateDirectory(path);
 
         try
@@ -1388,7 +1418,7 @@ public partial class PluginsPage : UserControl
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            _log.Warn($"could not open the plugins folder: {ex.Message}");
+            _log.Warn($"could not open the folder: {ex.Message}");
         }
     }
 
