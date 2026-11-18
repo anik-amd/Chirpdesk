@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Chirpdesk.Ui;
 
 namespace Chirpdesk.About;
@@ -17,9 +18,26 @@ public partial class AboutPage : UserControl
         InitializeComponent();
         _back = back;
         PageIcon.Content = UiIcons.Create("info", Token("CdAccent"), 24);
+        GithubIcon.Content = UiIcons.Create("github", Token("CdAccent"), 16);
+        AuthorAvatar.Source = new BitmapImage(
+            new Uri("pack://application:,,,/Chirpdesk;component/Assets/chirpdesk-author.png"));
         VersionText.Text = $"Version {Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "0.0.0"}";
+
+        GithubLink.NavigateUri = new Uri("https://github.com/anik-amd");
+        GithubLink.RequestNavigate += (_, e) =>
+        {
+            Open(e.Uri.AbsoluteUri);
+            e.Handled = true;
+        };
+
+        LicenseLink.NavigateUri = new Uri("https://opensource.org/license/mit");
+        LicenseLink.RequestNavigate += (_, e) =>
+        {
+            Open(e.Uri.AbsoluteUri);
+            e.Handled = true;
+        };
+
         RenderCredits();
-        RenderLicenses();
     }
 
     private void RenderCredits()
@@ -52,7 +70,7 @@ public partial class AboutPage : UserControl
             "https://github.com/Templarian/MaterialDesign");
         AddCredit(
             "Simple Icons",
-            "Brand marks for the service rail and plugin cards.",
+            "Brand marks for the sidebar and plugin cards.",
             "CC0 1.0",
             "https://github.com/simple-icons/simple-icons");
         AddCredit(
@@ -60,16 +78,6 @@ public partial class AboutPage : UserControl
             "The per-user Windows installer.",
             "Inno Setup License",
             "https://github.com/jrsoftware/issrc");
-    }
-
-    private void RenderLicenses()
-    {
-        LicensesPanel.Children.Clear();
-        AddLicense("MIT", "https://opensource.org/license/mit");
-        AddLicense("Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0");
-        AddLicense("CC0 1.0", "https://creativecommons.org/publicdomain/zero/1.0/");
-        AddLicense("Microsoft Software License Terms", "https://learn.microsoft.com/microsoft-edge/webview2/");
-        AddLicense("Inno Setup License", "https://jrsoftware.org/files/is/license.txt");
     }
 
     private void AddCredit(string name, string description, string license, string url)
@@ -136,24 +144,6 @@ public partial class AboutPage : UserControl
             Background = Token("CdRule"),
             Margin = new Thickness(0, 2, 0, 2),
         });
-    }
-
-    private void AddLicense(string name, string url)
-    {
-        var link = new Hyperlink(new Run(name))
-        {
-            NavigateUri = new Uri(url),
-            Foreground = Token("CdAccent"),
-        };
-        link.RequestNavigate += (_, e) =>
-        {
-            Open(e.Uri.AbsoluteUri);
-            e.Handled = true;
-        };
-
-        var text = new TextBlock { FontSize = 12, Margin = new Thickness(0, 2, 0, 2) };
-        text.Inlines.Add(link);
-        LicensesPanel.Children.Add(text);
     }
 
     private void OnOpenLink(object sender, RoutedEventArgs e)

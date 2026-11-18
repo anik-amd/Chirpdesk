@@ -2781,13 +2781,42 @@ public partial class App : Application
     }
 
     /// <summary>Uninstalls a user plugin to the Recycle Bin; bundled plugins are not touched.</summary>
-    private Task<bool> UninstallPluginAsync(string pluginId)
+    private async Task<bool> UninstallPluginAsync(string pluginId)
     {
         var path = Path.Combine(AppPaths.UserPluginsDirectory, pluginId);
 
         if (!Directory.Exists(path))
         {
-            return Task.FromResult(false);
+            // Bundled plugins live in the install folder. Per-user installs are writable, so
+            // removing one is a normal uninstall; a later installer or repository install
+            // restores it.
+            path = Path.Combine(AppPaths.BundledPluginsDirectory, pluginId);
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return false;
+        }
+
+        var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+        var settings = store.Load();
+        var instances = settings.Services
+            .Where(instance => string.Equals(instance.DefinitionId, pluginId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var instance in instances)
+        {
+            if (_registry is not null)
+            {
+                await _registry.CloseAsync(instance.InstanceId);
+            }
+        }
+
+        if (instances.Count > 0)
+        {
+            settings.Services.RemoveAll(instance =>
+                string.Equals(instance.DefinitionId, pluginId, StringComparison.OrdinalIgnoreCase));
+            store.Save(settings);
         }
 
         var moved = Interop.RecycleBin.Send(path, _log!);
@@ -2806,7 +2835,9 @@ public partial class App : Application
             }
         }
 
-        return Task.FromResult(moved);
+        RefreshServiceRail();
+        UpdateTrayStatus();
+        return moved;
     }
 
     /// <summary>

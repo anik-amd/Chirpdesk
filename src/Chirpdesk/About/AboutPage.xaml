@@ -15,49 +15,54 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <ContentControl x:Name="PageIcon" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <TextBlock Text="About"
-                               FontFamily="{StaticResource CdDisplayFont}"
-                               FontSize="30"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource CdText}" />
-                </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <ContentControl x:Name="PageIcon" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Text="About"
+                           FontFamily="{StaticResource CdDisplayFont}"
+                           FontSize="30"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource CdText}" />
             </StackPanel>
             <Button Grid.Column="1" Content="Back" Style="{StaticResource GhostButton}" Click="OnBack" />
         </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel MaxWidth="980" HorizontalAlignment="Stretch">
+            <StackPanel MaxWidth="920" HorizontalAlignment="Stretch">
                 <Border Style="{StaticResource CdPanel}" Padding="28">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Image Source="pack://application:,,,/Chirpdesk;component/Assets/chirpdesk-512.png"
-                               Width="88"
-                               Height="88"
-                               Stretch="Uniform"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               VerticalAlignment="Top" />
-                        <StackPanel Grid.Column="1" Margin="22,0,0,0">
+
+                        <Border Width="112"
+                                Height="112"
+                                CornerRadius="24"
+                                Background="{DynamicResource CdAccentSoft}"
+                                VerticalAlignment="Top">
+                            <Image Source="pack://application:,,,/Chirpdesk;component/Assets/chirpdesk-512.png"
+                                   Width="88"
+                                   Height="88"
+                                   Stretch="Uniform"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" Margin="26,0,0,0">
                             <TextBlock Text="Chirpdesk"
                                        FontFamily="{StaticResource CdDisplayFont}"
-                                       FontSize="34"
+                                       FontSize="36"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource CdText}" />
                             <TextBlock x:Name="VersionText"
                                        FontSize="12"
                                        Foreground="{DynamicResource CdAccent}"
-                                       Margin="0,2,0,10" />
-                            <TextBlock Text="Your chats, out of the way. A warm tray desk for web messengers, with real Windows notifications."
+                                       Margin="0,2,0,12" />
+                            <TextBlock Text="Web messengers in one warm tray window. Each chat keeps its own WebView2 session, and notifications arrive as real Windows toasts."
                                        FontSize="14"
                                        Foreground="{DynamicResource CdTextMuted}"
                                        TextWrapping="Wrap"
-                                       MaxWidth="620" />
-                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                       MaxWidth="560" />
+                            <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                                 <Button Content="GitHub repository"
                                         Style="{StaticResource PillButton}"
                                         Padding="14,8"
@@ -70,6 +75,12 @@
                                         Tag="https://github.com/anik-amd/Chirpdesk/issues"
                                         Click="OnOpenLink" />
                             </StackPanel>
+                            <TextBlock Margin="2,12,0,0" FontSize="12" Foreground="{DynamicResource CdTextMuted}">
+                                Chirpdesk is open source under the
+                                <Hyperlink x:Name="LicenseLink"
+                                           Foreground="{DynamicResource CdAccent}"
+                                           TextDecorations="None">MIT license</Hyperlink>.
+                            </TextBlock>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -81,29 +92,34 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource CdAccentSoft}">
-                            <TextBlock Text="AA"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource CdAccent}"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
+                        <Border Width="56" Height="56" CornerRadius="28" Background="{DynamicResource CdAccentSoft}">
+                            <Image x:Name="AuthorAvatar"
+                                   Width="56"
+                                   Height="56"
+                                   Stretch="UniformToFill"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
                         </Border>
-                        <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                        <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
                             <TextBlock Text="Anik Ahmed"
-                                       FontSize="15"
+                                       FontSize="16"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource CdText}" />
                             <TextBlock Text="Creator and maintainer"
                                        FontSize="12"
-                                       Foreground="{DynamicResource CdTextMuted}" />
-                            <Button Content="github.com/anik-amd"
-                                    Style="{StaticResource GhostButton}"
-                                    HorizontalAlignment="Left"
-                                    Padding="0"
-                                    Margin="0,4,0,0"
-                                    Tag="https://github.com/anik-amd"
-                                    Click="OnOpenLink" />
+                                       Foreground="{DynamicResource CdTextMuted}"
+                                       Margin="0,1,0,4" />
+                            <StackPanel Orientation="Horizontal">
+                                <ContentControl x:Name="GithubIcon"
+                                                Width="16"
+                                                Height="16"
+                                                Margin="0,0,6,0"
+                                                VerticalAlignment="Center" />
+                                <TextBlock FontSize="12" VerticalAlignment="Center">
+                                    <Hyperlink x:Name="GithubLink"
+                                               Foreground="{DynamicResource CdAccent}"
+                                               TextDecorations="None">github.com/anik-amd</Hyperlink>
+                                </TextBlock>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -111,16 +127,6 @@
                 <TextBlock Text="Built with" Style="{StaticResource Heading}" Margin="0,26,0,10" />
                 <Border Style="{StaticResource CdPanel}" Padding="0">
                     <StackPanel x:Name="CreditsPanel" Margin="18,8,18,8" />
-                </Border>
-
-                <TextBlock Text="Licenses" Style="{StaticResource Heading}" Margin="0,26,0,10" />
-                <Border Style="{StaticResource CdPanel}">
-                    <StackPanel>
-                        <TextBlock Text="Chirpdesk is open source. Each dependency keeps its own license; the links below point at the upstream project and license."
-                                   Style="{StaticResource MutedText}"
-                                   TextWrapping="Wrap" />
-                        <StackPanel x:Name="LicensesPanel" Margin="0,12,0,0" />
-                    </StackPanel>
                 </Border>
             </StackPanel>
         </ScrollViewer>
