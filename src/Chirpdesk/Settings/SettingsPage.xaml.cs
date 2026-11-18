@@ -27,7 +27,6 @@ public partial class SettingsPage : UserControl
 {
     private readonly SettingsStore _store;
     private readonly ServiceCatalog _catalog;
-    private readonly IReadOnlyList<PanelDefinition> _panels;
     private readonly ServiceRegistry _registry;
     private readonly HostWindow _host;
     private readonly IReadOnlyList<ThemeFlavor> _themeFlavors;
@@ -39,8 +38,6 @@ public partial class SettingsPage : UserControl
     private readonly Func<UpdateCheckResult, Task<bool>> _installUpdate;
     private UpdateCheckResult? _pendingUpdate;
     private AppSettings _settings;
-    private IReadOnlyList<OrphanItem> _orphans = [];
-    private bool _scanned;
     private bool _loading;
 
     internal SettingsPage(
@@ -60,7 +57,6 @@ public partial class SettingsPage : UserControl
         InitializeComponent();
         _store = store;
         _catalog = catalog;
-        _panels = panels;
         _registry = registry;
         _host = host;
         _themeFlavors = themeFlavors;
@@ -83,9 +79,6 @@ public partial class SettingsPage : UserControl
     {
         _settings = _store.Load();
         LoadControls();
-        RefreshServices();
-        RenderToolPanel();
-        RefreshStorage();
     }
 
     public void SetDark(bool dark)
@@ -241,157 +234,8 @@ public partial class SettingsPage : UserControl
         _loading = false;
     }
 
-    private void RefreshServices()
-    {
-        ServicesPanel.Children.Clear();
 
-        var ordered = _settings.Services.OrderBy(service => service.Order).ToList();
 
-        for (var index = 0; index < ordered.Count; index++)
-        {
-            var instance = ordered[index];
-            var state = _registry.StateOf(instance.InstanceId);
-
-            var block = new StackPanel { Margin = new Thickness(0, 8, 0, 8) };
-
-            var header = new Grid();
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var badge = ServiceIcons.Create(
-                instance.DefinitionId,
-                instance.Name,
-                _catalog?.Find(instance.DefinitionId)?.Accent);
-            Grid.SetColumn(badge, 0);
-            header.Children.Add(badge);
-
-            var names = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(12, 0, 12, 0) };
-            names.Children.Add(new TextBlock
-            {
-                Text = instance.Name,
-                FontFamily = (FontFamily)FindResource("CdBodyFont"),
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Token("CdText"),
-            });
-
-            var blockingOff = string.Equals(instance.Blocking, "off", StringComparison.OrdinalIgnoreCase);
-            var blocked = blockingOff ? 0 : _registry.Find(instance.InstanceId)?.BlockedRequests ?? 0;
-            var blockingText = blockingOff
-                ? "blocking off"
-                : blocked > 0
-                    ? $"blocking on · {blocked} blocked"
-                    : "blocking on";
-
-            names.Children.Add(new TextBlock
-            {
-                Text = $"{state.ToString().ToLowerInvariant()} · {blockingText} · {instance.DefinitionId ?? "legacy"}",
-                FontFamily = (FontFamily)FindResource("CdBodyFont"),
-                FontSize = 11,
-                Foreground = Token("CdTextMuted"),
-                Margin = new Thickness(0, 2, 0, 0),
-            });
-            Grid.SetColumn(names, 1);
-            header.Children.Add(names);
-
-            var remove = new Button
-            {
-                Content = "Remove",
-                Width = 76,
-                Style = (Style)FindResource("GhostButton"),
-                VerticalAlignment = VerticalAlignment.Top,
-            };
-            remove.Click += async (_, _) => await RemoveInstanceAsync(instance);
-            Grid.SetColumn(remove, 2);
-            header.Children.Add(remove);
-
-            block.Children.Add(header);
-
-            var actions = new WrapPanel { Margin = new Thickness(34, 6, 0, 0) };
-            var warm = new CheckBox
-            {
-                Content = "Warm at boot",
-                IsChecked = instance.WarmAtBoot,
-                Style = (Style)FindResource("CdSwitch"),
-                Margin = new Thickness(0, 0, 18, 0),
-            };
-            warm.Checked += (_, _) => SaveInstance(instance, i => i.WarmAtBoot = true);
-            warm.Unchecked += (_, _) => SaveInstance(instance, i => i.WarmAtBoot = false);
-            actions.Children.Add(warm);
-
-            var mute = new CheckBox
-            {
-                Content = "Mute",
-                IsChecked = instance.Mute,
-                Style = (Style)FindResource("CdSwitch"),
-            };
-            mute.Checked += (_, _) => SaveInstance(instance, i => i.Mute = true);
-            mute.Unchecked += (_, _) => SaveInstance(instance, i => i.Mute = false);
-            actions.Children.Add(mute);
-
-            block.Children.Add(actions);
-            ServicesPanel.Children.Add(block);
-
-            if (index < ordered.Count - 1)
-            {
-                ServicesPanel.Children.Add(new Border
-                {
-                    Height = 1,
-                    Background = Token("CdRule"),
-                    Margin = new Thickness(0, 2, 0, 2),
-                });
-            }
-        }
-
-        if (_settings.Services.Count == 0)
-        {
-            ServicesPanel.Children.Add(new TextBlock
-            {
-                Text = "No services yet. Open Plugins & services from Ctrl+K and activate one.",
-                Foreground = Token("CdTextMuted"),
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 8),
-            });
-        }
-    }
-
-    private void SaveInstance(ServiceInstance instance, Action<ServiceInstance> change)
-    {
-        if (_loading)
-        {
-            return;
-        }
-
-        change(instance);
-        Save();
-        RefreshServices();
-    }
-
-    private async Task RemoveInstanceAsync(ServiceInstance instance)
-    {
-        var answer = MessageBox.Show(
-            $"Remove '{instance.Name}' from the list?\n\nThe profile stays on disk so it can be removed from Storage.",
-            "Remove service",
-            MessageBoxButton.OKCancel,
-            MessageBoxImage.Question);
-
-        if (answer != MessageBoxResult.OK)
-        {
-            return;
-        }
-
-        if (_registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
-        {
-            await _registry.SleepAsync(instance.InstanceId);
-        }
-
-        _settings.Services.Remove(instance);
-        Save();
-        RefreshServices();
-        RefreshStorage();
-    }
 
     private void OnThemeChoice(object sender, RoutedEventArgs e)
     {
@@ -555,293 +399,13 @@ public partial class SettingsPage : UserControl
         return morning.ToUniversalTime();
     }
 
-    private void OnTrimAll(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var candidates = PlanTrim();
-            long reclaimed = 0;
 
-            foreach (var candidate in candidates)
-            {
-                reclaimed += CacheTrimmer.Trim(candidate, _log);
-            }
 
-            if (reclaimed > 0)
-            {
-                _settings.ReclaimedBytes += reclaimed;
-                Save();
-            }
-            else
-            {
-                MessageBox.Show("Nothing to trim: profiles are under budget or still warm.",
-                    "Storage", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
 
-            RefreshStorage();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _log.Error("settings: trim failed", ex);
-            MessageBox.Show(ex.Message, "Storage", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
 
-    private IReadOnlyList<TrimCandidate> PlanTrim()
-    {
-        var usage = ProfileScanner.ScanAll();
-        var profiles = new List<ProfileCache>();
 
-        foreach (var profile in usage)
-        {
-            var warm = _settings.Services
-                .Where(instance => string.Equals(instance.ProfileId, profile.ProfileId, StringComparison.OrdinalIgnoreCase))
-                .Any(instance => _registry.StateOf(instance.InstanceId) == RuntimeState.Warm);
 
-            profiles.Add(new ProfileCache(
-                profile.ProfileId,
-                Path.Combine(AppPaths.ProfilesRoot, profile.ProfileId),
-                profile.CacheBytes,
-                Disposed: !warm,
-                profile.LastWrite));
-        }
 
-        return TrimPlanner.Plan(
-            profiles,
-            _settings.CacheBudgetMb * 1024L * 1024L,
-            _settings.GlobalCacheBudgetMb * 1024L * 1024L).Candidates;
-    }
-
-    private void RefreshStorage()
-    {
-        StoragePanel.Children.Clear();
-
-        var usage = ProfileScanner.ScanAll();
-        var reclaimedMb = _settings.ReclaimedBytes / (1024d * 1024d);
-        ReclaimedText.Text = $"Reclaimed {reclaimedMb:0.0} MB since install";
-
-        foreach (var profile in usage)
-        {
-            var names = _settings.Services
-                .Where(instance => string.Equals(instance.ProfileId, profile.ProfileId, StringComparison.OrdinalIgnoreCase))
-                .Select(instance => instance.Name)
-                .ToList();
-
-            var warm = _settings.Services
-                .Where(instance => string.Equals(instance.ProfileId, profile.ProfileId, StringComparison.OrdinalIgnoreCase))
-                .Any(instance => _registry.StateOf(instance.InstanceId) == RuntimeState.Warm);
-
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-            row.Children.Add(new TextBlock
-            {
-                Text = names.Count > 0 ? string.Join(", ", names) : profile.ProfileId,
-                Width = 220,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            });
-            row.Children.Add(new TextBlock
-            {
-                Text = $"Data {Megabytes(profile.DataBytes)} · Cache {Megabytes(profile.CacheBytes)}",
-                Width = 260,
-                Opacity = 0.8,
-            });
-            row.Children.Add(new TextBlock
-            {
-                Text = warm ? "warm" : "disposed",
-                Width = 70,
-                Opacity = 0.6,
-            });
-            StoragePanel.Children.Add(row);
-        }
-
-        if (usage.Count == 0)
-        {
-            StoragePanel.Children.Add(new TextBlock { Text = "No profiles yet.", Opacity = 0.7 });
-        }
-
-        RefreshOrphans();
-    }
-
-    private void RefreshOrphans()
-    {
-        OrphanPanel.Children.Clear();
-
-        OrphanStatus.Text = !_scanned
-            ? "Not scanned yet."
-            : _orphans.Count == 0
-                ? "Scan complete: no leftovers found."
-                : $"{_orphans.Count} leftover(s) found. Nothing is pre-selected.";
-
-        if (_orphans.Count == 0)
-        {
-            return;
-        }
-
-        OrphanPanel.Children.Add(new TextBlock
-        {
-            Text = "Leftovers found (nothing is pre-selected)",
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 8, 0, 4),
-        });
-
-        foreach (var orphan in _orphans)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-            row.Children.Add(new TextBlock
-            {
-                Text = orphan.ProfileId ?? Path.GetFileName(orphan.Path),
-                Width = 220,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            });
-            row.Children.Add(new TextBlock { Text = orphan.App, Width = 150, Opacity = 0.8 });
-            row.Children.Add(new TextBlock { Text = Megabytes(orphan.Bytes), Width = 90, Opacity = 0.8 });
-
-            var recycle = new Button { Content = "Recycle", Width = 80 };
-            recycle.Click += (_, _) =>
-            {
-                if (MessageBox.Show($"Move '{orphan.Path}' to the Recycle Bin?", "Remove leftover",
-                        MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
-                {
-                    return;
-                }
-
-                if (OrphanDeleter.Delete(orphan, _log))
-                {
-                    _orphans = _orphans.Where(item => item != orphan).ToList();
-                    RefreshOrphans();
-                }
-            };
-            row.Children.Add(recycle);
-            OrphanPanel.Children.Add(row);
-        }
-    }
-
-    private void OnScanOrphans(object sender, RoutedEventArgs e)
-    {
-        var referenced = _settings.Services
-            .Select(instance => instance.ProfileId ?? instance.InstanceId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        _orphans = OrphanScanner.Scan(
-            AppPaths.ProfilesRoot,
-            referenced,
-            KnownRoots.ForThisUser(),
-            KnownRoots.IsInUse);
-
-        _scanned = true;
-        _log.Info($"settings: orphan scan found {_orphans.Count} item(s)");
-        RefreshOrphans();
-    }
-
-    private void RenderToolPanel()
-    {
-        PanelHost.Children.Clear();
-
-        var panel = _panels.Count > 0 ? _panels[0] : null;
-        if (panel is null)
-        {
-            return;
-        }
-
-        PanelHost.Children.Add(new TextBlock
-        {
-            Text = panel.Title,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 2),
-        });
-
-        if (!string.IsNullOrWhiteSpace(panel.Subtitle))
-        {
-            PanelHost.Children.Add(new TextBlock
-            {
-                Text = panel.Subtitle,
-                FontSize = 12,
-                Opacity = 0.7,
-                Margin = new Thickness(0, 0, 0, 6),
-            });
-        }
-
-        foreach (var section in panel.Sections.Where(section => section.Type == "text"))
-        {
-            PanelHost.Children.Add(new TextBlock
-            {
-                Text = section.Text,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Opacity = 0.8,
-                Margin = new Thickness(0, 2, 0, 6),
-            });
-        }
-
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-
-        foreach (var action in panel.Actions)
-        {
-            var button = new Button
-            {
-                Content = action.Label,
-                Width = 140,
-                Margin = new Thickness(0, 0, 8, 0),
-                ToolTip = action.Confirm,
-                Style = (Style)FindResource(action.Style == "primary" ? "PillButton" : "GhostButton"),
-            };
-
-            button.Click += (_, _) => ExecutePanelAction(action);
-            buttons.Children.Add(button);
-        }
-
-        PanelHost.Children.Add(buttons);
-    }
-
-    private void ExecutePanelAction(PanelAction action)
-    {
-        switch (action.Primitive)
-        {
-            case "storageReport":
-                RefreshStorage();
-                return;
-
-            case "trimCache":
-                OnTrimAll(this, new RoutedEventArgs());
-                return;
-
-            case "scanOrphans":
-                OnScanOrphans(this, new RoutedEventArgs());
-                return;
-
-            case "revealFolder":
-                RevealRoot(action.Args?.Root);
-                return;
-        }
-    }
-
-    private void RevealRoot(string? root)
-    {
-        var path = root switch
-        {
-            "profiles" => AppPaths.ProfilesRoot,
-            "plugins" => AppPaths.BundledPluginsDirectory,
-            "logs" => AppPaths.LogsRoot,
-            "data" => AppPaths.DataRoot,
-            _ => null,
-        };
-
-        if (path is null || !Directory.Exists(path))
-        {
-            return;
-        }
-
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{path}\"")
-            {
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            _log.Warn($"could not open the {root} folder: {ex.Message}");
-        }
-    }
 
     private void Save()
     {

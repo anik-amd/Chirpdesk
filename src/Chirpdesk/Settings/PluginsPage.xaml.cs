@@ -5,11 +5,14 @@ using System.Windows.Media;
 using Chirpdesk.Core.Definitions;
 using Chirpdesk.Core.Integrations;
 using Chirpdesk.Core.Logging;
+using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Plugins;
+using Chirpdesk.Core.Storage;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Hosting;
 using Chirpdesk.Integrations;
 using Chirpdesk.Repository;
+using Chirpdesk.Storage;
 using Chirpdesk.Ui;
 
 namespace Chirpdesk.Settings;
@@ -35,6 +38,9 @@ public partial class PluginsPage : UserControl
     private readonly Func<string, Task<bool>> _uninstallPlugin;
     private readonly Action _reloadPlugins;
     private readonly IntegrationRuntimeHost? _integrations;
+    private readonly Func<string, Task> _removeInstance;
+    private List<OrphanItem> _cleanerOrphans = [];
+    private bool _cleanerScanned;
     private readonly HashSet<string> _removedPlugins = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
@@ -57,7 +63,8 @@ public partial class PluginsPage : UserControl
         RepositoryService repositories,
         Func<string, Task<bool>> uninstallPlugin,
         Action reloadPlugins,
-        IntegrationRuntimeHost? integrations = null)
+        IntegrationRuntimeHost? integrations = null,
+        Func<string, Task>? removeInstance = null)
     {
         InitializeComponent();
         _catalog = catalog;
@@ -74,6 +81,7 @@ public partial class PluginsPage : UserControl
         _uninstallPlugin = uninstallPlugin;
         _reloadPlugins = reloadPlugins;
         _integrations = integrations;
+        _removeInstance = removeInstance ?? (_ => Task.CompletedTask);
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
@@ -248,6 +256,16 @@ public partial class PluginsPage : UserControl
             };
             off.Click += async (_, _) => await Run(_disable, definition);
             actions.Children.Add(off);
+
+            var serviceSettings = new Button
+            {
+                Content = "Settings",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 6),
+            };
+            serviceSettings.Click += (_, _) => OpenServiceSettings(definition.Id, definition.Name);
+            actions.Children.Add(serviceSettings);
 
             if (installedPlugin is { } installedService)
             {
@@ -498,6 +516,16 @@ public partial class PluginsPage : UserControl
                     OpenFolder(Path.Combine(AppPaths.DataRoot, "integrations", plugin.Id));
                 actions.Children.Add(dataFolder);
             }
+
+            var pluginSettings = new Button
+            {
+                Content = "Settings",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 6),
+            };
+            pluginSettings.Click += (_, _) => OpenPluginSettings(plugin);
+            actions.Children.Add(pluginSettings);
 
             var update = FindUpdate(plugin);
             if (update is { } candidate)
@@ -1455,6 +1483,382 @@ public partial class PluginsPage : UserControl
             _log.Warn($"could not open the folder: {ex.Message}");
         }
     }
+
+    private void OnClosePluginSettings(object sender, RoutedEventArgs e) =>
+        PluginSettingsLayer.Visibility = Visibility.Collapsed;
+
+    private void OpenServiceSettings(string definitionId, string name)
+    {
+        PluginSettingsTitle.Text = $"{name} settings";
+        PluginSettingsBody.Children.Clear();
+
+        var instances = _settings.Services
+            .Where(instance => string.Equals(instance.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (instances.Count == 0)
+        {
+            PluginSettingsBody.Children.Add(new TextBlock
+            {
+                Text = "No accounts yet. Add one to create a separate profile and session.",
+                Foreground = Token("CdTextMuted"),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 12),
+            });
+        }
+
+        foreach (var instance in instances)
+        {
+            var row = new Border
+            {
+                Style = (Style)FindResource("Card"),
+                Margin = new Thickness(0, 0, 0, 8),
+                Padding = new Thickness(12),
+            };
+
+            var content = new StackPanel();
+            var header = new Grid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var labels = new StackPanel();
+            labels.Children.Add(new TextBlock
+            {
+                Text = instance.Name,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13,
+                Foreground = Token("CdText"),
+            });
+            labels.Children.Add(new TextBlock
+            {
+                Text = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm ? "Warm" : "Cold",
+                FontSize = 10,
+                Foreground = Token("CdTextMuted"),
+            });
+            header.Children.Add(labels);
+
+            var remove = new Button
+            {
+                Content = "Remove",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+            };
+            remove.Click += async (_, _) =>
+            {
+                await _removeInstance!(instance.InstanceId);
+                PluginSettingsLayer.Visibility = Visibility.Collapsed;
+                _reloadPlugins();
+            };
+            Grid.SetColumn(remove, 1);
+            header.Children.Add(remove);
+            content.Children.Add(header);
+
+            var switches = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+            switches.Children.Add(Switch(
+                "Warm at boot",
+                instance.WarmAtBoot,
+                value => SaveInstance(instance.InstanceId, item => item.WarmAtBoot = value)));
+            switches.Children.Add(Switch(
+                "Mute",
+                instance.Mute,
+                value => SaveInstance(instance.InstanceId, item => item.Mute = value)));
+            content.Children.Add(switches);
+
+            row.Child = content;
+            PluginSettingsBody.Children.Add(row);
+        }
+
+        var addAccount = new Button
+        {
+            Content = "Add account",
+            Style = (Style)FindResource("PillButton"),
+            Padding = new Thickness(12, 6, 12, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        addAccount.Click += async (_, _) =>
+        {
+            PluginSettingsLayer.Visibility = Visibility.Collapsed;
+            var definition = _catalog.Find(definitionId);
+            if (definition is not null)
+            {
+                await _addAccount(definition);
+                Reload();
+            }
+        };
+        PluginSettingsBody.Children.Add(addAccount);
+
+        PluginSettingsLayer.Visibility = Visibility.Visible;
+    }
+
+    private CheckBox Switch(string label, bool value, Action<bool> changed)
+    {
+        var toggle = new CheckBox
+        {
+            Content = label,
+            IsChecked = value,
+            Style = (Style)FindResource("CdSwitch"),
+            Margin = new Thickness(0, 0, 16, 0),
+        };
+        toggle.Checked += (_, _) => changed(true);
+        toggle.Unchecked += (_, _) => changed(false);
+        return toggle;
+    }
+
+    private void SaveInstance(string instanceId, Action<ServiceInstance> apply)
+    {
+        var settings = _store.Load();
+        var instance = settings.Services.FirstOrDefault(item =>
+            string.Equals(item.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+
+        if (instance is null)
+        {
+            return;
+        }
+
+        apply(instance);
+        _store.Save(settings);
+        _settings = settings;
+    }
+
+    private void OpenPluginSettings(InstalledPlugin plugin)
+    {
+        if (string.Equals(plugin.Id, "tool-cleaner", StringComparison.Ordinal))
+        {
+            PluginSettingsTitle.Text = "Disk cleaner";
+            RenderStorageSettings(plugin);
+            PluginSettingsLayer.Visibility = Visibility.Visible;
+            return;
+        }
+
+        PluginSettingsTitle.Text = $"{plugin.Name} settings";
+        PluginSettingsBody.Children.Clear();
+        PluginSettingsBody.Children.Add(new TextBlock
+        {
+            Text = plugin.Source is { } source
+                ? $"Version {plugin.Version} from {source.RepositoryUrl}"
+                : $"Version {plugin.Version ?? "unknown"}",
+            FontSize = 12,
+            Foreground = Token("CdTextMuted"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
+        PluginSettingsBody.Children.Add(new TextBlock
+        {
+            Text = "Activation and removal are on the plugin card.",
+            FontSize = 12,
+            Foreground = Token("CdTextMuted"),
+            TextWrapping = TextWrapping.Wrap,
+        });
+        PluginSettingsLayer.Visibility = Visibility.Visible;
+    }
+
+    private void RenderStorageSettings(InstalledPlugin plugin)
+    {
+        PluginSettingsBody.Children.Clear();
+
+        var usage = ProfileScanner.ScanAll();
+        var reclaimedMb = _settings.ReclaimedBytes / (1024d * 1024d);
+
+        PluginSettingsBody.Children.Add(new TextBlock
+        {
+            Text = $"Reclaimed {reclaimedMb:0.0} MB since install",
+            FontSize = 11,
+            Foreground = Token("CdTextMuted"),
+            Margin = new Thickness(0, 0, 0, 8),
+        });
+
+        foreach (var profile in usage)
+        {
+            var names = _settings.Services
+                .Where(instance => string.Equals(instance.ProfileId, profile.ProfileId, StringComparison.OrdinalIgnoreCase))
+                .Select(instance => instance.Name)
+                .ToList();
+
+            var warm = _settings.Services
+                .Where(instance => string.Equals(instance.ProfileId, profile.ProfileId, StringComparison.OrdinalIgnoreCase))
+                .Any(instance => _registry.StateOf(instance.InstanceId) == RuntimeState.Warm);
+
+            PluginSettingsBody.Children.Add(new TextBlock
+            {
+                Text = $"{(names.Count > 0 ? string.Join(", ", names) : profile.ProfileId)}  ·  "
+                    + $"data {Megabytes(profile.DataBytes)}, cache {Megabytes(profile.CacheBytes)}  ·  "
+                    + (warm ? "warm" : "cold"),
+                FontSize = 11,
+                Foreground = Token("CdTextMuted"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 1, 0, 1),
+            });
+        }
+
+        if (usage.Count == 0)
+        {
+            PluginSettingsBody.Children.Add(new TextBlock
+            {
+                Text = "No profiles yet.",
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+            });
+        }
+
+        var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 10) };
+        var trim = new Button
+        {
+            Content = "Trim caches",
+            Style = (Style)FindResource("PillButton"),
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 6, 6),
+        };
+        trim.Click += (_, _) => TrimCaches(plugin);
+        actions.Children.Add(trim);
+
+        var scan = new Button
+        {
+            Content = "Scan for leftovers",
+            Style = (Style)FindResource("GhostButton"),
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 6, 6),
+        };
+        scan.Click += (_, _) => ScanOrphans(plugin);
+        actions.Children.Add(scan);
+
+        var folder = new Button
+        {
+            Content = "Open profile folder",
+            Style = (Style)FindResource("GhostButton"),
+            Padding = new Thickness(12, 6, 12, 6),
+            Margin = new Thickness(0, 0, 6, 6),
+        };
+        folder.Click += (_, _) => OpenFolder(AppPaths.ProfilesRoot);
+        actions.Children.Add(folder);
+        PluginSettingsBody.Children.Add(actions);
+
+        PluginSettingsBody.Children.Add(new TextBlock
+        {
+            Text = "Cookies, Local Storage, IndexedDB and Service Worker are the session and are never trimmed.",
+            FontSize = 11,
+            Foreground = Token("CdTextMuted"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 10),
+        });
+
+        PluginSettingsBody.Children.Add(new TextBlock
+        {
+            Text = !_cleanerScanned
+                ? "Leftovers not scanned yet."
+                : _cleanerOrphans.Count == 0
+                    ? "Scan complete: no leftovers found."
+                    : $"{_cleanerOrphans.Count} leftover(s) found. Nothing is pre-selected.",
+            FontSize = 11,
+            Foreground = Token("CdTextMuted"),
+            Margin = new Thickness(0, 0, 0, 6),
+        });
+
+        foreach (var orphan in _cleanerOrphans)
+        {
+            var row = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{orphan.ProfileId ?? Path.GetFileName(orphan.Path)}  ·  {orphan.App}  ·  {Megabytes(orphan.Bytes)}",
+                FontSize = 11,
+                Foreground = Token("CdTextMuted"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+            var recycle = new Button
+            {
+                Content = "Recycle",
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(8, 4, 8, 4),
+                Tag = orphan,
+            };
+            recycle.Click += (_, _) => RecycleOrphan(plugin, orphan);
+            Grid.SetColumn(recycle, 1);
+            row.Children.Add(recycle);
+            PluginSettingsBody.Children.Add(row);
+        }
+    }
+
+    private void TrimCaches(InstalledPlugin plugin)
+    {
+        var candidates = PlanTrim();
+        long reclaimed = 0;
+
+        foreach (var candidate in candidates)
+        {
+            reclaimed += CacheTrimmer.Trim(candidate, _log);
+        }
+
+        if (reclaimed > 0)
+        {
+            _settings.ReclaimedBytes += reclaimed;
+            _store.Save(_settings);
+        }
+
+        RenderStorageSettings(plugin);
+    }
+
+    private IReadOnlyList<TrimCandidate> PlanTrim()
+    {
+        var usage = ProfileScanner.ScanAll();
+        var profiles = new List<ProfileCache>();
+
+        foreach (var profile in usage)
+        {
+            var warm = _settings.Services
+                .Where(instance => string.Equals(instance.ProfileId, profile.ProfileId, StringComparison.OrdinalIgnoreCase))
+                .Any(instance => _registry.StateOf(instance.InstanceId) == RuntimeState.Warm);
+
+            profiles.Add(new ProfileCache(
+                profile.ProfileId,
+                Path.Combine(AppPaths.ProfilesRoot, profile.ProfileId),
+                profile.CacheBytes,
+                Disposed: !warm,
+                profile.LastWrite));
+        }
+
+        return TrimPlanner.Plan(
+            profiles,
+            _settings.CacheBudgetMb * 1024L * 1024L,
+            _settings.GlobalCacheBudgetMb * 1024L * 1024L).Candidates;
+    }
+
+    private void ScanOrphans(InstalledPlugin plugin)
+    {
+        var referenced = _settings.Services
+            .Select(instance => instance.ProfileId ?? instance.InstanceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _cleanerOrphans = OrphanScanner.Scan(
+            AppPaths.ProfilesRoot,
+            referenced,
+            KnownRoots.ForThisUser(),
+            KnownRoots.IsInUse).ToList();
+        _cleanerScanned = true;
+        RenderStorageSettings(plugin);
+    }
+
+    private void RecycleOrphan(InstalledPlugin plugin, OrphanItem orphan)
+    {
+        if (MessageBox.Show(
+                $"Move '{orphan.Path}' to the Recycle Bin?",
+                "Remove leftover",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning) != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        if (OrphanDeleter.Delete(orphan, _log))
+        {
+            _cleanerOrphans.Remove(orphan);
+            RenderStorageSettings(plugin);
+        }
+    }
+
+    private static string Megabytes(long bytes) => $"{bytes / (1024d * 1024d):0.0} MB";
 
     private async Task RunIntegrationAsync(Func<Task> action)
     {

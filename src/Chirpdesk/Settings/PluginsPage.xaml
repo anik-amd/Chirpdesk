@@ -290,6 +290,49 @@
             </Border>
         </Grid>
 
+        <!-- Per-plugin settings: service accounts, boot/mute state, and the cleaner's storage tools. -->
+        <Grid x:Name="PluginSettingsLayer"
+              Grid.RowSpan="3"
+              Panel.ZIndex="70"
+              Background="#99000000"
+              Visibility="Collapsed">
+            <Border Width="640"
+                    MaxHeight="680"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource CdPalette}"
+                    BorderBrush="{DynamicResource CdRule}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="24">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="PluginSettingsTitle"
+                               Text="Plugin settings"
+                               FontFamily="{StaticResource CdDisplayFont}"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource CdText}" />
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+                        <StackPanel x:Name="PluginSettingsBody" />
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Button Content="Close"
+                                Style="{StaticResource GhostButton}"
+                                Padding="14,7"
+                                Click="OnClosePluginSettings" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
         <!-- Consent is separate from repository management: it is the last gate before code-adjacent
              content from a third-party repo is written to the user plugin root. -->
         <Grid x:Name="ConsentLayer"

@@ -2488,7 +2488,8 @@ public partial class App : Application
                 _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log),
                 UninstallPluginAsync,
                 ReloadPluginCatalog,
-                _integrations);
+                _integrations,
+                RemoveInstanceAsync);
         }
 
         ShowPage(_pluginsPage);
@@ -2781,6 +2782,30 @@ public partial class App : Application
     }
 
     /// <summary>Uninstalls a user plugin to the Recycle Bin; bundled plugins are not touched.</summary>
+    private async Task RemoveInstanceAsync(string instanceId)
+    {
+        var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+        var settings = store.Load();
+        var instance = settings.Services.FirstOrDefault(item =>
+            string.Equals(item.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+
+        if (instance is null)
+        {
+            return;
+        }
+
+        if (_registry is not null)
+        {
+            await _registry.CloseAsync(instanceId);
+        }
+
+        settings.Services.Remove(instance);
+        store.Save(settings);
+        RefreshServiceRail();
+        UpdateTrayStatus();
+        _log?.Info($"service instance removed: {instanceId}");
+    }
+
     private async Task<bool> UninstallPluginAsync(string pluginId)
     {
         var path = Path.Combine(AppPaths.UserPluginsDirectory, pluginId);
