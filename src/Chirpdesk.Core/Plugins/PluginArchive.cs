@@ -3,10 +3,24 @@ using System.Security.Cryptography;
 
 namespace Chirpdesk.Core.Plugins;
 
+/// <summary>Size, count and executable rules for one plugin kind.</summary>
+public sealed record PluginArchivePolicy(long MaxBytes, int MaxFiles, bool AllowExecutables)
+{
+    /// <summary>Data plugins: small JSON and CSS, never a program.</summary>
+    public static readonly PluginArchivePolicy Data = new(5 * 1024 * 1024, 200, false);
+
+    /// <summary>
+    /// Integration helpers ship an executable and native libraries, so they get a larger budget.
+    /// Only this policy allows executable entries; every other kind keeps the data rules.
+    /// </summary>
+    public static readonly PluginArchivePolicy Integration = new(64 * 1024 * 1024, 300, true);
+}
+
 /// <summary>
-/// Archive policy for repository plugins: bounded size and count, no executable payloads and no
-/// path that can escape the install directory. Extraction stays inside a caller-supplied temp
-/// folder; the caller validates plugin.json before moving it into the live plugin root.
+/// Archive policy for repository plugins: bounded size and count, no executable payloads (except
+/// for integrations) and no path that can escape the install directory. Extraction stays inside a
+/// caller-supplied temp folder; the caller validates plugin.json before moving it into the live
+/// plugin root.
 /// </summary>
 public static class PluginArchive
 {
@@ -19,7 +33,12 @@ public static class PluginArchive
         ".jar", ".vbs", ".vbe", ".js", ".mjs", ".cjs", ".lnk", ".url", ".hta",
     };
 
-    public static bool IsSafeEntry(string? name)
+    public static PluginArchivePolicy PolicyForKind(string? kind) =>
+        string.Equals(kind, PluginLoader.IntegrationKind, StringComparison.Ordinal)
+            ? PluginArchivePolicy.Integration
+            : PluginArchivePolicy.Data;
+
+    public static bool IsSafeEntry(string? name, bool allowExecutables = false)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -45,7 +64,7 @@ public static class PluginArchive
             return false;
         }
 
-        return !ExecutableExtensions.Contains(Path.GetExtension(normalized));
+        return allowExecutables || !ExecutableExtensions.Contains(Path.GetExtension(normalized));
     }
 
     /// <summary>Checks the exact signed size and SHA-256 of a downloaded archive.</summary>
@@ -92,8 +111,17 @@ public static class PluginArchive
     }
 
     /// <summary>Inspects an archive without extracting it. Directory entries are allowed.</summary>
-    public static bool TryInspect(Stream archive, out int files, out long bytes, out string error)
+    public static bool TryInspect(Stream archive, out int files, out long bytes, out string error) =>
+        TryInspect(archive, PluginArchivePolicy.Data, out files, out bytes, out error);
+
+    public static bool TryInspect(
+        Stream archive,
+        PluginArchivePolicy policy,
+        out int files,
+        out long bytes,
+        out string error)
     {
+        ArgumentNullException.ThrowIfNull(policy);
         files = 0;
         bytes = 0;
         error = string.Empty;
@@ -104,7 +132,7 @@ public static class PluginArchive
 
             foreach (var entry in zip.Entries)
             {
-                if (!IsSafeEntry(entry.FullName))
+                if (!IsSafeEntry(entry.FullName, policy.AllowExecutables))
                 {
                     error = $"unsafe archive entry '{entry.FullName}'";
                     return false;
@@ -118,15 +146,15 @@ public static class PluginArchive
                 files++;
                 bytes += entry.Length;
 
-                if (files > MaxFiles)
+                if (files > policy.MaxFiles)
                 {
-                    error = $"archive has more than {MaxFiles} files";
+                    error = $"archive has more than {policy.MaxFiles} files";
                     return false;
                 }
 
-                if (bytes > MaxBytes)
+                if (bytes > policy.MaxBytes)
                 {
-                    error = $"archive expands beyond {MaxBytes} bytes";
+                    error = $"archive expands beyond {policy.MaxBytes} bytes";
                     return false;
                 }
             }
@@ -144,8 +172,16 @@ public static class PluginArchive
     /// Extracts a verified archive beneath <paramref name="destination"/>. The caller owns the
     /// temp folder and moves only a validated plugin folder into the live root.
     /// </summary>
-    public static bool TryExtract(Stream archive, string destination, out string error)
+    public static bool TryExtract(Stream archive, string destination, out string error) =>
+        TryExtract(archive, destination, PluginArchivePolicy.Data, out error);
+
+    public static bool TryExtract(
+        Stream archive,
+        string destination,
+        PluginArchivePolicy policy,
+        out string error)
     {
+        ArgumentNullException.ThrowIfNull(policy);
         error = string.Empty;
 
         try
@@ -157,7 +193,7 @@ public static class PluginArchive
 
             foreach (var entry in zip.Entries)
             {
-                if (!IsSafeEntry(entry.FullName))
+                if (!IsSafeEntry(entry.FullName, policy.AllowExecutables))
                 {
                     error = $"unsafe archive entry '{entry.FullName}'";
                     return false;

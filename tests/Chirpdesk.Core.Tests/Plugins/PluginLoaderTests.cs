@@ -144,6 +144,58 @@ public sealed class PluginLoaderTests : IDisposable
     }
 
     [Fact]
+    public void Process_is_refused_for_a_data_plugin()
+    {
+        var user = Root("user");
+        WritePlugin(user, "example-chat",
+            Manifest("example-chat", permissions: """["process"]"""),
+            ServiceJson(id: "example-chat", name: "Example Chat"));
+
+        var result = Load(User(user));
+
+        Assert.Empty(result.Definitions);
+        Assert.Contains(result.Errors, e => e.Contains("integration-only", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void An_integration_must_declare_process()
+    {
+        var user = Root("user");
+        WritePlugin(user, "telegram-tdlib",
+            Manifest("telegram-tdlib", kind: "integration", name: "Telegram", permissions: """["notifications"]"""));
+
+        var installed = PluginLoader.LoadInstalledPlugins([User(user)]);
+
+        Assert.DoesNotContain(installed, plugin => plugin.Id == "telegram-tdlib");
+    }
+
+    [Fact]
+    public void An_integration_may_declare_its_own_permissions()
+    {
+        var user = Root("user");
+        WritePlugin(user, "telegram-tdlib",
+            Manifest("telegram-tdlib", kind: "integration", name: "Telegram",
+                permissions: """["process","notifications","unread","commands"]"""));
+
+        var installed = PluginLoader.LoadInstalledPlugins([User(user)]);
+
+        Assert.Contains(installed, plugin => plugin.Id == "telegram-tdlib" && plugin.Kind == "integration");
+    }
+
+    [Fact]
+    public void A_data_permission_is_refused_for_an_integration()
+    {
+        var user = Root("user");
+        WritePlugin(user, "telegram-tdlib",
+            Manifest("telegram-tdlib", kind: "integration", name: "Telegram",
+                permissions: """["process","css"]"""));
+
+        var installed = PluginLoader.LoadInstalledPlugins([User(user)]);
+
+        Assert.DoesNotContain(installed, plugin => plugin.Id == "telegram-tdlib");
+    }
+
+    [Fact]
     public void A_user_plugin_shadows_a_bundled_plugin_with_the_same_id()
     {
         var bundled = Root("bundled");

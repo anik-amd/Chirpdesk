@@ -142,6 +142,71 @@ public sealed class RepositoryTests : IDisposable
     }
 
     [Fact]
+    public void Executables_are_refused_for_data_plugins_and_allowed_for_integrations()
+    {
+        using var archive = new MemoryStream();
+
+        using (var zip = new ZipArchive(archive, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("helper.exe");
+            using var stream = entry.Open();
+            stream.Write([0x4D, 0x5A]);
+        }
+
+        archive.Position = 0;
+        Assert.False(PluginArchive.TryInspect(archive, out _, out _, out var dataError));
+        Assert.Contains("unsafe", dataError, StringComparison.Ordinal);
+
+        archive.Position = 0;
+        Assert.True(
+            PluginArchive.TryInspect(archive, PluginArchivePolicy.Integration, out _, out _, out var integrationError),
+            integrationError);
+    }
+
+    [Fact]
+    public void An_archive_that_expands_past_the_data_limit_is_refused()
+    {
+        using var archive = new MemoryStream();
+
+        using (var zip = new ZipArchive(archive, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("payload.bin", CompressionLevel.NoCompression);
+            using var stream = entry.Open();
+            stream.Write(new byte[6 * 1024 * 1024]);
+        }
+
+        archive.Position = 0;
+        Assert.False(PluginArchive.TryInspect(archive, out _, out _, out var dataError));
+        Assert.Contains("expands", dataError, StringComparison.Ordinal);
+
+        archive.Position = 0;
+        Assert.True(
+            PluginArchive.TryInspect(archive, PluginArchivePolicy.Integration, out _, out _, out var integrationError),
+            integrationError);
+    }
+
+    [Fact]
+    public void The_index_size_limit_depends_on_the_kind()
+    {
+        var theme = IndexJson
+            .Replace("\"kind\": \"filter\"", "\"kind\": \"theme\"", StringComparison.Ordinal)
+            .Replace("\"size\": 18432", "\"size\": 10485760", StringComparison.Ordinal);
+
+        Assert.Null(RepositoryIndexCodec.TryRead(theme, out var themeError));
+        Assert.Contains("limit", themeError, StringComparison.Ordinal);
+
+        var integration = theme.Replace("\"kind\": \"theme\"", "\"kind\": \"integration\"", StringComparison.Ordinal);
+
+        Assert.NotNull(RepositoryIndexCodec.TryRead(integration, out var integrationError));
+        Assert.Null(integrationError);
+
+        var oversized = integration.Replace("\"size\": 10485760", "\"size\": 73400320", StringComparison.Ordinal);
+
+        Assert.Null(RepositoryIndexCodec.TryRead(oversized, out var oversizedError));
+        Assert.Contains("limit", oversizedError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Extraction_stays_beneath_the_destination()
     {
         Directory.CreateDirectory(_dir);

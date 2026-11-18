@@ -1,7 +1,9 @@
 # Phase 7 - Out-of-process integrations
 
-**Status:** designed (2026-11-18). No code yet. ADR 0016 and `docs/integrations.md` are the
-contract; the tasks below are ordered so every step is testable without a real messenger helper.
+**Status:** designed (2026-11-18); task 1 is implemented. ADR 0016 and `docs/integrations.md`
+are the contract; the tasks below are ordered so every step is testable without a real messenger
+helper. Task 1 landed the integration manifest/codec/loader, the integration-only permission
+matrix, kind-aware archive policies and the missing `TryInspect` enforcement before extraction.
 
 **ADR:** 0007 (data plugins, code out-of-process), 0016 (this boundary)
 **Plan:** `PLAN.md` §4.1, phase 7 row

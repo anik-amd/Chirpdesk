@@ -36,6 +36,8 @@ public static partial class PluginLoader
 {
     public const string ServiceKind = "service";
 
+    public const string IntegrationKind = "integration";
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -47,23 +49,35 @@ public static partial class PluginLoader
 
     private static readonly HashSet<string> Kinds = new(StringComparer.Ordinal)
     {
-        ServiceKind, "theme", "filter", "tool", "integration",
+        ServiceKind, "theme", "filter", "tool", IntegrationKind,
     };
 
     private static readonly HashSet<string> KnownPermissions = new(StringComparer.Ordinal)
     {
         "css", "notifications", "filters", "tools", "read-storage", "trim-cache", "storage",
-        "inject-js", "process",
+        "inject-js", "process", "unread", "commands",
     };
 
     private static readonly HashSet<string> UnavailablePermissions = new(StringComparer.Ordinal)
     {
-        "inject-js", "process",
+        "inject-js",
     };
 
     private static readonly HashSet<string> BundledOnlyPermissions = new(StringComparer.Ordinal)
     {
         "tools", "read-storage", "trim-cache", "storage",
+    };
+
+    /// <summary>The only permissions an integration may declare; `process` is mandatory.</summary>
+    private static readonly HashSet<string> IntegrationPermissions = new(StringComparer.Ordinal)
+    {
+        "process", "notifications", "unread", "commands",
+    };
+
+    /// <summary>Permissions that exist only for a helper process, never for a data plugin.</summary>
+    private static readonly HashSet<string> IntegrationOnlyPermissions = new(StringComparer.Ordinal)
+    {
+        "process", "unread", "commands",
     };
 
     /// <summary>
@@ -549,7 +563,10 @@ public static partial class PluginLoader
                 $"targets apiVersion {manifest.ApiVersion}; this host supports {DefinitionValidator.HostApiVersion}");
         }
 
-        foreach (var permission in manifest.Permissions ?? [])
+        var isIntegration = string.Equals(manifest.Kind, IntegrationKind, StringComparison.Ordinal);
+        var declared = manifest.Permissions ?? [];
+
+        foreach (var permission in declared)
         {
             if (!KnownPermissions.Contains(permission))
             {
@@ -563,10 +580,31 @@ public static partial class PluginLoader
                 continue;
             }
 
+            if (isIntegration)
+            {
+                if (!IntegrationPermissions.Contains(permission))
+                {
+                    problems.Add($"permission '{permission}' is not available to integrations");
+                }
+
+                continue;
+            }
+
+            if (IntegrationOnlyPermissions.Contains(permission))
+            {
+                problems.Add($"permission '{permission}' is integration-only");
+                continue;
+            }
+
             if (!bundled && BundledOnlyPermissions.Contains(permission))
             {
                 problems.Add($"permission '{permission}' is bundled-only in v1");
             }
+        }
+
+        if (isIntegration && !declared.Contains("process", StringComparer.Ordinal))
+        {
+            problems.Add("integration must declare the 'process' permission");
         }
 
         foreach (var asset in manifest.Assets ?? [])

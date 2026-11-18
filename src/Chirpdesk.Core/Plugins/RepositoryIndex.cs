@@ -167,7 +167,7 @@ public static partial class RepositoryIndexCodec
             return "sha256 is not 64 hex characters";
         }
 
-        if (plugin.Size <= 0 || plugin.Size > PluginArchive.MaxBytes)
+        if (plugin.Size <= 0 || plugin.Size > PluginArchive.PolicyForKind(plugin.Kind).MaxBytes)
         {
             return "size is outside the archive limit";
         }

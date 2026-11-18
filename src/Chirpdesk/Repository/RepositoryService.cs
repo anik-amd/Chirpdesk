@@ -208,9 +208,19 @@ internal sealed class RepositoryService
                 return new RepositoryInstallResult(false, payloadError);
             }
 
+            var archivePolicy = PluginArchive.PolicyForKind(plugin.Kind);
+
             using (var archive = File.OpenRead(archivePath))
             {
-                if (!PluginArchive.TryExtract(archive, extracted, out var extractError))
+                if (!PluginArchive.TryInspect(archive, archivePolicy, out _, out _, out var inspectError))
+                {
+                    return new RepositoryInstallResult(false, inspectError);
+                }
+            }
+
+            using (var archive = File.OpenRead(archivePath))
+            {
+                if (!PluginArchive.TryExtract(archive, extracted, archivePolicy, out var extractError))
                 {
                     return new RepositoryInstallResult(false, extractError);
                 }
