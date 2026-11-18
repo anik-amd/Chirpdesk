@@ -108,18 +108,25 @@
             </StackPanel>
         </Grid>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,16">
-            <RadioButton x:Name="InstalledTabButton"
-                         Content="Installed"
-                         GroupName="PluginsTabs"
-                         IsChecked="True"
-                         Style="{StaticResource PluginTab}"
-                         Checked="OnShowInstalled" />
-            <RadioButton x:Name="BrowseTabButton"
-                         Content="Browse"
-                         GroupName="PluginsTabs"
-                         Style="{StaticResource PluginTab}"
-                         Checked="OnShowBrowse" />
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="InstalledTabButton"
+                             Content="Installed"
+                             GroupName="PluginsTabs"
+                             IsChecked="True"
+                             Style="{StaticResource PluginTab}"
+                             Checked="OnShowInstalled" />
+                <RadioButton x:Name="BrowseTabButton"
+                             Content="Browse"
+                             GroupName="PluginsTabs"
+                             Style="{StaticResource PluginTab}"
+                             Checked="OnShowBrowse" />
+            </StackPanel>
+            <TextBlock x:Name="RepositoryStatus"
+                       Style="{StaticResource MutedText}"
+                       Text=""
+                       TextWrapping="Wrap"
+                       Margin="0,6,0,0" />
         </StackPanel>
 
         <ScrollViewer x:Name="InstalledTab" Grid.Row="2" VerticalScrollBarVisibility="Auto">
@@ -181,11 +188,6 @@
                                    Foreground="{DynamicResource CdTextMuted}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,10" />
-                        <TextBlock x:Name="RepositoryStatus"
-                                   Style="{StaticResource MutedText}"
-                                   Text="No repositories configured."
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,4" />
                     </StackPanel>
                 </Border>
 
