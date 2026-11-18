@@ -382,7 +382,7 @@ A repo is a static HTTPS directory with `index.json`, `index.json.sig` (ECDSA P-
 
 Install order, aborting on any failure: fetch index + signature → verify against the pinned repo key → skip incompatible entries → download archive, verify `sha256` **from the signed index** and `size` → unpack rejecting absolute paths, `..`, reparse points and zip-slip → validate `plugin.json` + payload → move into `%APPDATA%\Chirpdesk\plugins\<id>\` → enable only if the user asked.
 
-TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. The Plugins page has a Repositories section for adding, syncing and removing a repository; installed repository plugins are installed disabled and need an explicit enable. Installing, updating, rolling back or uninstalling a data plugin rebuilds the catalogue immediately; no app restart is required.
+TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. The Plugins page has a Repositories section for adding, syncing and removing a repository; before anything is written, the install consent sheet shows the source repository, version, kind, key fingerprint, archive hash and declared permissions. Installed repository plugins are installed disabled and need an explicit enable. Installing, updating, rolling back or uninstalling a data plugin rebuilds the catalogue immediately; no app restart is required.
 
 Build and sign the official registry with:
 

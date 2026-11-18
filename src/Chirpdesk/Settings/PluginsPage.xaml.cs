@@ -36,6 +36,7 @@ public partial class PluginsPage : UserControl
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
     private RepositorySetting? _editingRepository;
+    private (RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)? _pendingInstall;
     private AppSettings _settings;
 
     internal PluginsPage(
@@ -473,7 +474,7 @@ public partial class PluginsPage : UserControl
                     Margin = new Thickness(14, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
-                install.Click += async (_, _) => await InstallPluginAsync(repository, index, plugin);
+                install.Click += (_, _) => OpenInstallConsent(repository, index, plugin);
                 Grid.SetColumn(install, 1);
                 content.Children.Add(install);
 
@@ -749,6 +750,120 @@ public partial class PluginsPage : UserControl
         _keyChanges.Remove(repository.Url);
         await SyncRepositoryAsync(repository, trustNewKey: true);
     }
+
+    private void OpenInstallConsent(RepositorySetting repository, RepositoryIndex index, RepositoryPlugin plugin)
+    {
+        _pendingInstall = (repository, index, plugin);
+        ConsentTitle.Text = $"Install {plugin.Name} {plugin.Version}?";
+        ConsentBody.Children.Clear();
+
+        AddConsentLine("Source", string.IsNullOrWhiteSpace(repository.Name) ? repository.Url : repository.Name);
+        AddConsentLine("Version", plugin.Version);
+        AddConsentLine("Kind", plugin.Kind);
+        AddConsentLine("Repository key", repository.KeyFingerprint);
+        AddConsentLine("Archive SHA-256", plugin.Sha256);
+
+        ConsentBody.Children.Add(new TextBlock
+        {
+            Text = "Permissions",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Token("CdText"),
+            Margin = new Thickness(0, 14, 0, 4),
+        });
+
+        if (plugin.Permissions is not { Count: > 0 })
+        {
+            ConsentBody.Children.Add(new TextBlock
+            {
+                Text = "No additional permissions.",
+                FontSize = 12,
+                Foreground = Token("CdTextMuted"),
+            });
+        }
+        else
+        {
+            foreach (var permission in plugin.Permissions)
+            {
+                ConsentBody.Children.Add(new TextBlock
+                {
+                    Text = $"\u2022 {permission}: {PermissionDescription(permission)}",
+                    FontSize = 12,
+                    Foreground = Token("CdTextMuted"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 2, 0, 2),
+                });
+            }
+        }
+
+        ConsentBody.Children.Add(new TextBlock
+        {
+            Text = "Chirpdesk verifies the signed index and the archive before writing anything. Plugin code is not loaded in-process; v1 plugins are data only.",
+            FontSize = 11,
+            Foreground = Token("CdTextMuted"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 14, 0, 0),
+        });
+
+        ConsentLayer.Visibility = Visibility.Visible;
+    }
+
+    private void OnCancelConsent(object sender, RoutedEventArgs e)
+    {
+        _pendingInstall = null;
+        ConsentLayer.Visibility = Visibility.Collapsed;
+    }
+
+    private async void OnConfirmConsent(object sender, RoutedEventArgs e)
+    {
+        if (_pendingInstall is not { } pending)
+        {
+            return;
+        }
+
+        _pendingInstall = null;
+        ConsentLayer.Visibility = Visibility.Collapsed;
+        await InstallPluginAsync(pending.Repository, pending.Index, pending.Plugin);
+    }
+
+    private void AddConsentLine(string label, string? value)
+    {
+        var grid = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        grid.Children.Add(new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            Foreground = Token("CdTextMuted"),
+        });
+
+        var text = new TextBlock
+        {
+            Text = value ?? "\u2014",
+            FontSize = 11,
+            Foreground = Token("CdText"),
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        ConsentBody.Children.Add(grid);
+    }
+
+    private static string PermissionDescription(string permission) => permission switch
+    {
+        "css" => "inject a stylesheet into the plugin's own service page",
+        "notifications" => "receive notification events from its service",
+        "filters" => "contribute ad and tracker host rules",
+        "tools" => "declare a host-rendered tool panel (bundled only)",
+        "read-storage" => "read per-service size reports (bundled only)",
+        "trim-cache" => "request cache trims (bundled only)",
+        "storage" => "own a profile directory (bundled only)",
+        "inject-js" => "run JavaScript in the page origin (not granted in v1)",
+        "process" => "start a helper process (integration only)",
+        _ => "unknown permission; installation will be refused",
+    };
 
     private async Task InstallPluginAsync(RepositorySetting repository, RepositoryIndex index, RepositoryPlugin plugin)
     {

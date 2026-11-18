@@ -164,5 +164,54 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!-- Consent is separate from repository management: it is the last gate before code-adjacent
+             content from a third-party repo is written to the user plugin root. -->
+        <Grid x:Name="ConsentLayer"
+              Grid.RowSpan="2"
+              Panel.ZIndex="60"
+              Background="#99000000"
+              Visibility="Collapsed">
+            <Border Width="520"
+                    MaxHeight="560"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource CdPalette}"
+                    BorderBrush="{DynamicResource CdRule}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="24">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock x:Name="ConsentTitle"
+                               Text="Install plugin?"
+                               FontFamily="{StaticResource CdDisplayFont}"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource CdText}" />
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,10,0,0">
+                        <StackPanel x:Name="ConsentBody" />
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                        <Button Content="Cancel"
+                                Style="{StaticResource GhostButton}"
+                                Padding="14,7"
+                                Click="OnCancelConsent" />
+                        <Button Content="Install"
+                                Style="{StaticResource PillButton}"
+                                Padding="14,8"
+                                Margin="8,0,0,0"
+                                Click="OnConfirmConsent" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>
