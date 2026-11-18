@@ -91,9 +91,9 @@ Record results in `docs/measurements.md` with date, build SHA and RAM/disk numbe
 
 ## 6. CI
 
-- `windows-latest`: `dotnet build -warnaserror`, `dotnet test --filter Category!=Integration`, plugin/filter JSON-schema validation, artifact zip on tags.
+- `windows-latest`: `dotnet build -warnaserror`, `dotnet test --filter Category!=Integration`, and JSON Schema validation of every `plugin.json` plus `registry/index.json` (`scripts/validate-schemas.py`).
 - No webview, no toast, no network to chat services in CI — by design.
-- A release tag additionally runs the installer build and signature step (phase 6).
+- A release tag builds the installer and portable zip and leaves a **draft** release. Signing is manual because the key is offline; CI never sees it.
 
 ## 7. Known gaps (accepted)
 

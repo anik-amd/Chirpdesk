@@ -41,7 +41,7 @@ Current bundled service plugins: `whatsapp`, `messenger`, `telegram`, `facebook`
 | `theme` | `theme.json` with `variants[]` (+ `preview.png`) | no | bundled / repo | after v1 (ADR 0010) |
 | `filter` | `filters.json` | no | bundled / repo | phase 3 |
 | `tool` | `panel.json` (host-rendered primitives) | no | **bundled only** | phase 2 |
-| `integration` | executable + `integration.json` | **yes** | explicit consent, out-of-process | phase 7, never in-process |
+| `integration` | executable + `integration.json` | **yes** | explicit consent, out-of-process | phase 7 design, [`integrations.md`](integrations.md) |
 
 ## 3. Folder layout
 
@@ -351,6 +351,8 @@ Plugin management is built-in shell UI, never a tool action.
 
 `inject-js` is not available in v1: page JS can read the authenticated session. The built-in notification shim and theme script are host code, not a plugin permission.
 
+Integration plugins declare only `process`, `notifications`, `unread` and `commands`; the phase 7 contract is in [`integrations.md`](integrations.md). `unread` and `commands` are not accepted by the loader until that phase lands.
+
 ## 10. Validation, lifecycle and failure
 
 1. At startup, scan `<install>\plugins\` then `%APPDATA%\Chirpdesk\plugins\`. A missing folder is fine.
@@ -367,7 +369,7 @@ Plugin management is built-in shell UI, never a tool action.
 
 - Data plugins cannot execute code. No reflection, no script host, no expression evaluator.
 - `skin.css` and cosmetic CSS are sanitised: `@import` removed, remote `url()` removed, only local `assets` may be referenced.
-- Integrations (phase 7) run as separate processes, JSON-RPC over a named pipe, with a timeout/`kill`, and never get a webview handle or the settings store.
+- Integrations (phase 7) run as separate processes, JSON-RPC over a named pipe, with a timeout/`kill`, and never get a webview handle or the settings store. The executable is resolved by plain file name and its hash is re-checked at launch; see [`integrations.md`](integrations.md).
 - A plugin id may not shadow a reserved id (`core`, `settings`, `command-bar`).
 
 ## 12. Versioning

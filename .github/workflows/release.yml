@@ -67,6 +67,15 @@ jobs:
       - name: Build
         run: dotnet build --no-restore -c Release
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate plugin and repository schemas
+        run: |
+          python -m pip install --quiet jsonschema==4.26.0
+          python scripts/validate-schemas.py
+
       - name: Unit tests
         run: dotnet test --no-build -c Release --filter "Category!=Integration"
 
