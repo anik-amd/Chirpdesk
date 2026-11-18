@@ -46,6 +46,18 @@ public class BarStateTests
     }
 
     [Fact]
+    public void Tabs_highlight_the_active_tab_and_stay_sticky_on_control_release()
+    {
+        var bar = BarState.ForTabs(Warm, activeId: "telegram");
+
+        Assert.Equal(BarMode.Tabs, bar.Mode);
+        Assert.Equal("telegram", bar.Selected);
+        Assert.Null(bar.ReleaseControl());
+        Assert.Equal(BarMode.Tabs, bar.Mode);
+        Assert.True(bar.IsOpen);
+    }
+
+    [Fact]
     public void Search_starts_empty_so_results_can_be_filled_in()
     {
         var bar = BarState.ForSearch();

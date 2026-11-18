@@ -18,6 +18,16 @@ internal static partial class SettingsValidator
             ? AppSettings.CurrentSchemaVersion
             : settings.SchemaVersion;
 
+        // Existing installs predate auto-warmup: pin their services so the hidden-warm
+        // behaviour is on by default without forcing the user to reopen Settings.
+        if (settings.SchemaVersion < 4)
+        {
+            foreach (var instance in settings.Services)
+            {
+                instance.WarmAtBoot = true;
+            }
+        }
+
         settings.Theme = Theming.ThemeDecision.ToStorageValue(Theming.ThemeDecision.Parse(settings.Theme));
 
         settings.RailMode = settings.RailMode?.Trim().ToLowerInvariant() switch

@@ -63,7 +63,7 @@ public sealed class SettingsMigrationTests : IDisposable
     }
 
     [Fact]
-    public void A_v2_file_migrates_to_v3_without_losing_instances()
+    public void A_v2_file_migrates_to_the_current_schema_without_losing_instances()
     {
         Directory.CreateDirectory(_dir);
         File.WriteAllText(SettingsPath, """
@@ -95,11 +95,35 @@ public sealed class SettingsMigrationTests : IDisposable
     }
 
     [Fact]
-    public void A_v3_file_is_left_alone()
+    public void A_v3_file_pins_existing_services_for_auto_warmup()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(SettingsPath, """
+            {
+              "schemaVersion": 3,
+              "services": [
+                {
+                  "instanceId": "whatsapp",
+                  "definitionId": "whatsapp",
+                  "name": "WhatsApp",
+                  "warmAtBoot": false
+                }
+              ]
+            }
+            """);
+
+        var loaded = new SettingsStore(SettingsPath, NullLog.Instance).Load();
+
+        Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
+        Assert.True(Assert.Single(loaded.Services).WarmAtBoot);
+    }
+
+    [Fact]
+    public void A_v4_file_is_left_alone()
     {
         Directory.CreateDirectory(_dir);
         var original = """
-            { "schemaVersion": 3, "services": [] }
+            { "schemaVersion": 4, "services": [] }
             """;
         File.WriteAllText(SettingsPath, original);
 

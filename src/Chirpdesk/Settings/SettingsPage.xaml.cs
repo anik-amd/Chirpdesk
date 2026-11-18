@@ -339,7 +339,7 @@ public partial class SettingsPage : UserControl
         {
             ServicesPanel.Children.Add(new TextBlock
             {
-                Text = "No services yet. Open Plugins & services from Ctrl+P and activate one.",
+                Text = "No services yet. Open Plugins & services from Ctrl+K and activate one.",
                 Foreground = Token("CdTextMuted"),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,

@@ -3,7 +3,7 @@
 **Your chats, out of the way.**
 
 Chirpdesk is a Windows tray app that keeps your web messengers warm in the background and turns
-their notifications into real Windows toasts. One window, one tray icon, `Ctrl+P` when you need it.
+their notifications into real Windows toasts. One window, one tray icon, `Ctrl+K` when you need it.
 
 It is not an Electron app and does not bundle a browser. It uses the WebView2 runtime that ships
 with Windows and keeps each account in its own profile.
@@ -39,12 +39,13 @@ tray menu to stop it.
 | Action | How |
 |---|---|
 | Show the window | Tray icon, or launch Chirpdesk again |
-| Open the palette | `Ctrl+P` |
+| Open the palette | `Ctrl+K` |
+| List open tabs | `Ctrl+Shift+K` |
 | Switch chats | `Ctrl+Tab` while the palette is open |
 | Close a tab | `Ctrl+W` |
 | Back / close a page | `Esc` |
 | Second account | Plugins & services → Add account |
-| Blocking for one tab | `Ctrl+P` → “Turn blocking off for this tab” |
+| Blocking for one tab | `Ctrl+K` → “Turn blocking off for this tab” |
 
 The palette lists open chats and inactive service plugins. Type to search tabs, plugins and
 commands.

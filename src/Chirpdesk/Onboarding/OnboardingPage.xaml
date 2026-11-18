@@ -81,7 +81,7 @@
                                        VerticalAlignment="Center" />
                         </Border>
                         <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                            <TextBlock Text="Press Ctrl+P"
+                            <TextBlock Text="Press Ctrl+K"
                                        FontSize="14"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource CdText}" />
@@ -137,7 +137,7 @@
         </StackPanel>
 
         <TextBlock Grid.Row="1"
-                   Text="Ctrl+P  palette     Ctrl+Tab  switch chat     Esc  back"
+                   Text="Ctrl+K  palette     Ctrl+Shift+K  tabs     Ctrl+Tab  cycle     Esc  back"
                    Style="{StaticResource MutedText}"
                    FontFamily="{StaticResource CdMonoFont}"
                    FontSize="11"

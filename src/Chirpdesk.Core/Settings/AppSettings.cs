@@ -3,7 +3,7 @@ namespace Chirpdesk.Core.Settings;
 /// <summary>The whole user configuration. Small enough to rewrite atomically on every change.</summary>
 public sealed class AppSettings
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     public const int DefaultCacheBudgetMb = 60;
     public const int DefaultGlobalCacheBudgetMb = 180;

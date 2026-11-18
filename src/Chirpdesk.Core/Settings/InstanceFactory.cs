@@ -44,7 +44,7 @@ public static class InstanceFactory
             DefinitionId = definition.Id,
             Name = name,
             Url = null,
-            WarmAtBoot = false,
+            WarmAtBoot = true,
             ProfileId = id,
             Order = order,
         };

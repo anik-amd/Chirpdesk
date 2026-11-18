@@ -125,7 +125,7 @@ This is the file to write when adding a site. Field names are camelCase; JSON co
 | `url` | yes | absolute `https`, no credentials (`user:pass@`) | yes |
 | `icon` | no | bare file name; no `/`, `\` or `..` | validated, not rendered yet |
 | `unreadRegex` | no | valid .NET regex; first capture group is the count; default `\((\d+)\)` | yes |
-| `aliases` | no | at most 16 short search aliases, each ≤ 32 chars (e.g. `wa`) | yes, Ctrl+P |
+| `aliases` | no | at most 16 short search aliases, each ≤ 32 chars (e.g. `wa`) | yes, Ctrl+K |
 | `notificationMode` | no | `native` \| `shim` \| `title-only`; see §5.2 | yes |
 | `pageDarkMode` | no | `off` \| `auto`; see §5.1 | yes |
 | `userAgent` | no | user-agent override string | accepted, not applied yet |

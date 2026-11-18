@@ -5,6 +5,7 @@ namespace Chirpdesk.Interop;
 /// <summary>Every P/Invoke lives here. Nothing else in the app declares one.</summary>
 internal static class NativeMethods
 {
+    internal delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
     internal const int GwlExStyle = -20;
     internal const long WsExToolWindow = 0x0000_0080L;
     internal const long WsExAppWindow = 0x0004_0000L;
@@ -31,6 +32,22 @@ internal static class NativeMethods
     internal static extern int GetCurrentProcessExplicitAppUserModelID(out nint appUserModelId);
 
     [DllImport("user32.dll")]
+    internal static extern nint SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, nint hMod, uint dwThreadId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnhookWindowsHookEx(nint hhk);
+
+    [DllImport("user32.dll")]
+    internal static extern nint CallNextHookEx(nint hhk, int nCode, nint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
+
+    [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hWnd);
 
@@ -52,33 +69,9 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetCursorPos(out NativePoint point);
 
-    internal const int AwHide = 0x0001_0000;
-    internal const int AwBlend = 0x0002_0000;
-    internal const int SwHide = 0;
-    internal const int SwShow = 5;
-    internal const uint SwpNoZorder = 0x0004;
-    internal const uint SwpNoActivate = 0x0010;
-    internal const uint SwpNoCopyBits = 0x0100;
-    internal const uint RdwInvalidate = 0x0001;
-    internal const uint RdwUpdatenow = 0x0100;
-    internal const uint RdwNoerase = 0x0020;
-    internal const uint RdwAllchildren = 0x0080;
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool ShowWindow(nint hWnd, int nCmdShow);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool RedrawWindow(nint hwnd, nint lprc, nint hrgn, uint flags);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool AnimateWindow(nint hWnd, int dwTime, int dwFlags);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+    internal const int WhKeyboardLl = 13;
+    internal const int WmKeyDown = 0x0100;
+    internal const int WmSysKeyDown = 0x0104;
 
     internal const int WmGetMinMaxInfo = 0x0024;
     internal const uint MonitorDefaultToNearest = 0x0000_0002;
@@ -95,9 +88,6 @@ internal static class NativeMethods
 
     [DllImport("dwmapi.dll")]
     internal static extern int DwmSetWindowAttribute(nint hWnd, int attribute, ref int value, int size);
-
-    [DllImport("dwmapi.dll")]
-    internal static extern int DwmFlush();
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct MonitorInfo
@@ -127,7 +117,8 @@ internal static class NativeMethods
 
     /// <summary>
     /// Used by the Command Bar to commit on Ctrl release; WebView2 never delivers that key-up
-    /// (ADR 0002). Polled, not hooked, so no input goes through the app.
+    /// (ADR 0002). The modifier watcher polls these; the Command Bar hotkey is the one
+    /// keyboard hook, installed in App.
     /// </summary>
     internal static bool IsControlDown() => IsKeyDown(VkControl);
 

@@ -17,15 +17,19 @@ namespace Chirpdesk.Hosting;
 /// <summary>A shortcut pressed inside the page that the host should handle instead.</summary>
 public sealed class ServiceShortcutEventArgs : EventArgs
 {
-    public ServiceShortcutEventArgs(bool search, int direction, bool closeTab = false)
+    public ServiceShortcutEventArgs(bool search, int direction, bool closeTab = false, bool tabs = false)
     {
         Search = search;
         Direction = direction;
         CloseTab = closeTab;
+        Tabs = tabs;
     }
 
-    /// <summary>True for Ctrl+P; false for the cycle shortcut.</summary>
+    /// <summary>True for Ctrl+K; false for the cycle shortcut.</summary>
     public bool Search { get; }
+
+    /// <summary>True for the sticky Ctrl+Shift+K tab list.</summary>
+    public bool Tabs { get; }
 
     /// <summary>+1 for forward cycling, -1 for Shift+Tab.</summary>
     public int Direction { get; }
@@ -217,8 +221,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     }
 
     /// <summary>
-    /// Raised when the page has focus and the user presses Ctrl+Tab or Ctrl+P, which the page
-    /// would otherwise swallow as a browser shortcut. The app opens the one Command Bar.
+    /// Raised when the page has focus and the user presses Ctrl+Tab, Ctrl+K or Ctrl+Shift+K,
+    /// which the page would otherwise swallow as a browser shortcut. The app opens the one
+    /// Command Bar.
     /// </summary>
     public event EventHandler<ServiceShortcutEventArgs>? ShortcutRequested;
 
@@ -243,29 +248,11 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// resizing the WebView2. Collapsing would force a reflow; hiding the HWND keeps the page
     /// still so the captured backdrop and the restored page are the same frame.
     /// </summary>
-    public void CollapseForCommandBar()
-    {
-        if (_view.Handle != nint.Zero)
-        {
-            NativeMethods.ShowWindow(_view.Handle, NativeMethods.SwHide);
-        }
-        else
-        {
-            _view.Visibility = Visibility.Hidden;
-        }
-    }
+    public void CollapseForCommandBar() => _view.Visibility = Visibility.Collapsed;
 
     public void RestoreFromCommandBar()
     {
-        if (_view.Handle != nint.Zero)
-        {
-            NativeMethods.ShowWindow(_view.Handle, NativeMethods.SwShow);
-        }
-        else
-        {
-            _view.Visibility = Visibility.Visible;
-        }
-
+        _view.Visibility = Visibility.Visible;
         _host.UpdateLayout();
         FocusPage();
     }
@@ -325,7 +312,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         const int WmKeyDown = 0x0100;
         const int WmSysKeyDown = 0x0104;
         const int VkTab = 0x09;
-        const int VkP = 0x50;
+        const int VkK = 0x4B;
         const int VkW = 0x57;
 
         if ((msg != WmKeyDown && msg != WmSysKeyDown) || !NativeMethods.IsControlDown())
@@ -342,10 +329,15 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 this,
                 new ServiceShortcutEventArgs(search: false, NativeMethods.IsShiftDown() ? -1 : 1));
         }
-        else if (key == VkP && !NativeMethods.IsShiftDown())
+        else if (key == VkK)
         {
             handled = true;
-            ShortcutRequested?.Invoke(this, new ServiceShortcutEventArgs(search: true, direction: 1));
+            ShortcutRequested?.Invoke(
+                this,
+                new ServiceShortcutEventArgs(
+                    search: !NativeMethods.IsShiftDown(),
+                    direction: 1,
+                    tabs: NativeMethods.IsShiftDown()));
         }
         else if (key == VkW)
         {
@@ -448,11 +440,6 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     {
         _host.SetServiceContent(_view);
 
-        if (_view.Handle != nint.Zero)
-        {
-            NativeMethods.ShowWindow(_view.Handle, NativeMethods.SwShow);
-        }
-
         _view.Width = double.NaN;
         _view.Height = double.NaN;
         _view.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -493,15 +480,6 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _view.Width = double.NaN;
         _view.Height = double.NaN;
         _host.UpdateLayout();
-
-        if (_view.Handle != nint.Zero)
-        {
-            NativeMethods.RedrawWindow(
-                _view.Handle,
-                nint.Zero,
-                nint.Zero,
-                NativeMethods.RdwInvalidate | NativeMethods.RdwUpdatenow | NativeMethods.RdwNoerase);
-        }
 
         _log.Info($"webview '{_instance.InstanceId}' synced to {width:0}x{height:0}");
     }

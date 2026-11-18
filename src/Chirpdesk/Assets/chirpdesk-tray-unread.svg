@@ -7,5 +7,6 @@
         fill="none" stroke="#2F5A4C" stroke-width="1.6"
         stroke-linecap="round" stroke-linejoin="round"/>
 
-  <circle cx="27" cy="6" r="3.4" fill="#E4574C" stroke="#10171A" stroke-width="1.2"/>
+  <circle cx="23" cy="9" r="7.5" fill="#FFFFFF"/>
+  <circle cx="23" cy="9" r="6" fill="#E4574C"/>
 </svg>

@@ -103,7 +103,7 @@ Base commit `dfc9a18` (two warm services: WhatsApp and Telegram).
 
 This is higher than the phase-0 single-service reading (547 MB) because it includes two chat clients plus their service-worker/renderer processes. It sits close to the per-warm-service cost the plan warns about; record it before promising three warm services.
 
-**Manual evidence gathered during phase 1.** `Ctrl+Tab`/`Ctrl+Shift+Tab` cycles warm tabs; `Ctrl+P` lists open tabs and filters (`tel` ranks Telegram first); `Up`/`Down`/`Tab` move the highlight; `Esc` hides; `Ctrl+W` closes the highlighted tab and the next takes over; palette scroll survives open/close (CDP: `scrollTop=300` before, open and after); page focus returns on close; five bundled definitions load from `plugins/`; a user plugin in `%APPDATA%\Chirpdesk\plugins` loaded as a sixth definition before removal.
+**Manual evidence gathered during phase 1.** `Ctrl+Tab`/`Ctrl+Shift+Tab` cycles warm tabs; `Ctrl+K` lists open tabs and filters (`tel` ranks Telegram first); `Up`/`Down`/`Tab` move the highlight; `Esc` hides; `Ctrl+W` closes the highlighted tab and the next takes over; palette scroll survives open/close (CDP: `scrollTop=300` before, open and after); page focus returns on close; five bundled definitions load from `plugins/`; a user plugin in `%APPDATA%\Chirpdesk\plugins` loaded as a sixth definition before removal.
 
 **Not yet covered by hand.** Two WhatsApp accounts signed in simultaneously; a cold service started from search; a real inbound message while the palette is open; three warm services RAM; sleep/standby delivery. These remain in `docs/testing-strategy.md` §5.
 

@@ -103,7 +103,9 @@ public static class BarKeys
             return new BarKeyAction(BarKeyActionKind.Backspace);
         }
 
-        if (key == BarKey.Enter && bar.Mode == BarMode.Search && bar.Selected is not null)
+        if (key == BarKey.Enter
+            && bar.Mode is BarMode.Search or BarMode.Tabs
+            && bar.Selected is not null)
         {
             return new BarKeyAction(BarKeyActionKind.Commit);
         }

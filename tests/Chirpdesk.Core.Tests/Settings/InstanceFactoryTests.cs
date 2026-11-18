@@ -21,7 +21,7 @@ public class InstanceFactoryTests
         Assert.Equal("whatsapp", instance.DefinitionId);
         Assert.Equal("WhatsApp", instance.Name);
         Assert.Null(instance.Url);
-        Assert.False(instance.WarmAtBoot);
+        Assert.True(instance.WarmAtBoot);
         Assert.Equal(instance.InstanceId, instance.ProfileId);
     }
 

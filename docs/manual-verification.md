@@ -21,12 +21,12 @@ desktop session.
 ## Window chrome and motion
 
 - Maximize with the taskbar at the top: the whole title bar including minimize/maximize/close stays below the taskbar, and restore returns to the previous bounds.
-- The app animates maximize/restore, minimize and close; the command palette fades/slides and pages fade in.
+- Maximize/restore and minimize use the native Windows animation; hiding to the tray is immediate, with no fade. The command palette appears over the captured page frame without a fade-out of the page.
 - Windows 11 shows rounded outer corners; Windows 10 keeps the square frame.
 - The title bar shows the app mark before the name.
 - A 2 px accent bar runs along the bottom of the title bar while the active tab is loading.
-- Resize to roughly 360 px wide and open `Ctrl+P`: the palette, query, rows and hint stay inside the window instead of clipping.
-- Open `Ctrl+P` while Settings or Plugins is showing: the palette opens **over the page**, and closing it returns to the same page, not to the chat.
+- Resize to roughly 360 px wide and open `Ctrl+K`: the palette, query, rows and hint stay inside the window instead of clipping.
+- Open `Ctrl+K` while Settings or Plugins is showing: the palette opens **over the page**, and closing it returns to the same page, not to the chat.
 
 ## Side rail
 
@@ -39,26 +39,29 @@ desktop session.
 
 - Taskbar, Alt+Tab, the window title bar and the tray all show the paper-bubble mark; the tray glyph stays readable on a light and a dark taskbar.
 - At 100 % and 150 % scaling, the 16 px frame still reads as a bubble with the amber pin, not a blurry square.
+- Send an unread message: the tray shows a red badge with a white ring on the top-right of the bubble; it is visible on both a light and a dark taskbar, and the tooltip names the unread total.
 
 ## Settings and plugins pages
 
-- Open `Ctrl+P` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
+- Open `Ctrl+K` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
 - Switch the theme in Settings between light, dark and system: the page, palette and warm pages repaint immediately, with no restart and no flash of the old palette.
 - In Appearance, pick a light palette (Latte) and a dark palette (Frappé, Macchiato or Mocha) separately. The light choice should apply while the app is light and the dark choice while it is dark.
 - Turn on a Windows contrast theme: Chirpdesk should repaint with system colours; toggling it back should restore the normal palette without a restart.
 - At 150 % scaling, check that plugin cards and service rows do not clip their descriptions or buttons.
-- Open `Ctrl+P` → **Plugins & services**: installed plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state. Plugins are broader than services: filter packs, themes and tools share the same ecosystem. Expect service plugins, the bundled `page-dark` theme, `catppuccin`, the `filters-core` filter pack and the bundled cleaner.
+- Open `Ctrl+K` → **Plugins & services**: installed plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state. Plugins are broader than services: filter packs, themes and tools share the same ecosystem. Expect service plugins, the bundled `page-dark` theme, `catppuccin`, the `filters-core` filter pack and the bundled cleaner.
 - Toggle `page-dark` off: warm pages stop being inverted; toggle it on again and they invert without a restart.
 - Toggle `filters-core` off: the next page load has no ad rules; toggle it on again and rules return.
-- Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+P` afterwards.
+- Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+K` afterwards.
 - Add a second account from the same plugin; both should appear in the palette with their own sessions.
 - Turn the plugin off: runtimes sleep, sessions are not signed out. Turn it on again: the session should still be there.
 - Tray → Settings must show the same page, not a popup.
 
 ## Command palette
 
-- `Ctrl+P` opens the **Command palette** with a real text caret. Type normally; `Ctrl+A`, copy/cut/paste, Home/End, Delete and mouse selection work. `Up`/`Down` and `Tab` move the list, `Enter` activates, `Esc` goes back.
+- `Ctrl+K` opens the **Command palette** with a real text caret. Type normally; `Ctrl+A`, copy/cut/paste, Home/End, Delete and mouse selection work. `Up`/`Down` and `Tab` move the list, `Enter` activates, `Esc` goes back.
 - The empty palette lists open tabs plus inactive service plugins (dimmed icons). Type `settings` or `plugin` to reveal commands.
+- `Ctrl+Shift+K` opens the same open-tab list as a sticky palette, with the active tab highlighted; `Enter` switches, `Esc` closes.
+- Hold `Ctrl` and press `Tab` (or `Ctrl+Shift+Tab`): the same tab list appears and the highlight cycles; releasing `Ctrl` switches to the highlighted tab.
 - Type `plugin` to see plugin actions: inactive plugins activate on Enter; active plugins show `Deactivate …`.
 - Service icons are real brand glyphs from Simple Icons (CC0); unread counts show at the right of each tab row.
 - Selecting a cold/asleep service wakes it without re-pairing.
@@ -85,7 +88,7 @@ desktop session.
 ## Blocking
 
 - With `filters-core` active, log in and send a message on WhatsApp, Messenger and Telegram. Nothing about login, WebSocket or updates may break.
-- Open `Ctrl+P` and run **Turn blocking off for this tab**. The choice is per account and survives a restart; Settings shows `blocking off` for that row.
+- Open `Ctrl+K` and run **Turn blocking off for this tab**. The choice is per account and survives a restart; Settings shows `blocking off` for that row.
 - With blocking on, Settings shows `blocking on · N blocked` once the page has requested a known ad host. Reload the page a few times if the count is still zero.
 - Corrupt `plugins\filters-core\filters.json` beside `Chirpdesk.exe` (or copy the pack to `%APPDATA%\Chirpdesk\plugins\filters-core\` and corrupt that copy), restart: every service still logs in and the log reports the pack as skipped.
 

@@ -5,12 +5,13 @@ public enum BarMode
     Closed,
     Cycle,
     Search,
+    Tabs,
 }
 
 /// <summary>
 /// The Command Bar's mode, highlight and query, with no WPF in it. Cycle starts on the next
-/// service in MRU order; Ctrl+P opens search directly; only a Ctrl release while still in
-/// cycle mode commits (ADR 0002).
+/// service in MRU order; Ctrl+K opens search directly; Ctrl+Shift+K opens the sticky tab list;
+/// only a Ctrl release while still in cycle mode commits (ADR 0002).
 /// </summary>
 public sealed class BarState
 {
@@ -35,7 +36,18 @@ public sealed class BarState
         return state;
     }
 
-    /// <summary>Ctrl+P opens directly here; results are filled in as the query changes.</summary>
+    /// <summary>Ctrl+Shift+K opens the sticky list of open tabs, highlighted on the active one.</summary>
+    public static BarState ForTabs(IReadOnlyList<string> entries, string? activeId)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+
+        var state = new BarState(entries) { Mode = BarMode.Tabs };
+        var index = activeId is null ? -1 : state._entries.IndexOf(activeId);
+        state._highlight = index >= 0 ? index : (state._entries.Count > 0 ? 0 : -1);
+        return state;
+    }
+
+    /// <summary>Ctrl+K opens directly here; results are filled in as the query changes.</summary>
     public static BarState ForSearch() => new([]) { Mode = BarMode.Search };
 
     /// <summary>

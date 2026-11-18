@@ -117,7 +117,7 @@ public partial class HostWindow : Window
 
         RailActions.Children.Clear();
         RailActions.Children.Add(RailAction("plus", "Add a chat", (_, _) => RailAddRequested?.Invoke(this, EventArgs.Empty), accent: true));
-        RailActions.Children.Add(RailAction("search", "Command palette (Ctrl+P)", (_, _) => RailSearchRequested?.Invoke(this, EventArgs.Empty)));
+        RailActions.Children.Add(RailAction("search", "Command palette (Ctrl+K)", (_, _) => RailSearchRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("plugins", "Plugins & services", (_, _) => RailPluginsRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("settings", "Settings", (_, _) => RailSettingsRequested?.Invoke(this, EventArgs.Empty)));
     }
@@ -572,39 +572,15 @@ public partial class HostWindow : Window
 
         _visibilityToken++;
         BeginAnimation(OpacityProperty, null);
+        Opacity = 1;
 
         if (_railMode == ServiceRailMode.Hover)
         {
             _railHoverTimer.Start();
         }
 
-        if (SystemParameters.ClientAreaAnimation)
-        {
-            Opacity = 0;
-        }
-        else
-        {
-            Opacity = 1;
-        }
-
         Show();
         Activate();
-
-        if (SystemParameters.ClientAreaAnimation)
-        {
-            var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-
-            fade.Completed += (_, _) =>
-            {
-                BeginAnimation(OpacityProperty, null);
-                Opacity = 1;
-            };
-
-            BeginAnimation(OpacityProperty, fade);
-        }
 
         // Activate() alone loses to Windows' foreground lock when the request came from a
         // toast; asking directly is the only lever a desktop app has.
@@ -615,11 +591,6 @@ public partial class HostWindow : Window
     public void HideToBackground()
     {
         _railHoverTimer.Stop();
-
-        if (SystemParameters.ClientAreaAnimation && IsVisible)
-        {
-            NativeMethods.AnimateWindow(Handle, 180, NativeMethods.AwBlend | NativeMethods.AwHide);
-        }
 
         Hide();
         Opacity = 1;
@@ -668,116 +639,18 @@ public partial class HostWindow : Window
 
     private void ToggleMaximize()
     {
-        if (WindowState == WindowState.Maximized)
-        {
-            WindowState = WindowState.Normal;
-            return;
-        }
-
-        AnimateBounds(SystemParameters.WorkArea);
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
     }
 
     private void UpdateMaximizeGlyph() =>
         MaximizeButton.Content = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
 
-    /// <summary>Animates the four window bounds together; the content follows the real window.</summary>
-    private void AnimateBounds(Rect target)
-    {
-        if (!SystemParameters.ClientAreaAnimation)
-        {
-            ApplyBounds(target);
-            return;
-        }
-
-        var from = new Rect(Left, Top, Width, Height);
-        var start = Stopwatch.StartNew();
-        EventHandler? handler = null;
-
-        handler = (_, _) =>
-        {
-            var progress = Math.Min(1d, start.Elapsed.TotalMilliseconds / 260d);
-            var eased = progress < 0.5
-                ? 2 * progress * progress
-                : 1 - Math.Pow(-2 * progress + 2, 2) / 2;
-
-            var bounds = new Rect(
-                from.Left + (target.Left - from.Left) * eased,
-                from.Top + (target.Top - from.Top) * eased,
-                from.Width + (target.Width - from.Width) * eased,
-                from.Height + (target.Height - from.Height) * eased);
-
-            ApplyBounds(bounds);
-
-            if (progress >= 1)
-            {
-                CompositionTarget.Rendering -= handler;
-                ApplyBounds(target);
-            }
-        };
-
-        CompositionTarget.Rendering += handler;
-    }
-
-    private void ApplyBounds(Rect bounds)
-    {
-        var dpi = VisualTreeHelper.GetDpi(this);
-        _ = NativeMethods.SetWindowPos(
-            Handle,
-            IntPtr.Zero,
-            (int)Math.Round(bounds.Left * dpi.DpiScaleX),
-            (int)Math.Round(bounds.Top * dpi.DpiScaleY),
-            (int)Math.Round(bounds.Width * dpi.DpiScaleX),
-            (int)Math.Round(bounds.Height * dpi.DpiScaleY),
-            NativeMethods.SwpNoZorder | NativeMethods.SwpNoActivate | NativeMethods.SwpNoCopyBits);
-
-        Left = bounds.Left;
-        Top = bounds.Top;
-        Width = bounds.Width;
-        Height = bounds.Height;
-        UpdateLayout();
-
-        if (true)
-        {
-            NativeMethods.RedrawWindow(
-                Handle,
-                nint.Zero,
-                nint.Zero,
-                NativeMethods.RdwInvalidate | NativeMethods.RdwUpdatenow | NativeMethods.RdwNoerase | NativeMethods.RdwAllchildren);
-        }
-
-        _ = NativeMethods.DwmFlush();
-    }
-
-    private void FadeInFromTaskbar()
-    {
-        if (!SystemParameters.ClientAreaAnimation)
-        {
-            Opacity = 1;
-            return;
-        }
-
-        Opacity = 0;
-        BeginAnimation(
-            OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
-    }
-
     private void OnStateChanged()
     {
         UpdateMaximizeGlyph();
-
-        if (WindowState == WindowState.Normal && _wasMinimized)
-        {
-            FadeInFromTaskbar();
-        }
-
-        _wasMinimized = WindowState == WindowState.Minimized;
     }
-
-    private bool _wasMinimized;
 
     /// <summary>A 2 px indeterminate bar along the title bar; pure WPF, never over the webview.</summary>
     public void SetBusy(bool busy)

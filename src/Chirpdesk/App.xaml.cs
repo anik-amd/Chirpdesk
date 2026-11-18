@@ -59,6 +59,8 @@ public partial class App : Application
     private ModifierWatcher? _barWatcher;
     private IReadOnlyList<SearchCandidate> _searchCandidates = Array.Empty<SearchCandidate>();
     private bool _barOpening;
+    private IntPtr _keyboardHook;
+    private NativeMethods.LowLevelKeyboardProc? _keyboardHookProc;
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
 
@@ -124,6 +126,7 @@ public partial class App : Application
         _host = new HostWindow();
         _host.Show();
         _host.KeyDown += OnHostKeyDown;
+        InstallKeyboardHook();
         _host.Closing += OnHostClosing;
         _host.HideToTrayRequested += (_, _) => HideHost();
         _host.RailServiceSelected += (_, instanceId) =>
@@ -219,6 +222,13 @@ public partial class App : Application
     {
         ToastActivation.RevokeClassObject();
         _barWatcher?.Detach();
+
+        if (_keyboardHook != IntPtr.Zero)
+        {
+            NativeMethods.UnhookWindowsHookEx(_keyboardHook);
+            _keyboardHook = IntPtr.Zero;
+        }
+
         _tray?.Dispose();
 
         try
@@ -554,6 +564,117 @@ public partial class App : Application
         });
     }
 
+    private void InstallKeyboardHook()
+    {
+        _keyboardHookProc = KeyboardHookCallback;
+        _keyboardHook = NativeMethods.SetWindowsHookEx(
+            NativeMethods.WhKeyboardLl,
+            _keyboardHookProc,
+            IntPtr.Zero,
+            0);
+
+        if (_keyboardHook == IntPtr.Zero)
+        {
+            _log?.Warn("keyboard hook unavailable; command-bar keys fall back to the window");
+        }
+    }
+
+    private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0 && (wParam == (IntPtr)NativeMethods.WmKeyDown || wParam == (IntPtr)NativeMethods.WmSysKeyDown))
+        {
+            var vkCode = Marshal.ReadInt32(lParam);
+            var isCommandKey = vkCode == 0x4B;
+            var isTabKey = vkCode == 0x09;
+
+            if ((isCommandKey || isTabKey) && NativeMethods.IsControlDown())
+            {
+                uint processId = 0;
+                _ = NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out processId);
+
+                if (processId == (uint)Environment.ProcessId)
+                {
+                    var shift = NativeMethods.IsShiftDown();
+
+                    if (isCommandKey)
+                    {
+                        HandleCommandBarHotkey(shift);
+                    }
+                    else
+                    {
+                        HandleTabHotkey(shift);
+                    }
+
+                    return (IntPtr)1;
+                }
+            }
+        }
+
+        return NativeMethods.CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
+    }
+
+    private void HandleCommandBarHotkey(bool shift)
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_host is null || _bar is null || _registry is null)
+            {
+                return;
+            }
+
+            if (shift)
+            {
+                if (_barState is null && !_barOpening)
+                {
+                    _ = OpenTabsBarAsync();
+                }
+                else if (_barState is not null)
+                {
+                    SwitchToTabs();
+                }
+
+                return;
+            }
+
+            if (_barState is null && !_barOpening)
+            {
+                _ = OpenSearchBarAsync();
+            }
+            else if (_barState?.Mode is BarMode.Cycle or BarMode.Tabs)
+            {
+                SwitchToSearch();
+            }
+        }));
+    }
+
+    private void HandleTabHotkey(bool shift)
+    {
+        var direction = shift ? -1 : 1;
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_host is null || _bar is null || _registry is null)
+            {
+                return;
+            }
+
+            if (_barState is not null)
+            {
+                if (_barState.Move(direction))
+                {
+                    RenderCommandBar();
+                }
+
+                return;
+            }
+
+            if (!_barOpening)
+            {
+                _ = OpenCommandBarAsync(direction);
+            }
+        }));
+    }
+
     private void OnHostKeyDown(object sender, KeyEventArgs e)
     {
         if (_host?.IsPageOpen == true)
@@ -574,11 +695,19 @@ public partial class App : Application
                 return;
             }
 
-            if (e.Key == Key.P
-                && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
+            if (e.Key == Key.K && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
             {
                 e.Handled = true;
-                _ = OpenSearchBarAsync();
+
+                if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                {
+                    _ = OpenTabsBarAsync();
+                }
+                else
+                {
+                    _ = OpenSearchBarAsync();
+                }
+
                 return;
             }
 
@@ -590,12 +719,20 @@ public partial class App : Application
             return;
         }
 
-        // Ctrl+P opens the same bar directly in search mode; Ctrl+Shift+P belongs to the page.
-        if (e.Key == Key.P
-            && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
+        // Ctrl+K opens search; Ctrl+Shift+K opens the sticky tab list.
+        if (e.Key == Key.K && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             e.Handled = true;
-            _ = OpenSearchBarAsync();
+
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                _ = OpenTabsBarAsync();
+            }
+            else
+            {
+                _ = OpenSearchBarAsync();
+            }
+
             return;
         }
 
@@ -635,12 +772,15 @@ public partial class App : Application
             return;
         }
 
-        if (e.Key == Key.P
-            && (Keyboard.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == ModifierKeys.Control)
+        if (e.Key == Key.K && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             e.Handled = true;
 
-            if (_barState.Mode == BarMode.Cycle)
+            if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+            {
+                SwitchToTabs();
+            }
+            else if (_barState.Mode is BarMode.Cycle or BarMode.Tabs)
             {
                 SwitchToSearch();
             }
@@ -778,7 +918,11 @@ public partial class App : Application
                 return;
             }
 
-            if (e.Search)
+            if (e.Tabs)
+            {
+                _ = OpenTabsBarAsync();
+            }
+            else if (e.Search)
             {
                 _ = OpenSearchBarAsync();
             }
@@ -828,6 +972,58 @@ public partial class App : Application
             _barWatcher?.Start();
 
             _log?.Info($"command bar opened: {order.Count} warm service(s)");
+        }
+        finally
+        {
+            _barOpening = false;
+        }
+    }
+
+    /// <summary>Ctrl+Shift+K shows the same open-tab list as Ctrl+Tab, but sticky.</summary>
+    private async Task OpenTabsBarAsync()
+    {
+        if (_host is null || _bar is null || _registry is null || _barState is not null || _barOpening)
+        {
+            return;
+        }
+
+        var order = _registry.Order;
+        if (order.Count == 0)
+        {
+            return;
+        }
+
+        _barOpening = true;
+
+        try
+        {
+            var backdrop = await CaptureActiveAsync();
+            if (backdrop is not null)
+            {
+                _lastBackdrop = backdrop;
+            }
+            else
+            {
+                backdrop = _lastBackdrop;
+            }
+
+            if (_barState is not null)
+            {
+                return;
+            }
+
+            _barState = BarState.ForTabs(order, _registry.Active?.InstanceId);
+            RenderCommandBar();
+
+            if (_host.IsPageOpen != true)
+            {
+                _registry.Active?.CollapseForCommandBar();
+            }
+
+            _host.ShowCommandBar(backdrop);
+            _host.Focus();
+
+            _log?.Info($"command bar opened: {order.Count} open tab(s)");
         }
         finally
         {
@@ -896,12 +1092,12 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Ctrl+P while cycling keeps the unified bar open and switches it to search, with the
+    /// Ctrl+K while cycling keeps the unified bar open and switches it to search, with the
     /// highlighted tab still highlighted.
     /// </summary>
     private void SwitchToSearch()
     {
-        if (_barState is null || _barState.Mode != BarMode.Cycle)
+        if (_barState is null || _barState.Mode is not (BarMode.Cycle or BarMode.Tabs))
         {
             return;
         }
@@ -915,6 +1111,23 @@ public partial class App : Application
         _bar?.FocusQuery();
 
         _log?.Info("command bar switched to search mode");
+    }
+
+    /// <summary>Ctrl+Shift+K switches any open bar to the sticky tab list.</summary>
+    private void SwitchToTabs()
+    {
+        if (_barState is null || _registry is null)
+        {
+            return;
+        }
+
+        var keep = _barState.Selected;
+        _barWatcher?.Stop();
+
+        _barState = BarState.ForTabs(_registry.Order, keep ?? _registry.Active?.InstanceId);
+        RenderCommandBar();
+
+        _log?.Info("command bar switched to tab list");
     }
 
     private IReadOnlyList<SearchCandidate> BuildSearchCandidates()

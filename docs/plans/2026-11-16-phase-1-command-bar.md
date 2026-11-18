@@ -107,7 +107,7 @@ Every failure is per-plugin and logged: missing payload, invalid JSON, id mismat
 
 ## Task 5: Command Bar — cycle mode
 
-**Status:** complete (2026-11-17). The bar is an overlay inside `HostWindow` (airspace, ADR 0002); `BarState` in Core owns cycle/release/cancel; `ModifierWatcher` polls Ctrl at 30 ms; opening collapses the active view and closing restores it. Revised same day: no printable-key latch — cycle is a pure switcher, `Ctrl+P` is the only search entry (ADR 0002 revision). Search ranking is Task 6; scroll/focus survival is verified in Task 7.
+**Status:** complete (2026-11-17). The bar is an overlay inside `HostWindow` (airspace, ADR 0002); `BarState` in Core owns cycle/release/cancel; `ModifierWatcher` polls Ctrl at 30 ms; opening collapses the active view and closing restores it. Revised same day: no printable-key latch — cycle is a pure switcher, `Ctrl+K` is the only search entry (ADR 0002 revision). Search ranking is Task 6; scroll/focus survival is verified in Task 7.
 
 **Files:**
 - Create: `src/Chirpdesk/CommandBar/CommandBarWindow.xaml(.cs)`, `BarState.cs`, `ModifierWatcher.cs`
@@ -123,7 +123,7 @@ Size cap 560 × 420, anchored 12 % from the top, centred (§12 budget). Cycle mo
 
 ## Task 6: Search mode and ranking
 
-**Status:** complete (2026-11-17). `Ctrl+P` opens the same bar in search mode over **open tabs only**; MRU order, prefix-over-substring ranking, aliases and host matching. Cold instances and commands are deferred by product decision, so the palette is a tab list, not a command surface yet.
+**Status:** complete (2026-11-17). `Ctrl+K` opens the same bar in search mode over **open tabs only**; MRU order, prefix-over-substring ranking, aliases and host matching. Cold instances and commands are deferred by product decision, so the palette is a tab list, not a command surface yet.
 
 **Files:**
 - Create: `src/Chirpdesk.Core/CommandBar/SearchIndex.cs`
@@ -182,7 +182,7 @@ Reserved while the bar is open: `Ctrl+1..9` activates by position in the visible
 | catalog | instance overrides resolve; definition fallback resolves; unknown id is a clear failure |
 | migration | v1 fixture migrates to v2 without inventing or losing an instance |
 | registry | two warm services park/activate without disposing; shared profile reuses one environment; MRU order after three switches |
-| bar state | cycle wrap, Esc closes the palette, Ctrl+P switch to search keeping the highlight, search filtering, tab close, and reserved `Ctrl+1..9`, all from the pure state machine |
+| bar state | cycle wrap, Esc closes the palette, Ctrl+K switch to search keeping the highlight, search filtering, tab close, and reserved `Ctrl+1..9`, all from the pure state machine |
 
 `scripts/gate.ps1` runs all of it.
 

@@ -88,7 +88,7 @@ public class BarKeyTests
     }
 
     [Fact]
-    public void Enter_commits_only_in_search_and_only_with_a_row()
+    public void Enter_commits_in_search_and_tabs_only_with_a_row()
     {
         Assert.Equal(
             BarKeyActionKind.Commit,
@@ -96,6 +96,11 @@ public class BarKeyTests
         Assert.Equal(
             BarKeyActionKind.None,
             BarKeys.Decide(Cycle(), BarKey.Enter, BarModifiers.None).Kind);
+
+        var tabs = BarState.ForTabs(Warm, activeId: "telegram");
+        Assert.Equal(
+            BarKeyActionKind.Commit,
+            BarKeys.Decide(tabs, BarKey.Enter, BarModifiers.None).Kind);
 
         var empty = BarState.ForSearch();
         empty.Append("zzz");

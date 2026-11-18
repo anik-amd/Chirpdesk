@@ -42,18 +42,53 @@ internal static class TrayIconFactory
         return tray;
     }
 
+    private static BitmapSource? _normal;
+    private static RenderTargetBitmap? _unread;
+
     public static ImageSource CreateIcon(bool unread)
     {
         if (unread)
         {
-            return _unread ??= LoadIcon("chirpdesk-tray-unread.ico");
+            return _unread ??= CreateUnreadIcon();
         }
 
         return _normal ??= LoadIcon("chirpdesk-tray.ico");
     }
 
-    private static BitmapFrame? _normal;
-    private static BitmapFrame? _unread;
+    private static RenderTargetBitmap CreateUnreadIcon()
+    {
+        var baseIcon = LoadIcon("chirpdesk-tray.ico");
+        const int size = 32;
+        const double badgeRadius = 6;
+        const double badgeCenterX = size - 9;
+        const double badgeCenterY = 9;
+
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            context.DrawImage(baseIcon, new Rect(0, 0, size, size));
+
+            // A white ring keeps the badge legible on both light and dark taskbars.
+            context.DrawEllipse(
+                Brushes.White,
+                null,
+                new Point(badgeCenterX, badgeCenterY),
+                badgeRadius + 1.5,
+                badgeRadius + 1.5);
+
+            context.DrawEllipse(
+                new SolidColorBrush(Color.FromRgb(0xE4, 0x57, 0x4C)),
+                null,
+                new Point(badgeCenterX, badgeCenterY),
+                badgeRadius,
+                badgeRadius);
+        }
+
+        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        bitmap.Freeze();
+        return bitmap;
+    }
 
     private static BitmapFrame LoadIcon(string name)
     {
@@ -65,7 +100,6 @@ internal static class TrayIconFactory
             BitmapCreateOptions.None,
             BitmapCacheOption.OnLoad);
 
-        // The largest frame scales cleanly to the 16-32 px tray at every DPI.
         var frame = decoder.Frames.OrderByDescending(item => item.PixelWidth).First();
         frame.Freeze();
         return frame;
