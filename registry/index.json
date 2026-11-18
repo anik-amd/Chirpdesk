@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-18T11:07:18.6948180+00:00",
+  "generated": "2026-11-18T11:30:59.9605871+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -20,12 +20,12 @@
       "id": "element",
       "kind": "service",
       "name": "Element",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "4c7c6890ac278aaddb13405171897b9942ca77873784fe521c541fa9be574f69",
+      "sha256": "fc93e71e8936345877bbf82ff215653c9a1dade7023181278361ae1001751bc6",
       "size": 551,
-      "url": "plugins/element-1.1.0.zip",
+      "url": "plugins/element-1.2.0.zip",
       "permissions": []
     },
     {

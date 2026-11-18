@@ -79,9 +79,12 @@ public partial class PluginsPage : UserControl
         RenderPluginCards();
         RenderAvailablePlugins();
 
+        // Read every repository once per page load: the 4 h cache makes it free offline, and
+        // without an index an installed card cannot know that a newer signed version exists.
         foreach (var repository in _settings.Repositories
-            .Where(item => item.AutoUpdate
-                && (item.LastSync is null || DateTimeOffset.UtcNow - item.LastSync > RepositoryService.CacheTtl))
+            .Where(item => !_synced.ContainsKey(item.Url)
+                || (item.AutoUpdate
+                    && (item.LastSync is null || DateTimeOffset.UtcNow - item.LastSync > RepositoryService.CacheTtl)))
             .ToList())
         {
             _ = SyncRepositoryAsync(repository, trustNewKey: true);
@@ -109,13 +112,6 @@ public partial class PluginsPage : UserControl
         InstalledTab.Visibility = Visibility.Collapsed;
         BrowseTab.Visibility = Visibility.Visible;
         RenderAvailablePlugins();
-
-        // A cache hit costs nothing, so opening Browse is also the moment to fill in any
-        // repository that has not been read this session.
-        foreach (var repository in _settings.Repositories.Where(item => !_synced.ContainsKey(item.Url)).ToList())
-        {
-            _ = SyncRepositoryAsync(repository, trustNewKey: true);
-        }
     }
 
     /// <summary>
@@ -256,16 +252,8 @@ public partial class PluginsPage : UserControl
                         Padding = new Thickness(10, 5, 10, 5),
                         Margin = new Thickness(0, 0, 6, 6),
                     };
-                    updateButton.Click += async (_, _) =>
-                    {
-                        RepositoryStatus.Text = $"Updating {definition.Name}…";
-                        var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
-                        RepositoryStatus.Text = result.Message;
-                        if (result.Ok)
-                        {
-                            _reloadPlugins();
-                        }
-                    };
+                    updateButton.Click += (_, _) =>
+                        OpenPluginDetails(candidate.Repository, candidate.Index, candidate.Plugin);
                     actions.Children.Add(updateButton);
                 }
 
@@ -408,16 +396,8 @@ public partial class PluginsPage : UserControl
                     Padding = new Thickness(10, 5, 10, 5),
                     Margin = new Thickness(0, 0, 6, 6),
                 };
-                updateButton.Click += async (_, _) =>
-                {
-                    RepositoryStatus.Text = $"Updating {plugin.Name}…";
-                    var result = await _repositories.InstallAsync(candidate.Repository, candidate.Index, candidate.Plugin);
-                    RepositoryStatus.Text = result.Message;
-                    if (result.Ok)
-                    {
-                        _reloadPlugins();
-                    }
-                };
+                updateButton.Click += (_, _) =>
+                    OpenPluginDetails(candidate.Repository, candidate.Index, candidate.Plugin);
                 actions.Children.Add(updateButton);
             }
 
