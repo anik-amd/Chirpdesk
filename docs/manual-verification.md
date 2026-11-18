@@ -51,9 +51,9 @@ desktop session.
 - Turn on a Windows contrast theme: Chirpdesk should repaint with system colours; toggling it back should restore the normal palette without a restart.
 - At 150 % scaling, check that plugin cards and service rows do not clip their descriptions or buttons.
 - Open `Ctrl+K` → **Plugins & services**: installed plugins are a grid of cards, each with a real brand icon, its own usage description and On/Off state. Plugins are broader than services: filter packs, themes and tools share the same ecosystem. Expect service plugins, the bundled `page-dark` theme, `catppuccin`, the `filters-core` filter pack and the bundled cleaner.
-- Toggle `page-dark` off: warm pages stop being inverted; toggle it on again and they invert without a restart.
+- Toggle `page-dark` off: open pages stop being inverted; toggle it on again and they invert without a restart.
 - Toggle `filters-core` off: the next page load has no ad rules; toggle it on again and rules return.
-- Turn on **Messenger** (or Facebook): it should add the account, warm its page, and appear in `Ctrl+K` afterwards.
+- Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+K` afterwards.
 - Add a second account from the same plugin; both should appear in the palette with their own sessions. Rename either one from the service settings sheet (Rename → Save name) and confirm the sidebar, sheet and command bar update.
 - Turn the plugin off: runtimes sleep, sessions are not signed out. Turn it on again: the session should still be there.
 - Tray → Settings must show the same page, not a popup.
@@ -123,7 +123,7 @@ desktop session.
 
 ## Measurements still owed
 
-- Three open + one closed after reboot: RAM and disk, plus notifications within 30 s and no boot storm. An idle three-warm run already measured ~1.8 GB total (`docs/measurements.md`), so check whether boot and a cold service change the picture.
+- Three open + one closed after reboot: RAM and disk, plus notifications within 30 s and no boot storm. An idle three-open run already measured ~1.8 GB total (`docs/measurements.md`), so check whether boot and a cold service change the picture.
 - Third account measurement (deferred on purpose).
 
 ## Known gaps

@@ -2,7 +2,7 @@
 
 **Your chats, out of the way.**
 
-Chirpdesk is a Windows tray app that keeps your web messengers warm in the background and turns
+Chirpdesk is a Windows tray app that keeps your web messengers running in the background and turns
 their notifications into real Windows toasts. One window, one tray icon, `Ctrl+K` when you need it.
 
 It is not an Electron app and does not bundle a browser. It uses the WebView2 runtime that ships
