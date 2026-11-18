@@ -44,6 +44,7 @@ internal sealed class RepositoryService
 
     public async Task<RepositorySyncResult> SyncAsync(
         RepositorySetting repository,
+        bool forceRefresh = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryBaseUri(repository.Url, out var baseUri, out var urlError))
@@ -55,7 +56,8 @@ internal sealed class RepositoryService
         {
             var cache = CachePaths(repository.Url);
 
-            if (repository.LastSync is { } lastSync
+            if (!forceRefresh
+                && repository.LastSync is { } lastSync
                 && DateTimeOffset.UtcNow - lastSync < CacheTtl
                 && TryReadCache(cache, repository, out var cached))
             {

@@ -902,7 +902,7 @@ public partial class PluginsPage : UserControl
                 Padding = new Thickness(10, 5, 10, 5),
                 Margin = new Thickness(0, 0, 6, 0),
             };
-            update.Click += async (_, _) => await SyncRepositoryAsync(repository, trustNewKey: true);
+            update.Click += async (_, _) => await SyncRepositoryAsync(repository, trustNewKey: true, forceRefresh: true);
             actions.Children.Add(update);
 
             var edit = new Button
@@ -1045,10 +1045,10 @@ public partial class PluginsPage : UserControl
         await SyncRepositoryAsync(repository, trustNewKey: true);
     }
 
-    private async Task SyncRepositoryAsync(RepositorySetting repository, bool trustNewKey)
+    private async Task SyncRepositoryAsync(RepositorySetting repository, bool trustNewKey, bool forceRefresh = false)
     {
         RepositoryStatus.Text = "Syncing repository…";
-        var result = await _repositories.SyncAsync(repository);
+        var result = await _repositories.SyncAsync(repository, forceRefresh);
 
         if (!result.Ok || result.Index is null)
         {
