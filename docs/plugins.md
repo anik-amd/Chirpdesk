@@ -382,7 +382,18 @@ A repo is a static HTTPS directory with `index.json`, `index.json.sig` (ECDSA P-
 
 Install order, aborting on any failure: fetch index + signature → verify against the pinned repo key → skip incompatible entries → download archive, verify `sha256` **from the signed index** and `size` → unpack rejecting absolute paths, `..`, reparse points and zip-slip → validate `plugin.json` + payload → move into `%APPDATA%\Chirpdesk\plugins\<id>\` → enable only if the user asked.
 
-TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. The Plugins page has a Repositories section for adding, syncing and removing a repository; installed repository plugins are installed disabled and need an explicit enable. Limits: ≤ 5 MB / ≤ 200 files, no executables. Installed plugins work offline; the index is cached for 24 h. Two repos offering one id require an explicit choice per id.
+TOFU pins the repo key on first use; a changed key blocks the repo until the user re-trusts it by fingerprint. The Plugins page has a Repositories section for adding, syncing and removing a repository; installed repository plugins are installed disabled and need an explicit enable.
+
+Build and sign the official registry with:
+
+```powershell
+pwsh scripts/build-registry.ps1 `
+  -KeyPath D:\keys\chirpdesk-registry.pem `
+  -PublicKeyPath D:\keys\chirpdesk-registry.pub.pem `
+  -OutDir dist/registry
+```
+
+The output contains `index.json`, `index.json.sig`, `key.pem` and one zip per plugin. Publish that folder on any static HTTPS host. Limits: ≤ 5 MB / ≤ 200 files, no executables. Installed plugins work offline; the index is cached for 4 h so a machine that is not always on still refreshes promptly. Two repos offering one id require an explicit choice per id.
 
 ## 14. Commands
 

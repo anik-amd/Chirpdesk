@@ -6,7 +6,7 @@ zip-slip/executable rejection all have unit tests. The official registry key is 
 `RepositoryKeys`. A first repository slice is wired: settings rows, HTTPS sync with first-use
 `key.pem` pinning, archive verification/installation into the user plugin root, and a
 Repositories section on the Plugins page. A successful install is disabled by default and asks
-for a restart before the new plugin appears in the catalogue. Still open: 24 h cache, changed-key
+for a restart before the new plugin appears in the catalogue. Still open: 4 h cache, changed-key
 re-trust UI, uninstall/source tracking, automatic updates, signed registry release tooling and
 the full manual matrix.
 

@@ -17,6 +17,9 @@ public static class AppPaths
     /// <summary>Verified installers waiting to be applied. Safe to clear on boot.</summary>
     public static string UpdatesRoot => Path.Combine(DataRoot, "updates");
 
+    /// <summary>Signed repository index cache. Safe to clear at any time.</summary>
+    public static string RepositoryCacheRoot => Path.Combine(DataRoot, "repositories");
+
     public static string LogsRoot => Path.Combine(LocalRoot, "logs");
 
     /// <summary>Bundled plugins that travel beside the executable. Trusted by install location.</summary>

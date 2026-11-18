@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Net.Http;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Plugins;
@@ -11,7 +13,8 @@ internal sealed record RepositorySyncResult(
     string Message,
     RepositoryIndex? Index = null,
     string? PublicKeyPem = null,
-    string? Fingerprint = null);
+    string? Fingerprint = null,
+    bool KeyChanged = false);
 
 internal sealed record RepositoryInstallResult(bool Ok, string Message, string? PluginId = null);
 
@@ -22,6 +25,8 @@ internal sealed record RepositoryInstallResult(bool Ok, string Message, string? 
 /// </summary>
 internal sealed class RepositoryService
 {
+    public static readonly TimeSpan CacheTtl = TimeSpan.FromHours(4);
+
     private static readonly HttpClient Http = new()
     {
         Timeout = TimeSpan.FromSeconds(30),
@@ -47,6 +52,16 @@ internal sealed class RepositoryService
 
         try
         {
+            var cache = CachePaths(repository.Url);
+
+            if (repository.LastSync is { } lastSync
+                && DateTimeOffset.UtcNow - lastSync < CacheTtl
+                && TryReadCache(cache, repository, out var cached))
+            {
+                _log.Info($"repository cache hit: {cached.Index!.Name}");
+                return cached;
+            }
+
             var indexUri = new Uri(baseUri, "index.json");
             var signatureUri = new Uri(baseUri, "index.json.sig");
 
@@ -54,6 +69,7 @@ internal sealed class RepositoryService
             var signatureText = await Http.GetStringAsync(signatureUri, cancellationToken);
 
             string publicKeyPem;
+            var keyUri = new Uri(baseUri, "key.pem");
 
             if (string.IsNullOrWhiteSpace(repository.PublicKeyPem))
             {
@@ -64,7 +80,6 @@ internal sealed class RepositoryService
                         "Repository key is missing; re-trust the repository.");
                 }
 
-                var keyUri = new Uri(baseUri, "key.pem");
                 publicKeyPem = await Http.GetStringAsync(keyUri, cancellationToken);
             }
             else
@@ -74,17 +89,35 @@ internal sealed class RepositoryService
 
             var fingerprint = RepositorySignature.Fingerprint(publicKeyPem);
 
+            if (!RepositorySignature.Verify(indexBytes, signatureText, publicKeyPem, out var signatureError))
+            {
+                // A failed signature with a pinned key is the changed-key case. Fetch the key the
+                // repository currently publishes so the user can compare both fingerprints.
+                var candidate = await Http.GetStringAsync(keyUri, cancellationToken);
+                var candidateFingerprint = RepositorySignature.Fingerprint(candidate);
+
+                if (!string.Equals(candidateFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return new RepositorySyncResult(
+                        false,
+                        $"Repository key changed ({repository.KeyFingerprint} -> {candidateFingerprint}). Compare both fingerprints, then re-trust.",
+                        PublicKeyPem: candidate,
+                        Fingerprint: candidateFingerprint,
+                        KeyChanged: true);
+                }
+
+                return new RepositorySyncResult(false, signatureError);
+            }
+
             if (!string.IsNullOrWhiteSpace(repository.KeyFingerprint)
                 && !string.Equals(repository.KeyFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
             {
                 return new RepositorySyncResult(
                     false,
-                    $"Repository key changed ({repository.KeyFingerprint} -> {fingerprint}). Re-trust it to continue.");
-            }
-
-            if (!RepositorySignature.Verify(indexBytes, signatureText, publicKeyPem, out var signatureError))
-            {
-                return new RepositorySyncResult(false, signatureError);
+                    $"Repository key changed ({repository.KeyFingerprint} -> {fingerprint}). Compare both fingerprints, then re-trust.",
+                    PublicKeyPem: publicKeyPem,
+                    Fingerprint: fingerprint,
+                    KeyChanged: true);
             }
 
             var index = RepositoryIndexCodec.TryRead(
@@ -103,6 +136,7 @@ internal sealed class RepositoryService
                     $"Index fingerprint {index.KeyFingerprint} does not match the repository key {fingerprint}.");
             }
 
+            WriteCache(cache, indexBytes, signatureText);
             _log.Info($"repository synced: {index.Name} ({index.Plugins.Count} plugin(s))");
             return new RepositorySyncResult(true, $"Synced {index.Name}.", index, publicKeyPem, fingerprint);
         }
@@ -218,6 +252,76 @@ internal sealed class RepositoryService
         finally
         {
             TryDeleteDirectory(staging);
+        }
+    }
+
+    private static (string Index, string Signature) CachePaths(string url)
+    {
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url))).ToLowerInvariant();
+        var directory = Path.Combine(AppPaths.RepositoryCacheRoot, key[..24]);
+        return (directory + ".json", directory + ".sig");
+    }
+
+    private bool TryReadCache(
+        (string Index, string Signature) cache,
+        RepositorySetting repository,
+        out RepositorySyncResult result)
+    {
+        result = new RepositorySyncResult(false, string.Empty);
+
+        if (string.IsNullOrWhiteSpace(repository.PublicKeyPem)
+            || !File.Exists(cache.Index)
+            || !File.Exists(cache.Signature))
+        {
+            return false;
+        }
+
+        try
+        {
+            var indexBytes = File.ReadAllBytes(cache.Index);
+            var signature = File.ReadAllText(cache.Signature);
+
+            if (!RepositorySignature.Verify(indexBytes, signature, repository.PublicKeyPem, out _))
+            {
+                return false;
+            }
+
+            var index = RepositoryIndexCodec.TryRead(Encoding.UTF8.GetString(indexBytes), out _);
+            if (index is null
+                || !string.Equals(index.KeyFingerprint, repository.KeyFingerprint, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            result = new RepositorySyncResult(
+                true,
+                $"Using cached {index.Name} (refreshes every {CacheTtl.TotalHours:0} h).",
+                index,
+                repository.PublicKeyPem,
+                repository.KeyFingerprint);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"repository cache read failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private void WriteCache((string Index, string Signature) cache, byte[] indexBytes, string signature)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(cache.Index)!;
+            Directory.CreateDirectory(directory);
+            File.WriteAllBytes(cache.Index + ".tmp", indexBytes);
+            File.WriteAllText(cache.Signature + ".tmp", signature);
+            File.Move(cache.Index + ".tmp", cache.Index, overwrite: true);
+            File.Move(cache.Signature + ".tmp", cache.Signature, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Warn($"repository cache write failed: {ex.Message}");
         }
     }
 

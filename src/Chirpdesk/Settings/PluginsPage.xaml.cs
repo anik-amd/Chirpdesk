@@ -31,6 +31,7 @@ public partial class PluginsPage : UserControl
     private readonly Action _back;
     private readonly RepositoryService _repositories;
     private readonly Dictionary<string, RepositoryIndex> _synced = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (string Pem, string Fingerprint)> _keyChanges = new(StringComparer.OrdinalIgnoreCase);
     private AppSettings _settings;
 
     internal PluginsPage(
@@ -68,6 +69,14 @@ public partial class PluginsPage : UserControl
         _settings = _store.Load();
         PluginsPanel.Children.Clear();
         RenderRepositories();
+
+        foreach (var repository in _settings.Repositories
+            .Where(item => item.AutoUpdate
+                && (item.LastSync is null || DateTimeOffset.UtcNow - item.LastSync > RepositoryService.CacheTtl))
+            .ToList())
+        {
+            _ = SyncRepositoryAsync(repository, trustNewKey: true);
+        }
 
         foreach (var definition in _catalog.Definitions.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
         {
@@ -298,6 +307,17 @@ public partial class PluginsPage : UserControl
                 Margin = new Thickness(0, 4, 0, 8),
             });
 
+            var auto = new CheckBox
+            {
+                Content = "Auto-update",
+                IsChecked = repository.AutoUpdate,
+                Style = (Style)FindResource("CdSwitch"),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            auto.Checked += (_, _) => SetRepositoryAutoUpdate(repository, true);
+            auto.Unchecked += (_, _) => SetRepositoryAutoUpdate(repository, false);
+            content.Children.Add(auto);
+
             var actions = new StackPanel { Orientation = Orientation.Horizontal };
             var sync = new Button
             {
@@ -317,6 +337,29 @@ public partial class PluginsPage : UserControl
             };
             remove.Click += (_, _) => RemoveRepository(repository);
             actions.Children.Add(remove);
+
+            if (_keyChanges.TryGetValue(repository.Url, out var pendingKey))
+            {
+                content.Children.Add(new TextBlock
+                {
+                    Text = $"New key: {pendingKey.Fingerprint}\nOld key: {repository.KeyFingerprint}",
+                    FontSize = 11,
+                    Foreground = Token("CdAccent"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 8, 0, 6),
+                });
+
+                var trust = new Button
+                {
+                    Content = "Trust new key",
+                    Style = (Style)FindResource("PillButton"),
+                    Padding = new Thickness(12, 6, 12, 6),
+                    Margin = new Thickness(0, 0, 8, 0),
+                };
+                trust.Click += async (_, _) => await TrustRepositoryAsync(repository, pendingKey.Pem, pendingKey.Fingerprint);
+                actions.Children.Add(trust);
+            }
+
             content.Children.Add(actions);
             card.Child = content;
             RepositoriesPanel.Children.Add(card);
@@ -415,10 +458,19 @@ public partial class PluginsPage : UserControl
 
         if (!result.Ok || result.Index is null)
         {
+            if (result.KeyChanged
+                && result.PublicKeyPem is not null
+                && result.Fingerprint is not null)
+            {
+                _keyChanges[repository.Url] = (result.PublicKeyPem, result.Fingerprint);
+            }
+
             RepositoryStatus.Text = result.Message;
             RenderRepositories();
             return;
         }
+
+        _keyChanges.Remove(repository.Url);
 
         repository.Name = result.Index.Name;
         repository.PublicKeyPem = result.PublicKeyPem ?? repository.PublicKeyPem;
@@ -430,6 +482,16 @@ public partial class PluginsPage : UserControl
         RenderRepositories();
     }
 
+    private async Task TrustRepositoryAsync(RepositorySetting repository, string publicKeyPem, string fingerprint)
+    {
+        repository.PublicKeyPem = publicKeyPem;
+        repository.KeyFingerprint = fingerprint;
+        repository.LastSync = null;
+        _store.Save(_settings);
+        _keyChanges.Remove(repository.Url);
+        await SyncRepositoryAsync(repository, trustNewKey: true);
+    }
+
     private async Task InstallPluginAsync(RepositorySetting repository, RepositoryIndex index, RepositoryPlugin plugin)
     {
         RepositoryStatus.Text = $"Installing {plugin.Name}…";
@@ -439,6 +501,12 @@ public partial class PluginsPage : UserControl
         {
             RepositoryStatus.Text += " Restart Chirpdesk to load it.";
         }
+    }
+
+    private void SetRepositoryAutoUpdate(RepositorySetting repository, bool enabled)
+    {
+        repository.AutoUpdate = enabled;
+        _store.Save(_settings);
     }
 
     private void RemoveRepository(RepositorySetting repository)
