@@ -182,7 +182,7 @@ internal sealed class RepositoryService
             return new RepositoryInstallResult(false, compatibilityError);
         }
 
-        var staging = Path.Combine(AppPaths.UserPluginsDirectory, ".staging", Guid.NewGuid().ToString("N"));
+        var staging = Path.Combine(AppPaths.PluginStagingRoot, Guid.NewGuid().ToString("N"));
         var archivePath = Path.Combine(staging, "plugin.zip");
         var extracted = Path.Combine(staging, "plugin");
 
@@ -231,6 +231,7 @@ internal sealed class RepositoryService
 
             var target = Path.Combine(AppPaths.UserPluginsDirectory, manifest.Id);
             var backup = Path.Combine(AppPaths.PluginBackupsRoot, manifest.Id);
+            var isUpdate = Directory.Exists(target);
 
             if (Directory.Exists(backup))
             {
@@ -268,12 +269,24 @@ internal sealed class RepositoryService
                 throw;
             }
 
-            var settings = _store.Load();
-            PluginState.SetEnabled(settings, manifest.Id, false);
-            _store.Save(settings);
+            // A fresh install starts disabled so the user opts in; an update keeps whatever
+            // activation state the plugin already had.
+            if (!isUpdate)
+            {
+                var settings = _store.Load();
+                PluginState.SetEnabled(settings, manifest.Id, false);
+                _store.Save(settings);
+            }
 
-            _log.Info($"repository installed plugin '{manifest.Id}' {manifest.Version} disabled");
-            return new RepositoryInstallResult(true, $"Installed {manifest.Name}. Enable it from Plugins.", manifest.Id);
+            _log.Info(isUpdate
+                ? $"repository updated plugin '{manifest.Id}' to {manifest.Version}"
+                : $"repository installed plugin '{manifest.Id}' {manifest.Version} disabled");
+            return new RepositoryInstallResult(
+                true,
+                isUpdate
+                    ? $"Updated {manifest.Name} to {manifest.Version}."
+                    : $"Installed {manifest.Name}. Enable it from Plugins.",
+                manifest.Id);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {

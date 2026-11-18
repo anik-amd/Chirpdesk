@@ -22,6 +22,7 @@ public static class AppPaths
 
     /// <summary>Previous repository-installed plugin versions, outside the live plugin scan root.</summary>
     public static string PluginBackupsRoot => Path.Combine(DataRoot, "plugin-backups");
+    public static string PluginStagingRoot => Path.Combine(DataRoot, "plugin-staging");
 
     public static string LogsRoot => Path.Combine(LocalRoot, "logs");
 

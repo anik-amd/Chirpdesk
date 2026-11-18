@@ -76,7 +76,7 @@ public partial class PluginsPage : UserControl
     public void Reload()
     {
         _settings = _store.Load();
-        PluginsPanel.Children.Clear();
+        RenderPluginCards();
         RenderAvailablePlugins();
 
         foreach (var repository in _settings.Repositories
@@ -86,6 +86,15 @@ public partial class PluginsPage : UserControl
         {
             _ = SyncRepositoryAsync(repository, trustNewKey: true);
         }
+    }
+
+    /// <summary>
+    /// Rebuilds the installed-plugin cards. A sync refreshes the available list on its own, but
+    /// the cards carry their own update and rollback buttons, so a new index has to rebuild them.
+    /// </summary>
+    private void RenderPluginCards()
+    {
+        PluginsPanel.Children.Clear();
 
         foreach (var definition in _catalog.Definitions.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
         {
@@ -833,6 +842,7 @@ public partial class PluginsPage : UserControl
         _store.Save(_settings);
         _synced[repository.Url] = result.Index;
         RepositoryStatus.Text = result.Message;
+        RenderPluginCards();
         RenderAvailablePlugins();
         if (ModalLayer.Visibility == Visibility.Visible)
         {
