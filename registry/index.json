@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-18T18:34:09.8519160+00:00",
+  "generated": "2026-11-18T19:29:58.2172624+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -136,6 +136,18 @@
       "sha256": "a436542be3909f329b1f46dcdffd62985285e3f70b3cc825bdb893b6b97dab55",
       "size": 330,
       "url": "plugins/page-dark-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "reddit",
+      "kind": "service",
+      "name": "Reddit",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "d518df565f5400c1f5a296a5b60db101f7640751f37c6700ffba5ca646fe2eee",
+      "size": 542,
+      "url": "plugins/reddit-1.0.0.zip",
       "permissions": []
     },
     {

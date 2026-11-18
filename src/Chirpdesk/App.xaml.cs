@@ -150,6 +150,7 @@ public partial class App : Application
         };
         _host.RailSearchRequested += (_, _) => _ = OpenSearchBarAsync();
         _host.RailAddRequested += (_, _) => _ = OpenSearchBarAsync();
+        _host.RailServiceCloseRequested += (_, id) => _ = CloseServiceInstanceAsync(id);
         _host.RailPluginsRequested += (_, _) => OpenPlugins();
         _host.RailSettingsRequested += (_, _) => OpenSettings();
         _host.RailAboutRequested += (_, _) => OpenAbout();
@@ -1321,6 +1322,36 @@ public partial class App : Application
         _log?.Info("command bar switched to tab list");
     }
 
+    private static string AccountAwareName(AppSettings settings, ServiceInstance? instance, string serviceName)
+    {
+        if (instance is null)
+        {
+            return serviceName;
+        }
+
+        var accounts = settings.Services
+            .Where(item => string.Equals(item.DefinitionId, instance.DefinitionId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(item => item.Order)
+            .ToList();
+
+        if (accounts.Count < 2)
+        {
+            return serviceName;
+        }
+
+        var index = accounts.FindIndex(item =>
+            string.Equals(item.InstanceId, instance.InstanceId, StringComparison.OrdinalIgnoreCase)) + 1;
+        var accountName = instance.Name;
+
+        if (string.IsNullOrWhiteSpace(accountName)
+            || string.Equals(accountName, serviceName, StringComparison.OrdinalIgnoreCase))
+        {
+            accountName = $"Account {index}";
+        }
+
+        return $"{serviceName} · {accountName}";
+    }
+
     private IReadOnlyList<SearchCandidate> BuildSearchCandidates()
     {
         if (_registry is null)
@@ -1353,9 +1384,13 @@ public partial class App : Application
                 ? _catalog?.Find(definitionId)?.Aliases
                 : null;
 
+            var serviceName = resolved?.DefinitionId is { } serviceDefinitionId
+                ? _catalog?.Find(serviceDefinitionId)?.Name ?? resolved?.Name ?? id
+                : resolved?.Name ?? id;
+
             candidates.Add(new SearchCandidate(
                 id,
-                resolved?.Name ?? _registry.Find(id)?.Name ?? id,
+                AccountAwareName(settings, instance, serviceName),
                 SearchKind.Warm,
                 aliases,
                 HostOf(resolved?.Url),
@@ -1386,7 +1421,7 @@ public partial class App : Application
             var state = _registry.StateOf(instance.InstanceId).ToString().ToLowerInvariant();
             candidates.Add(new SearchCandidate(
                 instance.InstanceId,
-                resolved.Name,
+                AccountAwareName(settings, instance, resolved.Name),
                 SearchKind.Cold,
                 aliases,
                 HostOf(resolved.Url),
@@ -2489,7 +2524,14 @@ public partial class App : Application
                 UninstallPluginAsync,
                 ReloadPluginCatalog,
                 _integrations,
-                RemoveInstanceAsync);
+                RemoveInstanceAsync,
+                ActivateServiceAsync,
+                CloseServiceInstanceAsync,
+                () =>
+                {
+                    RefreshServiceRail();
+                    UpdateTrayStatus();
+                });
         }
 
         ShowPage(_pluginsPage);
@@ -2653,7 +2695,7 @@ public partial class App : Application
         await OpenInstanceAsync(first, show: true, probe: false);
     }
 
-    private async Task AddAccountAsync(ServiceDefinition definition)
+    private async Task AddAccountAsync(ServiceDefinition definition, string? displayName = null)
     {
         if (_log is null)
         {
@@ -2666,7 +2708,10 @@ public partial class App : Application
 
         try
         {
-            instance = InstanceFactory.Create(definition, definition.Name, settings.Services);
+            var existing = settings.Services.Count(item =>
+                string.Equals(item.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase));
+            var fallback = existing == 0 ? definition.Name : $"{definition.Name} {existing + 1}";
+            instance = InstanceFactory.Create(definition, displayName ?? fallback, settings.Services);
         }
         catch (ArgumentException ex)
         {
@@ -2782,6 +2827,21 @@ public partial class App : Application
     }
 
     /// <summary>Uninstalls a user plugin to the Recycle Bin; bundled plugins are not touched.</summary>
+    private async Task CloseServiceInstanceAsync(string instanceId)
+    {
+        if (_registry is null)
+        {
+            return;
+        }
+
+        if (await _registry.SleepAsync(instanceId))
+        {
+            RefreshServiceRail();
+            UpdateTrayStatus();
+            _log?.Info($"closed service: {instanceId}");
+        }
+    }
+
     private async Task RemoveInstanceAsync(string instanceId)
     {
         var store = new SettingsStore(AppPaths.SettingsFile, _log!);

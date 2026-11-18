@@ -1,0 +1,11 @@
+{
+  "id": "reddit",
+  "kind": "service",
+  "name": "Reddit",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Reddit chat. Open to add an account; the feed opens in its own profile.",
+  "permissions": [],
+  "accent": "#FF4500"
+}

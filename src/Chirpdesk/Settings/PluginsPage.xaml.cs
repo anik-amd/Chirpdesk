@@ -30,7 +30,7 @@ public partial class PluginsPage : UserControl
     private readonly ServiceRegistry _registry;
     private readonly ILog _log;
     private readonly Func<ServiceDefinition, Task> _enable;
-    private readonly Func<ServiceDefinition, Task> _addAccount;
+    private readonly Func<ServiceDefinition, string?, Task> _addAccount;
     private readonly Func<ServiceDefinition, Task> _disable;
     private readonly Func<string, bool, Task> _setPluginEnabled;
     private readonly Action _back;
@@ -39,6 +39,10 @@ public partial class PluginsPage : UserControl
     private readonly Action _reloadPlugins;
     private readonly IntegrationRuntimeHost? _integrations;
     private readonly Func<string, Task> _removeInstance;
+    private readonly Func<string, Task> _openInstance;
+    private readonly Func<string, Task> _closeInstance;
+    private readonly Action _refreshShell;
+    private ServiceDefinition? _pendingAccountDefinition;
     private List<OrphanItem> _cleanerOrphans = [];
     private bool _cleanerScanned;
     private readonly HashSet<string> _removedPlugins = new(StringComparer.OrdinalIgnoreCase);
@@ -56,7 +60,7 @@ public partial class PluginsPage : UserControl
         ServiceRegistry registry,
         ILog log,
         Func<ServiceDefinition, Task> enable,
-        Func<ServiceDefinition, Task> addAccount,
+        Func<ServiceDefinition, string?, Task> addAccount,
         Func<ServiceDefinition, Task> disable,
         Func<string, bool, Task> setPluginEnabled,
         Action back,
@@ -64,7 +68,10 @@ public partial class PluginsPage : UserControl
         Func<string, Task<bool>> uninstallPlugin,
         Action reloadPlugins,
         IntegrationRuntimeHost? integrations = null,
-        Func<string, Task>? removeInstance = null)
+        Func<string, Task>? removeInstance = null,
+        Func<string, Task>? openInstance = null,
+        Func<string, Task>? closeInstance = null,
+        Action? refreshShell = null)
     {
         InitializeComponent();
         _catalog = catalog;
@@ -82,6 +89,9 @@ public partial class PluginsPage : UserControl
         _reloadPlugins = reloadPlugins;
         _integrations = integrations;
         _removeInstance = removeInstance ?? (_ => Task.CompletedTask);
+        _openInstance = openInstance ?? (_ => Task.CompletedTask);
+        _closeInstance = closeInstance ?? (_ => Task.CompletedTask);
+        _refreshShell = refreshShell ?? (() => { });
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
@@ -243,7 +253,16 @@ public partial class PluginsPage : UserControl
                 Margin = new Thickness(0, 0, 6, 6),
                 Style = (Style)FindResource("PillButton"),
             };
-            primary.Click += async (_, _) => await Run(enabled ? _addAccount : _enable, definition);
+            primary.Click += async (_, _) =>
+            {
+                if (enabled)
+                {
+                    OpenAccountNamePrompt(definition);
+                    return;
+                }
+
+                await Run(_enable, definition);
+            };
             actions.Children.Add(primary);
 
             var off = new Button
@@ -1514,6 +1533,41 @@ public partial class PluginsPage : UserControl
         _ => "#2F5A4C",
     };
 
+    private void OpenAccountNamePrompt(ServiceDefinition definition)
+    {
+        _pendingAccountDefinition = definition;
+        var count = _settings.Services.Count(item =>
+            string.Equals(item.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase));
+
+        AccountNameBox.Text = count == 0 ? definition.Name : $"{definition.Name} {count + 1}";
+        AccountNameLayer.Visibility = Visibility.Visible;
+        AccountNameBox.Focus();
+        AccountNameBox.SelectAll();
+    }
+
+    private void OnCancelAccountName(object sender, RoutedEventArgs e)
+    {
+        _pendingAccountDefinition = null;
+        AccountNameLayer.Visibility = Visibility.Collapsed;
+    }
+
+    private async void OnConfirmAccountName(object sender, RoutedEventArgs e)
+    {
+        var definition = _pendingAccountDefinition;
+        var name = AccountNameBox.Text.Trim();
+
+        if (definition is null || string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        _pendingAccountDefinition = null;
+        AccountNameLayer.Visibility = Visibility.Collapsed;
+        PluginSettingsLayer.Visibility = Visibility.Collapsed;
+        await _addAccount(definition, name);
+        Reload();
+    }
+
     private void OnClosePluginSettings(object sender, RoutedEventArgs e) =>
         PluginSettingsLayer.Visibility = Visibility.Collapsed;
 
@@ -1553,16 +1607,30 @@ public partial class PluginsPage : UserControl
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var labels = new StackPanel();
-            labels.Children.Add(new TextBlock
+            var nameBox = new TextBox
             {
                 Text = instance.Name,
-                FontWeight = FontWeights.SemiBold,
+                Width = 190,
                 FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(0),
                 Foreground = Token("CdText"),
-            });
+            };
+            nameBox.LostFocus += (_, _) => RenameInstance(instance.InstanceId, nameBox.Text);
+            nameBox.KeyDown += (_, args) =>
+            {
+                if (args.Key == System.Windows.Input.Key.Enter)
+                {
+                    RenameInstance(instance.InstanceId, nameBox.Text);
+                    System.Windows.Input.Keyboard.ClearFocus();
+                }
+            };
+            labels.Children.Add(nameBox);
             labels.Children.Add(new TextBlock
             {
-                Text = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm ? "Warm" : "Cold",
+                Text = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm ? "Open" : "Closed",
                 FontSize = 10,
                 Foreground = Token("CdTextMuted"),
             });
@@ -1580,8 +1648,33 @@ public partial class PluginsPage : UserControl
                 PluginSettingsLayer.Visibility = Visibility.Collapsed;
                 _reloadPlugins();
             };
-            Grid.SetColumn(remove, 1);
-            header.Children.Add(remove);
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            var warm = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm;
+            var toggle = new Button
+            {
+                Content = warm ? "Close" : "Open",
+                Style = (Style)FindResource(warm ? "GhostButton" : "PillButton"),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+            };
+            toggle.Click += async (_, _) =>
+            {
+                if (warm)
+                {
+                    await _closeInstance(instance.InstanceId);
+                }
+                else
+                {
+                    await _openInstance(instance.InstanceId);
+                }
+
+                _refreshShell();
+                OpenServiceSettings(definitionId, name);
+            };
+            actions.Children.Add(toggle);
+            actions.Children.Add(remove);
+            Grid.SetColumn(actions, 1);
+            header.Children.Add(actions);
             content.Children.Add(header);
 
             var switches = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
@@ -1607,14 +1700,12 @@ public partial class PluginsPage : UserControl
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        addAccount.Click += async (_, _) =>
+        addAccount.Click += (_, _) =>
         {
-            PluginSettingsLayer.Visibility = Visibility.Collapsed;
             var definition = _catalog.Find(definitionId);
             if (definition is not null)
             {
-                await _addAccount(definition);
-                Reload();
+                OpenAccountNamePrompt(definition);
             }
         };
         PluginSettingsBody.Children.Add(addAccount);
@@ -1650,6 +1741,30 @@ public partial class PluginsPage : UserControl
         apply(instance);
         _store.Save(settings);
         _settings = settings;
+    }
+
+    private void RenameInstance(string instanceId, string name)
+    {
+        name = name.Trim();
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var settings = _store.Load();
+        var instance = settings.Services.FirstOrDefault(item =>
+            string.Equals(item.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+
+        if (instance is null || string.Equals(instance.Name, name, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        instance.Name = name;
+        _store.Save(settings);
+        _settings = settings;
+        _refreshShell();
     }
 
     private void OpenPluginSettings(InstalledPlugin plugin)

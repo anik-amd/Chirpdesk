@@ -1,0 +1,11 @@
+{
+  "url": "https://www.reddit.com/chat/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": [
+    "reddit"
+  ],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

@@ -87,7 +87,9 @@ public partial class HostWindow : Window
                 };
                 badge.Child = new TextBlock
                 {
-                    Text = entry.Ordinal.ToString(CultureInfo.InvariantCulture),
+                    Text = string.IsNullOrWhiteSpace(entry.Name)
+                        ? entry.Ordinal.ToString(CultureInfo.InvariantCulture)
+                        : char.ToUpperInvariant(entry.Name.Trim()[0]).ToString(),
                     FontSize = 8,
                     FontWeight = FontWeights.Bold,
                     Foreground = Palette("CdPaletteSurface"),
@@ -98,8 +100,34 @@ public partial class HostWindow : Window
             }
 
             button.Content = content;
+            button.Width = 40;
+            button.Height = 40;
+            button.Margin = new Thickness(0);
             button.Click += (_, _) => RailServiceSelected?.Invoke(this, entry.InstanceId);
-            RailServices.Children.Add(button);
+
+            var close = new Button
+            {
+                Content = "\u00D7",
+                Style = (Style)FindResource("RailCloseButton"),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                ToolTip = "Close account",
+                Visibility = Visibility.Collapsed,
+            };
+            close.Click += (_, _) => RailServiceCloseRequested?.Invoke(this, entry.InstanceId);
+            AutomationProperties.SetName(close, $"Close {entry.Name}");
+
+            var container = new Grid
+            {
+                Width = 40,
+                Height = 40,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            container.Children.Add(button);
+            container.Children.Add(close);
+            container.MouseEnter += (_, _) => close.Visibility = Visibility.Visible;
+            container.MouseLeave += (_, _) => close.Visibility = Visibility.Collapsed;
+            RailServices.Children.Add(container);
         }
 
         // The add button belongs with the tabs, not at the bottom of the sidebar.
@@ -342,6 +370,9 @@ public partial class HostWindow : Window
         bool ShowOrdinal);
 
     public event EventHandler<string>? RailServiceSelected;
+
+    /// <summary>Raised when the user closes (cools) one account from the sidebar.</summary>
+    public event EventHandler<string>? RailServiceCloseRequested;
     public event EventHandler? RailSearchRequested;
     public event EventHandler? RailAddRequested;
     public event EventHandler? RailPluginsRequested;
