@@ -125,7 +125,7 @@ public static partial class IntegrationManifestCodec
                 continue;
             }
 
-            if (!CommandIdPattern().IsMatch(command.Id ?? string.Empty))
+            if (!IsValidCommandId(command.Id))
             {
                 problems.Add($"invalid command id '{command.Id}'");
             }
@@ -152,6 +152,9 @@ public static partial class IntegrationManifestCodec
 
         return problems;
     }
+
+    public static bool IsValidCommandId(string? value) =>
+        !string.IsNullOrEmpty(value) && CommandIdPattern().IsMatch(value);
 
     /// <summary>
     /// A helper is resolved inside its plugin folder by file name only. No separators, no parent
