@@ -14,6 +14,9 @@ public static class AppPaths
 
     public static string ProfilesRoot => Path.Combine(LocalRoot, "profiles");
 
+    /// <summary>Verified installers waiting to be applied. Safe to clear on boot.</summary>
+    public static string UpdatesRoot => Path.Combine(DataRoot, "updates");
+
     public static string LogsRoot => Path.Combine(LocalRoot, "logs");
 
     /// <summary>Bundled plugins that travel beside the executable. Trusted by install location.</summary>

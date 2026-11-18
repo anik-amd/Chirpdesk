@@ -22,6 +22,9 @@ public sealed class AppSettings
     /// <summary>Mirror of the HKCU Run entry, so Settings can show the real state.</summary>
     public bool Autostart { get; set; }
 
+    /// <summary>Opt-in background check of the signed stable release channel.</summary>
+    public bool UpdateAutoCheck { get; set; }
+
     /// <summary>Minimize hides to the tray instead of the taskbar.</summary>
     public bool MinimizeToTray { get; set; }
 

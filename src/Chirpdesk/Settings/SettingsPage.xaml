@@ -301,6 +301,70 @@
 
                 <Border Height="1" Background="{DynamicResource CdRule}" Margin="0,26,0,22" />
 
+                <TextBlock Text="Updates" Style="{StaticResource SectionTitle}" />
+
+                <Border Style="{StaticResource CdPanel}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Check for updates automatically" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Stable channel only. Downloads are checked against the pinned signing key before anything runs."
+                                           Style="{StaticResource MutedText}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Margin="0,3,18,0" />
+                            </StackPanel>
+                            <CheckBox x:Name="UpdateAutoBox"
+                                      AutomationProperties.Name="Check for updates automatically"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CdSwitch}"
+                                      VerticalAlignment="Center"
+                                      Checked="OnUpdateAutoChanged"
+                                      Unchecked="OnUpdateAutoChanged" />
+                        </Grid>
+
+                        <Border Height="1" Background="{DynamicResource CdRule}" Margin="0,16,0,14" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock x:Name="UpdateStatus"
+                                           Style="{StaticResource MutedText}"
+                                           Text="Not checked yet."
+                                           TextWrapping="Wrap" />
+                                <TextBlock x:Name="UpdateVersion"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource CdAccent}"
+                                           Margin="0,4,0,0"
+                                           Visibility="Collapsed" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                                <Button x:Name="CheckUpdatesButton"
+                                        Content="Check now"
+                                        Style="{StaticResource GhostButton}"
+                                        Padding="14,7"
+                                        Click="OnCheckUpdates" />
+                                <Button x:Name="InstallUpdateButton"
+                                        Content="Install and restart"
+                                        Style="{StaticResource PillButton}"
+                                        Padding="14,8"
+                                        Margin="8,0,0,0"
+                                        Visibility="Collapsed"
+                                        Click="OnInstallUpdate" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Height="1" Background="{DynamicResource CdRule}" Margin="0,26,0,22" />
+
                 <TextBlock Text="Do Not Disturb" Style="{StaticResource SectionTitle}" />
 
                 <Border Style="{StaticResource CdPanel}">

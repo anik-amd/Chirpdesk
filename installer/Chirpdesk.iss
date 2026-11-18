@@ -54,6 +54,7 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; AppUserModelID: "
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Flags: nowait; Check: RelaunchRequested
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
@@ -112,6 +113,11 @@ var
   ErrorCode: Integer;
 begin
   Result := ShellExec('open', Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+end;
+
+function RelaunchRequested: Boolean;
+begin
+  Result := WizardSilent and (Pos('/RELAUNCH', Uppercase(GetCmdTail)) > 0);
 end;
 
 function InitializeSetup: Boolean;

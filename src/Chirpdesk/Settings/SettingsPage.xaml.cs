@@ -15,6 +15,7 @@ using Chirpdesk.Hosting;
 using Chirpdesk.Interop;
 using Chirpdesk.Storage;
 using Chirpdesk.Ui;
+using Chirpdesk.Updates;
 
 namespace Chirpdesk.Settings;
 
@@ -34,6 +35,9 @@ public partial class SettingsPage : UserControl
     private readonly Action _applyTheme;
     private readonly Action? _stateChanged;
     private readonly Action _back;
+    private readonly UpdateService _updates;
+    private readonly Func<UpdateCheckResult, Task<bool>> _installUpdate;
+    private UpdateCheckResult? _pendingUpdate;
     private AppSettings _settings;
     private IReadOnlyList<OrphanItem> _orphans = [];
     private bool _scanned;
@@ -49,7 +53,9 @@ public partial class SettingsPage : UserControl
         ILog log,
         Action applyTheme,
         Action? stateChanged,
-        Action back)
+        Action back,
+        UpdateService updates,
+        Func<UpdateCheckResult, Task<bool>> installUpdate)
     {
         InitializeComponent();
         _store = store;
@@ -62,6 +68,8 @@ public partial class SettingsPage : UserControl
         _applyTheme = applyTheme;
         _stateChanged = stateChanged;
         _back = back;
+        _updates = updates;
+        _installUpdate = installUpdate;
         _settings = store.Load();
 
         PageIcon.Content = UiIcons.Create("settings", Token("CdAccent"), 24);
@@ -203,6 +211,7 @@ public partial class SettingsPage : UserControl
         AutostartBox.IsChecked = _settings.Autostart;
         MinimizeToTrayBox.IsChecked = _settings.MinimizeToTray;
         CloseToTrayBox.IsChecked = _settings.CloseToTray;
+        UpdateAutoBox.IsChecked = _settings.UpdateAutoCheck;
 
         var dndIndex = 0;
         if (_settings.DndUntil is { } dnd && dnd > DateTimeOffset.UtcNow)
@@ -443,6 +452,78 @@ public partial class SettingsPage : UserControl
 
         _settings.Autostart = enabled;
         Save();
+    }
+
+    private void OnUpdateAutoChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _settings.UpdateAutoCheck = UpdateAutoBox.IsChecked == true;
+        Save();
+    }
+
+    private async void OnCheckUpdates(object sender, RoutedEventArgs e)
+    {
+        CheckUpdatesButton.IsEnabled = false;
+        InstallUpdateButton.Visibility = Visibility.Collapsed;
+        UpdateStatus.Text = "Checking GitHub for a signed stable release…";
+        UpdateVersion.Visibility = Visibility.Collapsed;
+        _pendingUpdate = null;
+
+        try
+        {
+            var result = await _updates.CheckAsync();
+            _pendingUpdate = result.Available ? result : null;
+            UpdateStatus.Text = result.Message;
+
+            if (result.Available)
+            {
+                UpdateVersion.Text = $"Version {result.Version}";
+                UpdateVersion.Visibility = Visibility.Visible;
+                InstallUpdateButton.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or TaskCanceledException)
+        {
+            _log.Warn($"update check failed: {ex.Message}");
+            UpdateStatus.Text = "Could not check for updates.";
+        }
+        finally
+        {
+            CheckUpdatesButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnInstallUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_pendingUpdate is null)
+        {
+            return;
+        }
+
+        CheckUpdatesButton.IsEnabled = false;
+        InstallUpdateButton.IsEnabled = false;
+        UpdateStatus.Text = "Downloading and verifying the installer…";
+
+        try
+        {
+            if (await _installUpdate(_pendingUpdate))
+            {
+                UpdateStatus.Text = "Update verified. Chirpdesk is restarting.";
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or TaskCanceledException)
+        {
+            _log.Error("could not apply the update", ex);
+        }
+
+        UpdateStatus.Text = "Update did not apply. The current version is still running.";
+        CheckUpdatesButton.IsEnabled = true;
+        InstallUpdateButton.IsEnabled = true;
     }
 
     private void OnDndChoice(object sender, RoutedEventArgs e)

@@ -24,6 +24,7 @@ using Chirpdesk.Onboarding;
 using Chirpdesk.Settings;
 using Chirpdesk.Theming;
 using Chirpdesk.Ui;
+using Chirpdesk.Updates;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Chirpdesk;
@@ -63,6 +64,7 @@ public partial class App : Application
     private NativeMethods.LowLevelKeyboardProc? _keyboardHookProc;
     private bool _quitting;
     private ThemeMode _themeMode = ThemeMode.System;
+    private UpdateService? _updates;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -77,6 +79,8 @@ public partial class App : Application
             && !options.SelfTest
             && !options.TestToast;
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
+        _updates = new UpdateService(_log);
+        _updates.Cleanup();
         _registry = new ServiceRegistry(_log);
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
@@ -175,6 +179,11 @@ public partial class App : Application
         UpdateTrayStatus();
 
         _log.Info("started");
+
+        if (LoadSettingsForUpdateCheck())
+        {
+            _ = AutoCheckUpdatesAsync();
+        }
 
         if (!string.IsNullOrEmpty(options.Page))
         {
@@ -1681,6 +1690,92 @@ public partial class App : Application
     /// it from settings instead of showing the wrong page. Fire-and-forget because the caller
     /// is a WinRT event or a COM callback, neither of which can await.
     /// </summary>
+    private bool LoadSettingsForUpdateCheck()
+    {
+        try
+        {
+            return new SettingsStore(AppPaths.SettingsFile, _log!).Load().UpdateAutoCheck;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private async Task AutoCheckUpdatesAsync()
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        var result = await _updates.CheckAsync();
+        if (!result.Available)
+        {
+            return;
+        }
+
+        _log?.Info($"update ready: {result.Version}");
+        try
+        {
+            var toasts = new ToastService(
+                _log!,
+                id => Dispatcher.Invoke(() => ShowHostFor(id)));
+            toasts.Show(new ToastMessage(
+                "Chirpdesk update",
+                $"Version {result.Version} is ready. Open Settings to install.",
+                null,
+                "update"));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            _log?.Warn($"could not show the update toast: {ex.Message}");
+        }
+    }
+
+    private async Task<bool> InstallUpdateAsync(UpdateCheckResult result)
+    {
+        if (_updates is null || result.Manifest is null)
+        {
+            return false;
+        }
+
+        var installer = await _updates.DownloadAsync(result.Manifest);
+        if (installer is null)
+        {
+            return false;
+        }
+
+        _log?.Info("update: closing webviews before the installer");
+        _quitting = true;
+
+        try
+        {
+            if (_registry is not null)
+            {
+                await _registry.DisposeAsync();
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            _log?.Warn($"update: service dispose reported {ex.Message}");
+        }
+
+        if (!_updates.LaunchInstaller(installer))
+        {
+            MessageBox.Show(
+                "The verified installer could not be started. Chirpdesk will close; open it again from the Start menu.",
+                "Chirpdesk update",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            Shutdown(1);
+            return true;
+        }
+
+        Shutdown(0);
+        return true;
+    }
+
     private void ShowHostFor(string? serviceId)
     {
         var id = string.IsNullOrWhiteSpace(serviceId) ? null : Uri.UnescapeDataString(serviceId);
@@ -1688,6 +1783,12 @@ public partial class App : Application
         if (id is null)
         {
             ShowHost();
+            return;
+        }
+
+        if (string.Equals(id, "update", StringComparison.Ordinal))
+        {
+            OpenSettings();
             return;
         }
 
@@ -1996,7 +2097,9 @@ public partial class App : Application
                 _log,
                 ApplyTheme,
                 UpdateTrayStatus,
-                ClosePage);
+                ClosePage,
+                _updates ?? new UpdateService(_log),
+                InstallUpdateAsync);
         }
 
         ShowPage(_settingsPage);

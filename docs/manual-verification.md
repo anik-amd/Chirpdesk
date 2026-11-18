@@ -68,6 +68,13 @@ desktop session.
 - Service icons are real brand glyphs from Simple Icons (CC0); unread counts show at the right of each tab row.
 - Selecting a cold/asleep service wakes it without re-pairing.
 
+## Updates
+
+- Settings -> Updates -> **Check now** against a public stable release: the status names the newer version and **Install and restart** appears.
+- Install a signed newer release: the installer is downloaded, size and SHA-256 match, every WebView2 closes, the silent installer runs and the new build relaunches.
+- Tamper `update.json` or the downloaded setup: the update is refused, the current build keeps running, and no installer starts.
+- With **Check for updates automatically** off, no network request is made at boot.
+
 ## Autostart
 
 - Tray → Settings → tick autostart, reboot.

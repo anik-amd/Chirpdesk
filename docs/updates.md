@@ -15,7 +15,8 @@ Every GitHub Release in the stable channel ships:
 
 The manifest URL is the release asset's `browser_download_url`, so it is absolute `https`.
 `update.json` is fetched only after the release JSON has been checked for `draft: false` and
-`prerelease: false`.
+`prerelease: false`. The release repository must be public: an unauthenticated client cannot
+read a private repo's releases, and embedding a token in the app is forbidden.
 
 ## Manifest
 
@@ -92,3 +93,23 @@ builds and builds without a pinned key never check or apply updates.
    widely installed, then destroy it.
 
 A lost key is a manual-reinstall event: there is no recovery path in the client, by design.
+
+
+## Client wiring
+
+Settings -> Updates has an opt-in **Check for updates automatically** switch, **Check now**, and
+**Install and restart** when a signed release is newer. The app never installs from a URL in the
+release body: it fetches the signed `update.json`, verifies it against the pinned P-256 key,
+downloads the installer, verifies its exact size and SHA-256, disposes every WebView2 runtime,
+then runs the installer with:
+
+```text
+/SILENT /SUPPRESSMSGBOXES /NORESTART /SP- /RELAUNCH
+```
+
+The installer's `AppMutex` waits for Chirpdesk to exit. `/RELAUNCH` makes the silent installer
+start the new build after it finishes. Partial downloads are deleted on failure and on the next
+successful boot; a mismatch never reaches `Process.Start`.
+
+The pinned key is in `src/Chirpdesk/Updates/UpdateService.cs`. Its fingerprint is
+`ecdsa-p256:bcecc91f49a68b2a`. The private half is not in the repository.
