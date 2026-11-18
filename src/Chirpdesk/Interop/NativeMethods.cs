@@ -6,9 +6,17 @@ namespace Chirpdesk.Interop;
 internal static class NativeMethods
 {
     internal delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    internal const int GwlStyle = -16;
     internal const int GwlExStyle = -20;
     internal const long WsExToolWindow = 0x0000_0080L;
     internal const long WsExAppWindow = 0x0004_0000L;
+
+    internal const long WsPopup = 0x8000_0000L;
+    internal const long WsCaption = 0x00C0_0000L;
+    internal const long WsSysMenu = 0x0008_0000L;
+    internal const long WsThickFrame = 0x0004_0000L;
+    internal const long WsMinimizeBox = 0x0002_0000L;
+    internal const long WsMaximizeBox = 0x0001_0000L;
 
     private const int VkControl = 0x11;
     private const int VkShift = 0x10;
@@ -54,6 +62,22 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetWindowRect(nint hWnd, out WindowRect rect);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(
+        nint hWnd,
+        nint hWndInsertAfter,
+        int x,
+        int y,
+        int cx,
+        int cy,
+        uint uFlags);
+
+    internal const uint SwpNoSize = 0x0001;
+    internal const uint SwpNoMove = 0x0002;
+    internal const uint SwpNoZorder = 0x0004;
+    internal const uint SwpNoActivate = 0x0010;
+    internal const uint SwpFrameChanged = 0x0020;
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -74,9 +98,13 @@ internal static class NativeMethods
     internal const int WmSysKeyDown = 0x0104;
 
     internal const int WmGetMinMaxInfo = 0x0024;
+    internal const int WmNcCalcSize = 0x0083;
+    internal const int WmNcHitTest = 0x0084;
     internal const uint MonitorDefaultToNearest = 0x0000_0002;
     internal const int DwmwaWindowCornerPreference = 33;
     internal const int DwmWindowCornerRound = 2;
+    internal const int DwmwaBorderColor = 34;
+    internal const int DwmColorNone = unchecked((int)0xFFFF_FFFE);
 
     [DllImport("user32.dll")]
     internal static extern nint MonitorFromWindow(nint hWnd, uint flags);
@@ -108,11 +136,42 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct NcCalcSizeParams
+    {
+        public WindowRect Rgrc0;
+        public WindowRect Rgrc1;
+        public WindowRect Rgrc2;
+        public WindowPos WindowPos;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WindowPos
+    {
+        public nint Hwnd;
+        public nint HwndInsertAfter;
+        public int X;
+        public int Y;
+        public int Cx;
+        public int Cy;
+        public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct NativePoint
     {
         public int X;
         public int Y;
     }
+
+    internal const int HtClient = 1;
+    internal const int HtLeft = 10;
+    internal const int HtRight = 11;
+    internal const int HtTop = 12;
+    internal const int HtTopLeft = 13;
+    internal const int HtTopRight = 14;
+    internal const int HtBottom = 15;
+    internal const int HtBottomLeft = 16;
+    internal const int HtBottomRight = 17;
 
     /// <summary>
     /// Used by the Command Bar to commit on Ctrl release; WebView2 never delivers that key-up
@@ -148,6 +207,23 @@ internal static class NativeMethods
         else
         {
             _ = SetWindowLong32(hwnd, GwlExStyle, unchecked((int)style));
+        }
+    }
+
+    internal static long GetStyle(nint hwnd) =>
+        nint.Size == 8
+            ? GetWindowLongPtr64(hwnd, GwlStyle)
+            : GetWindowLong32(hwnd, GwlStyle);
+
+    internal static void SetStyle(nint hwnd, long style)
+    {
+        if (nint.Size == 8)
+        {
+            _ = SetWindowLongPtr64(hwnd, GwlStyle, (nint)style);
+        }
+        else
+        {
+            _ = SetWindowLong32(hwnd, GwlStyle, unchecked((int)style));
         }
     }
 }

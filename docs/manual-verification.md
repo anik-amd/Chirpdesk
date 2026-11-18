@@ -21,6 +21,7 @@ desktop session.
 ## Window chrome and motion
 
 - Maximize with the taskbar at the top: the whole title bar including minimize/maximize/close stays below the taskbar, and restore returns to the previous bounds.
+- Maximized: the page reaches the work-area edges with no left/right/bottom gap and no Windows accent border above the title bar.
 - Maximize/restore and minimize use the native Windows transition (not a WPF fade or a hand-moved rectangle). Hiding to the tray is immediate, with no fade. The command palette appears over the captured page frame without a fade-out of the page.
 - Drag the title bar, resize from every edge and double-click the title bar to maximize; all three still work without `WindowChrome`.
 - Windows 11 shows rounded outer corners; Windows 10 keeps the square frame.

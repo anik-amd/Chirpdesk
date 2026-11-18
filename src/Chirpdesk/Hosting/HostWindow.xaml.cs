@@ -687,6 +687,7 @@ public partial class HostWindow : Window
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
+        ApplyNativeFrameStyle();
         TaskbarList.Remove(Handle);
 
         if (PresentationSource.FromVisual(this) is HwndSource source)
@@ -696,6 +697,37 @@ public partial class HostWindow : Window
 
         EnableRoundedCorners();
         UpdateMaximizeGlyph();
+    }
+
+    /// <summary>
+    /// <c>WindowStyle=None</c> leaves the HWND without <c>WS_CAPTION</c>, which is the style
+    /// Windows uses to decide that a top-level window participates in the normal caption
+    /// minimise/maximise/restore transitions. Add the caption and popup bits without letting
+    /// the native caption paint: WM_NCCALCSIZE below makes the client cover the frame.
+    /// </summary>
+    private void ApplyNativeFrameStyle()
+    {
+        var style = NativeMethods.GetStyle(Handle);
+        style |= NativeMethods.WsPopup
+            | NativeMethods.WsCaption
+            | NativeMethods.WsThickFrame
+            | NativeMethods.WsSysMenu
+            | NativeMethods.WsMinimizeBox
+            | NativeMethods.WsMaximizeBox;
+
+        NativeMethods.SetStyle(Handle, style);
+        _ = NativeMethods.SetWindowPos(
+            Handle,
+            IntPtr.Zero,
+            0,
+            0,
+            0,
+            0,
+            NativeMethods.SwpNoMove
+                | NativeMethods.SwpNoSize
+                | NativeMethods.SwpNoZorder
+                | NativeMethods.SwpNoActivate
+                | NativeMethods.SwpFrameChanged);
     }
 
     /// <summary>Windows 11 rounds the frame itself; Windows 10 simply ignores the attribute.</summary>
@@ -709,11 +741,69 @@ public partial class HostWindow : Window
                 NativeMethods.DwmwaWindowCornerPreference,
                 ref preference,
                 sizeof(int));
+
+            // Windows 11 otherwise paints the active accent colour around the frame. The
+            // border is not part of our custom chrome, so remove it rather than leave a
+            // thick blue edge above the title bar.
+            var border = NativeMethods.DwmColorNone;
+            _ = NativeMethods.DwmSetWindowAttribute(
+                Handle,
+                NativeMethods.DwmwaBorderColor,
+                ref border,
+                sizeof(int));
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {
             // Older Windows: the square frame is the correct fallback.
         }
+    }
+
+    /// <summary>
+    /// Resize edges for the borderless frame. Returning HTCLIENT everywhere else keeps the
+    /// custom title-bar buttons and WPF drag handling in charge.
+    /// </summary>
+    private nint HitTest(nint lParam, ref bool handled)
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            return nint.Zero;
+        }
+
+        var value = lParam.ToInt64();
+        var screenX = (short)(value & 0xFFFF);
+        var screenY = (short)((value >> 16) & 0xFFFF);
+
+        if (!NativeMethods.GetWindowRect(Handle, out var rect))
+        {
+            return nint.Zero;
+        }
+
+        var border = (int)Math.Round(6 * VisualTreeHelper.GetDpi(this).DpiScaleX);
+        var left = screenX >= rect.Left && screenX < rect.Left + border;
+        var right = screenX < rect.Right && screenX >= rect.Right - border;
+        var top = screenY >= rect.Top && screenY < rect.Top + border;
+        var bottom = screenY < rect.Bottom && screenY >= rect.Bottom - border;
+
+        var hit = (left, right, top, bottom) switch
+        {
+            (true, _, true, _) => NativeMethods.HtTopLeft,
+            (_, true, true, _) => NativeMethods.HtTopRight,
+            (true, _, _, true) => NativeMethods.HtBottomLeft,
+            (_, true, _, true) => NativeMethods.HtBottomRight,
+            (true, _, _, _) => NativeMethods.HtLeft,
+            (_, true, _, _) => NativeMethods.HtRight,
+            (_, _, true, _) => NativeMethods.HtTop,
+            (_, _, _, true) => NativeMethods.HtBottom,
+            _ => NativeMethods.HtClient,
+        };
+
+        if (hit == NativeMethods.HtClient)
+        {
+            return nint.Zero;
+        }
+
+        handled = true;
+        return (nint)hit;
     }
 
     /// <summary>
@@ -723,6 +813,37 @@ public partial class HostWindow : Window
     /// </summary>
     private nint WndProc(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
+        if (message == NativeMethods.WmNcCalcSize && wParam != IntPtr.Zero)
+        {
+            // The caption and thick-frame bits stay in the style so Windows keeps its
+            // window-management behaviour, but the client fills the frame. When maximized,
+            // the window rect overhangs the work area by the frame margin; pin the client
+            // rect to the work area so the page reaches every screen edge.
+            if (WindowState == WindowState.Maximized)
+            {
+                var sizeMonitor = NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MonitorDefaultToNearest);
+                var sizeInfo = new NativeMethods.MonitorInfo
+                {
+                    Size = Marshal.SizeOf<NativeMethods.MonitorInfo>(),
+                };
+
+                if (sizeMonitor != nint.Zero && NativeMethods.GetMonitorInfo(sizeMonitor, ref sizeInfo))
+                {
+                    var calc = Marshal.PtrToStructure<NativeMethods.NcCalcSizeParams>(lParam);
+                    calc.Rgrc0 = sizeInfo.Work;
+                    Marshal.StructureToPtr(calc, lParam, fDeleteOld: false);
+                }
+            }
+
+            handled = true;
+            return nint.Zero;
+        }
+
+        if (message == NativeMethods.WmNcHitTest)
+        {
+            return HitTest(lParam, ref handled);
+        }
+
         if (message != NativeMethods.WmGetMinMaxInfo)
         {
             return nint.Zero;

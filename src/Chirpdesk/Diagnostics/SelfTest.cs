@@ -60,6 +60,7 @@ internal sealed class SelfTest
         Guarded("theme", CheckTheme);
         Guarded("tray", CheckTray);
         Guarded("window-hidden", CheckWindowIsHidden);
+        Guarded("window-style", CheckWindowStyle);
         Guarded("single-instance", CheckSingleInstance);
         Guarded("definitions", CheckDefinitions);
         Guarded("catalog", CheckCatalog);
@@ -790,6 +791,25 @@ internal sealed class SelfTest
             "window-hidden",
             appWindow && !toolWindow && taskbarHidden && visible && offScreen,
             $"toolwindow={toolWindow} appwindow={appWindow} taskbarHidden={taskbarHidden} visible={visible} at={rect.Left},{rect.Top}");
+    }
+
+    /// <summary>
+    /// The caption bits are what make Windows treat the custom frame as a normal top-level
+    /// window for minimise/maximise/restore transitions; the thick frame keeps resize and
+    /// snap behaviour. WM_NCCALCSIZE removes the painted non-client area.
+    /// </summary>
+    private void CheckWindowStyle()
+    {
+        var style = NativeMethods.GetStyle(_host.Handle);
+        var caption = (style & NativeMethods.WsCaption) == NativeMethods.WsCaption;
+        var thickFrame = (style & NativeMethods.WsThickFrame) == NativeMethods.WsThickFrame;
+        var minimize = (style & NativeMethods.WsMinimizeBox) == NativeMethods.WsMinimizeBox;
+        var maximize = (style & NativeMethods.WsMaximizeBox) == NativeMethods.WsMaximizeBox;
+
+        Check(
+            "window-style",
+            caption && thickFrame && minimize && maximize,
+            $"caption={caption} thick={thickFrame} min={minimize} max={maximize} style=0x{style:X8}");
     }
 
     /// <summary>Re-launches the app: it must see the mutex and exit without a window.</summary>
