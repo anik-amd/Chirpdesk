@@ -63,6 +63,7 @@ public partial class App : Application
     private CommandBarView? _bar;
     private BitmapSource? _lastBackdrop;
     private BarState? _barState;
+    private (string PluginId, string CommandId)? _pendingIntegrationArgument;
     private ModifierWatcher? _barWatcher;
     private IReadOnlyList<SearchCandidate> _searchCandidates = Array.Empty<SearchCandidate>();
     private bool _barOpening;
@@ -860,6 +861,11 @@ public partial class App : Application
         {
             e.Handled = true;
 
+            if (_barState?.Mode == BarMode.Argument)
+            {
+                return;
+            }
+
             if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
             {
                 _ = OpenTabsBarAsync();
@@ -892,7 +898,19 @@ public partial class App : Application
 
     private void OnBarQueryChanged(object? sender, string query)
     {
-        if (_barState?.Mode != BarMode.Search)
+        if (_barState is null)
+        {
+            return;
+        }
+
+        if (_barState.Mode == BarMode.Argument)
+        {
+            _barState.SetQuery(query);
+            RenderCommandBar();
+            return;
+        }
+
+        if (_barState.Mode != BarMode.Search)
         {
             return;
         }
@@ -921,6 +939,34 @@ public partial class App : Application
                 SwitchToSearch();
             }
 
+            return;
+        }
+
+        if (_barState.Mode == BarMode.Argument)
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                CloseCommandBar(restore: true);
+                return;
+            }
+
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                var argument = _barState.Query;
+                var pending = _pendingIntegrationArgument;
+                CloseCommandBar(restore: true);
+
+                if (pending is { } request && !string.IsNullOrWhiteSpace(argument))
+                {
+                    _ = RunIntegrationCommandAsync(request.PluginId, request.CommandId, argument);
+                }
+
+                return;
+            }
+
+            // Everything else belongs to the text field.
             return;
         }
 
@@ -1411,17 +1457,12 @@ public partial class App : Application
                 Initial: "D"));
         }
 
-        // Declared integration commands. Text commands wait for an argument surface, so only
-        // argument-free commands are listed today.
+        // Declared integration commands. A text command keeps the bar open and turns the query
+        // field into its argument.
         if (_integrations is not null)
         {
             foreach (var (pluginId, pluginName, command) in _integrations.Commands())
             {
-                if (!string.Equals(command.Argument, "none", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
                 candidates.Add(new SearchCandidate(
                     $"integration:{pluginId}:{command.Id}",
                     $"{pluginName}: {command.Title}",
@@ -1514,6 +1555,11 @@ public partial class App : Application
         var id = _barState.Entries[index];
         var mode = _barState.Mode;
 
+        if (mode == BarMode.Search && TryBeginIntegrationArgument(id))
+        {
+            return;
+        }
+
         _barState.Commit();
         CloseCommandBar(restore: true);
 
@@ -1526,7 +1572,7 @@ public partial class App : Application
 
                 if (separator > 0)
                 {
-                    _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..]);
+                    _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..], null);
                 }
 
                 _log?.Info($"command bar integration command committed via Ctrl+{index + 1}");
@@ -1552,6 +1598,11 @@ public partial class App : Application
 
         var selected = _barState.Selected;
         if (selected is null)
+        {
+            return;
+        }
+
+        if (TryBeginIntegrationArgument(selected))
         {
             return;
         }
@@ -1596,7 +1647,7 @@ public partial class App : Application
 
             if (separator > 0)
             {
-                _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..]);
+                _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..], null);
             }
 
             return;
@@ -1631,7 +1682,43 @@ public partial class App : Application
         _log?.Info($"command bar search committed '{selected}'");
     }
 
-    private async Task RunIntegrationCommandAsync(string pluginId, string commandId)
+    /// <summary>
+    /// A text command keeps the bar open and turns the query field into its argument. Returns
+    /// false when the id is not a text integration command, so the normal commit path runs.
+    /// </summary>
+    private bool TryBeginIntegrationArgument(string selected)
+    {
+        if (_integrations is null || !selected.StartsWith("integration:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var rest = selected["integration:".Length..];
+        var separator = rest.IndexOf(':', StringComparison.Ordinal);
+
+        if (separator <= 0)
+        {
+            return false;
+        }
+
+        var pluginId = rest[..separator];
+        var commandId = rest[(separator + 1)..];
+        var description = _integrations.DescribeCommand(pluginId, commandId);
+
+        if (description is null || !string.Equals(description.Value.Argument, "text", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        _pendingIntegrationArgument = (pluginId, commandId);
+        _barState = BarState.ForArgument();
+        RenderCommandBar();
+        _bar?.FocusQuery();
+        _log?.Info($"command bar awaiting text for integration command '{pluginId}/{commandId}'");
+        return true;
+    }
+
+    private async Task RunIntegrationCommandAsync(string pluginId, string commandId, string? argument)
     {
         if (_integrations is null)
         {
@@ -1640,7 +1727,7 @@ public partial class App : Application
 
         try
         {
-            var result = await _integrations.SendCommandAsync(pluginId, commandId, null);
+            var result = await _integrations.SendCommandAsync(pluginId, commandId, argument);
 
             if (result.Ok)
             {
@@ -1746,6 +1833,7 @@ public partial class App : Application
         _barWatcher?.Stop();
         _barState?.Cancel();
         _barState = null;
+        _pendingIntegrationArgument = null;
 
         _host?.HideCommandBar();
 

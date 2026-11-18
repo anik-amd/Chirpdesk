@@ -70,6 +70,22 @@ internal sealed class IntegrationRuntimeHost
         }
     }
 
+    public (string Title, string Argument)? DescribeCommand(string pluginId, string commandId)
+    {
+        lock (_lock)
+        {
+            if (!_entries.TryGetValue(pluginId, out var entry))
+            {
+                return null;
+            }
+
+            var command = entry.Manifest.Commands.FirstOrDefault(item =>
+                string.Equals(item.Id, commandId, StringComparison.Ordinal));
+
+            return command is null ? null : (command.Title, command.Argument);
+        }
+    }
+
     public IReadOnlyList<(string PluginId, string PluginName, IntegrationCommand Command)> Commands()
     {
         lock (_lock)

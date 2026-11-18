@@ -64,6 +64,20 @@ public partial class CommandBarView : UserControl
                 QueryBox.CaretIndex = QueryBox.Text.Length;
             }
         }
+        else if (mode == BarMode.Argument)
+        {
+            Header.Text = "Type the argument, then press Enter.";
+            Header.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
+            QueryBox.Visibility = Visibility.Visible;
+
+            if (!string.Equals(QueryBox.Text, query, StringComparison.Ordinal))
+            {
+                _syncing = true;
+                QueryBox.Text = query;
+                _syncing = false;
+                QueryBox.CaretIndex = QueryBox.Text.Length;
+            }
+        }
         else
         {
             Header.Text = "Switch service";
@@ -71,15 +85,20 @@ public partial class CommandBarView : UserControl
             QueryBox.Visibility = Visibility.Collapsed;
         }
 
-        Hint.Text = mode == BarMode.Search
-            ? "Enter to run · Esc back"
-            : "Tab to move · release Ctrl to switch";
+        Hint.Text = mode switch
+        {
+            BarMode.Search => "Enter to run - Esc back",
+            BarMode.Argument => "Enter to send - Esc cancel",
+            _ => "Tab to move - release Ctrl to switch",
+        };
         Hint.Foreground = Token("CdPaletteMuted");
 
         Rows.ItemsSource = rows;
         Rows.SelectedIndex = highlight >= 0 && highlight < rows.Count ? highlight : -1;
         EmptyText.Text = mode == BarMode.Search ? "No matches." : "No warm services.";
-        EmptyText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyText.Visibility = rows.Count == 0 && mode != BarMode.Argument
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void ApplyPalette(bool dark)

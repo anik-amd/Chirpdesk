@@ -14,8 +14,8 @@ through the real Windows launcher and proved handshake, notify, unread, command 
 no orphan process. The app runtime is wired: sessions start for enabled integrations at boot and after a
 catalogue reload, notifications go through the gated toast sink, unread counts add to the tray,
 the plugin card exposes Start/Stop/Restart, the second consent screen gates installation, and
-argument-free declared commands appear in the command bar. Text commands still need an argument
-surface. Manual rows and the TDLib helper remain.
+declared commands appear in the command bar, with an inline argument step for text commands.
+Manual rows and the TDLib helper remain.
 
 **ADR:** 0007 (data plugins, code out-of-process), 0016 (this boundary)
 **Plan:** `PLAN.md` §4.1, phase 7 row

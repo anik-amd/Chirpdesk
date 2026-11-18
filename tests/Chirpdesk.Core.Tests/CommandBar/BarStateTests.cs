@@ -7,6 +7,25 @@ public class BarStateTests
     private static readonly string[] Warm = ["whatsapp", "telegram", "messenger"];
 
     [Fact]
+    public void Argument_mode_opens_and_accepts_text()
+    {
+        var bar = BarState.ForArgument();
+
+        Assert.Equal(BarMode.Argument, bar.Mode);
+        Assert.True(bar.IsOpen);
+
+        bar.SetQuery("hello");
+        bar.Append("!");
+        Assert.Equal("hello!", bar.Query);
+
+        bar.Backspace();
+        Assert.Equal("hello", bar.Query);
+
+        Assert.Null(bar.Commit());
+        Assert.Equal(BarMode.Closed, bar.Mode);
+    }
+
+    [Fact]
     public void Cycle_starts_on_the_next_service_in_mru_order()
     {
         var bar = BarState.ForCycle(Warm, activeId: "whatsapp", direction: 1);

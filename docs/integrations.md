@@ -128,7 +128,7 @@ helper is stopped. `notify` without the permission is `-32603` and is not retrie
 | Method | Params | Notes |
 |---|---|---|
 | `ping` | none | Liveness; 2 s timeout |
-| `command` | `id`, `argument` (≤500 when the command takes text) | Only a declared id is accepted; 10 s timeout; result `{ "ok": true, "message": "..." }` or `{ "ok": false, "message": "..." }`. The command bar lists argument-free commands today; text commands wait for an argument surface. |
+| `command` | `id`, `argument` (≤500 when the command takes text) | Only a declared id is accepted; 10 s timeout; result `{ "ok": true, "message": "..." }` or `{ "ok": false, "message": "..." }`. A text command keeps the command bar open, uses the typed line as the argument, sends on Enter and cancels on Esc. |
 | `shutdown` | none | Sent on stop, then 3 s grace before kill |
 
 There is no generic `invoke`, no reflection, and no host callback that exposes a path or a handle.

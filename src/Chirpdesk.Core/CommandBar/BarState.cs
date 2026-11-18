@@ -6,6 +6,7 @@ public enum BarMode
     Cycle,
     Search,
     Tabs,
+    Argument,
 }
 
 /// <summary>
@@ -51,6 +52,12 @@ public sealed class BarState
     public static BarState ForSearch() => new([]) { Mode = BarMode.Search };
 
     /// <summary>
+    /// A text argument for a command the user already picked. The query field becomes the
+    /// argument; Enter sends it and Esc cancels.
+    /// </summary>
+    public static BarState ForArgument() => new([]) { Mode = BarMode.Argument };
+
+    /// <summary>
     /// Replaces the visible rows. The highlight follows <paramref name="keepSelected"/> when
     /// that row survived the filter, otherwise it lands on the first row.
     /// </summary>
@@ -81,7 +88,7 @@ public sealed class BarState
     /// <summary>Search text comes from the real text field, not from synthetic key handling.</summary>
     public void SetQuery(string text)
     {
-        if (Mode == BarMode.Search)
+        if (Mode is BarMode.Search or BarMode.Argument)
         {
             Query = text ?? string.Empty;
         }
@@ -107,7 +114,7 @@ public sealed class BarState
 
     public void Append(string text)
     {
-        if (Mode == BarMode.Search && !string.IsNullOrEmpty(text))
+        if ((Mode is BarMode.Search or BarMode.Argument) && !string.IsNullOrEmpty(text))
         {
             Query += text;
         }
@@ -115,7 +122,7 @@ public sealed class BarState
 
     public void Backspace()
     {
-        if (Mode == BarMode.Search && Query.Length > 0)
+        if ((Mode is BarMode.Search or BarMode.Argument) && Query.Length > 0)
         {
             Query = Query[..^1];
         }
