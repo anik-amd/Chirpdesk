@@ -102,21 +102,10 @@ public partial class HostWindow : Window
             RailServices.Children.Add(button);
         }
 
-        if (entries.Count == 0)
-        {
-            RailServices.Children.Add(new TextBlock
-            {
-                Text = "No open chats",
-                Foreground = Palette("CdPaletteMuted"),
-                FontSize = 10,
-                TextWrapping = TextWrapping.Wrap,
-                TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(6, 10, 6, 0),
-            });
-        }
+        // The add button belongs with the tabs, not at the bottom of the sidebar.
+        RailServices.Children.Add(RailAction("plus", "Add a chat", (_, _) => RailAddRequested?.Invoke(this, EventArgs.Empty), accent: true));
 
         RailActions.Children.Clear();
-        RailActions.Children.Add(RailAction("plus", "Add a chat", (_, _) => RailAddRequested?.Invoke(this, EventArgs.Empty), accent: true));
         RailActions.Children.Add(RailAction("search", "Command palette (Ctrl+K)", (_, _) => RailSearchRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("plugins", "Plugins & services", (_, _) => RailPluginsRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("settings", "Settings", (_, _) => RailSettingsRequested?.Invoke(this, EventArgs.Empty)));
@@ -656,6 +645,15 @@ public partial class HostWindow : Window
     private void OnStateChanged()
     {
         UpdateMaximizeGlyph();
+
+        // The 4 px gutter on the right and bottom is what makes those edges resizable while a
+        // WebView2 child covers the client. A maximized window must not show a gap.
+        if (ContentFrame is not null)
+        {
+            ContentFrame.Margin = WindowState == WindowState.Maximized
+                ? new Thickness(0)
+                : new Thickness(0, 0, 4, 4);
+        }
     }
 
     /// <summary>A 2 px indeterminate bar along the title bar; pure WPF, never over the webview.</summary>

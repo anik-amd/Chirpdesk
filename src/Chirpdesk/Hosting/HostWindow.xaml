@@ -12,7 +12,7 @@
         Height="2"
         Left="-32000"
         Top="-32000"
-        Background="#241C22"
+        Background="{DynamicResource CdCanvas}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
@@ -20,7 +20,7 @@
     <Window.Resources>
         <Style x:Key="CaptionButton" TargetType="Button">
             <Setter Property="Width" Value="46" />
-            <Setter Property="Height" Value="36" />
+            <Setter Property="Height" Value="42" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
@@ -36,6 +36,31 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CdControlHover}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CdSurfaceAlt}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="CloseCaptionButton" TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#C42B1C" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#9B1C12" />
+                                <Setter Property="Foreground" Value="White" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -135,13 +160,13 @@
                         Click="OnMaximizeClick" />
                 <Button x:Name="CloseButton"
                         Content="&#xE8BB;"
-                        Style="{StaticResource CaptionButton}"
+                        Style="{StaticResource CloseCaptionButton}"
                         ToolTip="Hide to tray"
                         Click="OnCloseClick" />
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1">
+        <Grid x:Name="ContentFrame" Grid.Row="1" Margin="0,0,4,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="RailColumn" Width="Auto" />
                 <ColumnDefinition Width="*" />

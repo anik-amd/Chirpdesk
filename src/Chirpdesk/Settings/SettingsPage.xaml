@@ -206,7 +206,7 @@
 
                 <Border Height="1" Background="{DynamicResource CdRule}" Margin="0,26,0,22" />
 
-                <TextBlock Text="Side rail" Style="{StaticResource SectionTitle}" />
+                <TextBlock Text="Sidebar" Style="{StaticResource SectionTitle}" />
 
                 <Border Style="{StaticResource CdPanel}">
                     <StackPanel>
@@ -216,21 +216,21 @@
                                          Tag="always"
                                          Content="Always show"
                                          Style="{StaticResource SegmentChoice}"
-                                         AutomationProperties.Name="Rail always show"
+                                         AutomationProperties.Name="Sidebar always show"
                                          Checked="OnRailChoice" />
                             <RadioButton x:Name="RailHover"
                                          GroupName="Rail"
                                          Tag="hover"
                                          Content="Show on hover at left edge"
                                          Style="{StaticResource SegmentChoice}"
-                                         AutomationProperties.Name="Show rail on hover at left edge"
+                                         AutomationProperties.Name="Show sidebar on hover at left edge"
                                          Checked="OnRailChoice" />
                             <RadioButton x:Name="RailHidden"
                                          GroupName="Rail"
                                          Tag="hidden"
                                          Content="Hide completely"
                                          Style="{StaticResource SegmentChoice}"
-                                         AutomationProperties.Name="Rail hidden"
+                                         AutomationProperties.Name="Sidebar hidden"
                                          Checked="OnRailChoice" />
                         </WrapPanel>
                     </StackPanel>

@@ -30,11 +30,11 @@ desktop session.
 - Resize to roughly 360 px wide and open `Ctrl+K`: the palette, query, rows and hint stay inside the window instead of clipping.
 - Open `Ctrl+K` while Settings or Plugins is showing: the palette opens **over the page**, and closing it returns to the same page, not to the chat.
 
-## Side rail
+## Sidebar
 
 - The left rail lists every open chat. Activate two accounts of one plugin: each icon gets a small 1 and 2 badge.
 - The **+** button opens the palette with the plugin list, so another service can be activated; the palette, plugins and settings icons in the rail open their surfaces directly.
-- Settings → Side rail: **Always show**, **On left edge** and **Hide completely**. On hover, the rail animates its width from the left edge; the chat must not reflow or reload.
+- Settings → Sidebar: **Always show**, **On left edge** and **Hide completely**. On hover, the rail animates its width from the left edge; the chat must not reflow or reload.
 - Switch between rail modes while a chat is open and confirm the rail animation does not steal keyboard focus from the page.
 
 ## Icons

@@ -1922,8 +1922,6 @@ public partial class App : Application
 
     private void ApplyTheme()
     {
-        var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
-
         string? lightTheme = null;
         string? darkTheme = null;
         var catppuccin = false;
@@ -1931,6 +1929,7 @@ public partial class App : Application
         try
         {
             var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            _themeMode = ThemeDecision.Parse(settings.Theme);
             lightTheme = settings.LightTheme;
             darkTheme = settings.DarkTheme;
             catppuccin = PluginState.IsEnabled(settings, PluginState.CatppuccinId);
@@ -1940,6 +1939,7 @@ public partial class App : Application
             _log?.Warn($"could not read the palette selection: {ex.Message}");
         }
 
+        var dark = ThemeDecision.IsDark(_themeMode, SystemTheme.UsesLight());
         UiTheme.Apply(dark, lightTheme, darkTheme, catppuccin);
         _host?.SetDark(dark);
         _settingsPage?.SetDark(dark);

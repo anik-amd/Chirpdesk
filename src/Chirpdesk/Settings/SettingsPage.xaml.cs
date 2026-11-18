@@ -21,7 +21,7 @@ namespace Chirpdesk.Settings;
 
 /// <summary>
 /// The only settings surface: services/instances, add-from-definition, appearance, autostart,
-/// DND and storage. Changes save immediately; no tabs or rail.
+/// DND and storage. Changes save immediately; no tabs or sidebar.
 /// </summary>
 public partial class SettingsPage : UserControl
 {

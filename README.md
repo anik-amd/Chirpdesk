@@ -56,7 +56,7 @@ commands.
   services warm after login without showing a window.
 - **Windows toasts.** Real Action Center notifications with the service icon, dedupe and a short
   warm-up gate so a reconnect cannot replay a backlog.
-- **A minimal service rail.** Open chats sit on the left edge with a 1/2 badge when one plugin has
+- **A minimal service sidebar.** Open chats sit on the left edge with a 1/2 badge when one plugin has
   two accounts. The **+** button opens the palette to activate another chat; palette, plugins and
   settings are one click from the same strip. It can be always on, edge-hover or hidden in Settings.
 - **Accounts stay separate.** Every account gets its own WebView2 profile and session. Two WhatsApp
