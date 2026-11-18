@@ -536,8 +536,28 @@ public partial class PluginsPage : UserControl
                     : $"Key {repository.KeyFingerprint}",
                 FontSize = 11,
                 Foreground = Token("CdAccent"),
-                Margin = new Thickness(0, 3, 0, 6),
+                Margin = new Thickness(0, 3, 0, 2),
             });
+            content.Children.Add(new TextBlock
+            {
+                Text = repository.LastSync is { } last
+                    ? $"Last sync {last.ToLocalTime():yyyy-MM-dd HH:mm} · cache window 4 h"
+                    : "Never synced.",
+                FontSize = 10,
+                Foreground = Token("CdTextMuted"),
+                Margin = new Thickness(0, 0, 0, 6),
+            });
+
+            var auto = new CheckBox
+            {
+                Content = "Auto-update when the 4 h cache is stale",
+                IsChecked = repository.AutoUpdate,
+                Style = (Style)FindResource("CdSwitch"),
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            auto.Checked += (_, _) => SetRepositoryAutoUpdate(repository, true);
+            auto.Unchecked += (_, _) => SetRepositoryAutoUpdate(repository, false);
+            content.Children.Add(auto);
 
             if (_keyChanges.TryGetValue(repository.Url, out var pendingKey))
             {
