@@ -547,6 +547,13 @@ public static partial class PluginLoader
             problems.Add($"unknown kind '{manifest.Kind}'");
         }
 
+        if (bundled && string.Equals(manifest.Kind, IntegrationKind, StringComparison.Ordinal))
+        {
+            // Helpers run as separate user programs with explicit consent. Bundling one would
+            // make it part of the installer instead of a signed, inspectable plugin.
+            problems.Add("integration plugins are repository-only, never bundled");
+        }
+
         if (string.IsNullOrWhiteSpace(manifest.Name))
         {
             problems.Add("has no name");

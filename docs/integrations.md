@@ -1,18 +1,22 @@
 # Integrations (phase 7 design)
 
-**Status:** designed 2026-11-18, not implemented. ADR 0016 is the decision record. Everything
-here is a contract to build against; until the phase-7 tasks land, `PluginLoader` refuses the
-`process` permission and no helper is started.
+**Status:** implemented 2026-11-18. ADR 0016 is the decision record. No integration plugin ships
+in v1; the host stays dormant until a signed repository integration is installed. TDLib is
+deferred.
 
-An `integration` plugin is an optional helper program that talks to a protocol directly (TDLib for
-Telegram is the motivating case). It never runs code in the Chirpdesk process, never receives a
-WebView handle, a profile path or the settings store, and cannot add UI. It can report
-notifications and unread counts, expose named commands, and own a private data directory.
+An `integration` plugin is an optional helper program that talks to a protocol directly. It never
+runs code in the Chirpdesk process, never receives a WebView handle, a profile path or the settings
+store, and cannot add UI. It can report notifications and unread counts, expose named commands,
+and own a private data directory.
+
+Integrations are **user-installed from a signed repository, never bundled**. The loader refuses an
+integration found in the app's own plugin folder; shipping one would make it part of the installer
+instead of a signed, inspectable plugin the user chose.
 
 ## Layout
 
 ```
-plugins/telegram-tdlib/
+plugins/example-integration/
 ├─ plugin.json          # kind: integration, permissions, version
 ├─ integration.json     # executable, protocol version, commands
 ├─ helper.exe
@@ -103,7 +107,7 @@ Within 5 seconds of launch the helper must connect to the pipe and send:
 The host compares the token in constant time, checks `protocolVersion`, and answers:
 
 ```json
-{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"appVersion":"0.2.1","permissions":["notifications","unread"],"dataDirectory":"C:\\...\\integrations\\telegram-tdlib"}}
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"appVersion":"0.2.1","permissions":["notifications","unread"],"dataDirectory":"C:\\...\\integrations\\example-integration"}}
 ```
 
 A bad token, wrong version or timeout stops the helper and records `error` with a reason. The
@@ -189,12 +193,14 @@ the plugin folder, because it may contain session tokens; the Recycle Bin makes 
   stop/start, disable/enable, update with changed permissions, tampered executable refusal,
   uninstall and data deletion.
 
-## First integration (TDLib)
+## First integration (deferred)
 
-The helper owns TDLib, its native DLLs, the API id/hash configuration, the session database and
-the authentication flow. Chirpdesk only receives `notify`, `unread`, `status` and `log`, and sends
-declared commands. The helper is user-installed from a repository, never bundled, and its license
-and redistribution terms must be checked before publishing.
+No integration ships in v1. TDLib was the motivating example, but Telegram already works through
+the bundled `web.telegram.org` service plugin, so a native helper is only justified if that web
+client shows a real gap in daily use. If one is built later, the helper owns its native libraries,
+credentials and session database, Chirpdesk receives only `notify`, `unread`, `status` and `log`,
+and the helper ships as a signed repository plugin, never bundled. Its license and redistribution
+terms must be checked before publishing.
 
 ## Non-goals
 
@@ -202,4 +208,5 @@ and redistribution terms must be checked before publishing.
 - Host filesystem, registry, profile or settings access for a helper.
 - Plugin-defined UI beyond command-bar entries and toasts.
 - Inline toast reply and message history in the host (possible later, as an additive method).
-- Bundled or official-registry integrations until one is real and tested.
+- Bundled integrations. None are planned for v1; a future one ships from a repository.
+- TDLib or any other first integration until a concrete need appears.

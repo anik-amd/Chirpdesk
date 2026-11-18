@@ -41,7 +41,7 @@ Current bundled service plugins: `whatsapp`, `messenger`, `telegram`, `facebook`
 | `theme` | `theme.json` with `variants[]` (+ `preview.png`) | no | bundled / repo | after v1 (ADR 0010) |
 | `filter` | `filters.json` | no | bundled / repo | phase 3 |
 | `tool` | `panel.json` (host-rendered primitives) | no | **bundled only** | phase 2 |
-| `integration` | executable + `integration.json` | **yes** | explicit consent, out-of-process | phase 7 design, [`integrations.md`](integrations.md) |
+| `integration` | executable + `integration.json` | **yes** | explicit consent, out-of-process, **repository-only** | phase 7 design, [`integrations.md`](integrations.md) |
 
 ## 3. Folder layout
 

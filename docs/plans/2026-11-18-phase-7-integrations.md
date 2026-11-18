@@ -15,7 +15,8 @@ no orphan process. The app runtime is wired: sessions start for enabled integrat
 catalogue reload, notifications go through the gated toast sink, unread counts add to the tray,
 the plugin card exposes Start/Stop/Restart, the second consent screen gates installation, and
 declared commands appear in the command bar, with an inline argument step for text commands.
-Manual rows and the TDLib helper remain.
+No integration ships in v1: helpers are repository-only and TDLib is deferred until the web
+Telegram client shows a concrete gap. Manual rows remain.
 
 **ADR:** 0007 (data plugins, code out-of-process), 0016 (this boundary)
 **Plan:** `PLAN.md` §4.1, phase 7 row
@@ -99,8 +100,8 @@ restarted, updated, and uninstalled without touching the app's sessions.
      unread count, answers a command, exits on `shutdown`. Built only for tests and manual runs.
    - A local static repo containing the stub proves install → consent → run → toast → command →
      update → uninstall without a real messenger.
-   - TDLib is deliberately not part of this phase; it is a separate helper deliverable once the
-     host is proven.
+   - No real integration ships in v1. TDLib is deferred until the web Telegram client shows a
+     concrete gap; if built, it is a signed repository plugin, never bundled.
 
 9. **Documentation and review**
    - ADR 0016 and `docs/integrations.md` (done); update `docs/plugins.md` links and the manual
@@ -140,7 +141,7 @@ restarted, updated, and uninstalled without touching the app's sessions.
 |---|---|
 | A hostile helper reads the user's files | Cannot be prevented at the same user; the consent screen says it plainly and shows hashes and publisher key |
 | Users read "signed plugin" as "signed Windows program" | No Authenticode claim; UI states the signature is the repository's |
-| Large TDLib payloads | Kind-aware 64 MB limit; streamed download already exists |
+| Large native helpers | Kind-aware 64 MB limit; streamed download already exists |
 | Antivirus flags a downloaded helper | Document it; keep the repository and hash visible before install |
 | Pipe squatter or token leak | Random GUID, `FirstPipeInstance`, 32-byte token in the environment, constant-time compare |
 | Helper stdout leaks secrets | stdout/stderr go to NUL; diagnostics only through sanitised `log` |

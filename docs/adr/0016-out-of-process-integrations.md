@@ -20,7 +20,8 @@ OS sandbox, and the design must say so rather than imply more.
 1. **Separate process only.** An `integration` plugin ships an executable plus
    `integration.json`. The host resolves the executable to a plain file name inside the plugin
    folder, never a path, and launches it directly. No shell, no user-supplied arguments, no
-   `cmd.exe`, no in-process loading.
+   `cmd.exe`, no in-process loading. Integrations are repository-only: the loader rejects one
+   found in the bundled plugin folder, so a helper is always a signed plugin the user installed.
 2. **Named pipe, JSON-RPC 2.0.** One pipe per launch
    (`\\.\pipe\chirpdesk-integration-<guid>`), one client, length-prefixed UTF-8 JSON frames
    (4-byte little-endian length, 256 KiB cap). No TCP port, so no firewall prompt and no network
@@ -70,5 +71,6 @@ OS sandbox, and the design must say so rather than imply more.
   auth allowlist: adding a primitive is a reviewed code change with a test, not a manifest field.
 - One helper instance per integration in this phase; multiple accounts return when the contract
   carries an account id, and that will be an additive `protocolVersion` change.
-- Integration plugins stay out of the official registry until one is real, tested and documented;
-  the registry builder gains kind-aware limits but no default integration entry.
+- No integration ships in v1. TDLib was the motivating example and is deferred until the web
+  Telegram client shows a concrete gap; if built, it is a signed repository plugin, never bundled.
+  The host stays dormant when no integration is installed.

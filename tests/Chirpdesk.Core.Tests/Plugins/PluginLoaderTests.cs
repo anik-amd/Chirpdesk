@@ -183,6 +183,19 @@ public sealed class PluginLoaderTests : IDisposable
     }
 
     [Fact]
+    public void A_bundled_integration_is_refused()
+    {
+        var bundled = Root("bundled");
+        WritePlugin(bundled, "telegram-tdlib",
+            Manifest("telegram-tdlib", kind: "integration", name: "Telegram",
+                permissions: """["process","notifications"]"""));
+
+        var installed = PluginLoader.LoadInstalledPlugins([Bundle(bundled)]);
+
+        Assert.DoesNotContain(installed, plugin => plugin.Id == "telegram-tdlib");
+    }
+
+    [Fact]
     public void A_data_permission_is_refused_for_an_integration()
     {
         var user = Root("user");
