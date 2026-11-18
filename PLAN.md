@@ -215,7 +215,7 @@ If a pinned key changes, the repo is **blocked** until the user re-trusts it by 
 - A repo can never modify the global auth/WebSocket allowlist, and can never install silently.
 - `integration` kind requires a second, separate consent screen naming the executable and its declared commands.
 - Unreachable or invalid repo → skipped and logged; the app starts and keeps working with what is installed.
-- Index cached with a 24 h TTL; updates are **check-on-demand** by default, auto-update only if the user turns it on per repo.
+- Index cached with a 4 h TTL; updates are **check-on-demand** by default, auto-update only if the user turns it on per repo. The window is short because the machine cannot be assumed always-on; a cached index still lets installed plugins work offline.
 
 Commands: `> repo add <url>` · `> repo list` · `> repo remove <name>` · `> repo sync` · `> plugins` (manager) · `> plugin: disable <id>`.
 
@@ -705,7 +705,7 @@ Each phase ends with a build you can actually run.
 | Broken plugin hides a service | User thinks the app lost their account | Invalid plugins are skipped and flagged; disabling a definition never deletes an instance or profile |
 | Malicious filter pack | Blocks logins, or beacons out via CSS | Host rules cannot touch the global allowlist; service origin auto-allowlisted; CSS sanitised (no `@import`, no remote `url()`); permissions listed before install |
 | Compromised plugin repo | Serves a tampered plugin | ECDSA-signed index, pinned per-repo key, explicit re-trust prompt on key change, hash from the signed index, zip-slip rejection, no silent installs |
-| Repo outage or stale index | Filters age, manager errors | Cached index (24 h TTL), installed plugins keep working offline, failures logged not fatal |
+| Repo outage or stale index | Filters age, manager errors | Cached index (4 h TTL), installed plugins keep working offline, failures logged not fatal |
 | `Ctrl+K` avoids the sites' print shortcut | Minor | `Ctrl+P` passthrough documented |
 | Meta changes the web client / sniffs the UA | Service breaks | Stock Edge UA like Meta's own Windows app; per-service UA override |
 | Google sign-in refuses embedded browsers | Some services unusable | Detect + explain; open-in-browser escape hatch |

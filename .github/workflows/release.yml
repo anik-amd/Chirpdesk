@@ -1,0 +1,106 @@
+name: release
+
+# Builds the release assets and leaves a draft. Signing is deliberately not here: the update
+# private key is offline by design (ADR 0006), so a human downloads the installer from the draft,
+# runs scripts/sign-update.ps1, uploads update.json and publishes. A tag alone never ships an
+# update the app will trust.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, without the leading v
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: nuget-
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ inputs.version }}'
+          } else {
+            '${{ github.ref_name }}'.TrimStart('v')
+          }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version '$version' is not MAJOR.MINOR.PATCH."
+          }
+
+          [xml]$project = Get-Content src/Chirpdesk/Chirpdesk.csproj
+          $declared = $project.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+
+          if ($declared -ne $version) {
+            throw "Tag says $version but Chirpdesk.csproj says $declared. Bump the project first."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building $version"
+
+      - name: Restore
+        run: dotnet restore --locked-mode
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Unit tests
+        run: dotnet test --no-build -c Release --filter "Category!=Integration"
+
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Pack installer and portable zip
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          pwsh -NoProfile -File scripts/pack-release.ps1 -Version $version
+
+          if (-not (Test-Path "dist/Chirpdesk-Setup-$version.exe")) {
+            throw "Installer was not produced."
+          }
+
+      - name: Create draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $notes = @'
+          Draft release. Sign update.json from the uploaded installer, attach it, then publish.
+          '@
+
+          gh release create "v$version" `
+            "dist/Chirpdesk-Setup-$version.exe" `
+            "dist/Chirpdesk-$version-portable.zip" `
+            --draft `
+            --title "Chirpdesk $version" `
+            --notes $notes

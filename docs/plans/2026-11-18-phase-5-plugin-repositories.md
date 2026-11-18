@@ -1,14 +1,16 @@
 # Phase 5 - Plugin repositories
 
-**Status:** in progress (2026-11-18). The core policy is in place: signed index model and parser,
+**Status:** substantially complete (2026-11-18). The core policy is in place: signed index model and parser,
 P-256 signature verification, key fingerprints, compatibility filtering, archive limits and
 zip-slip/executable rejection all have unit tests. The official registry key is pinned in
 `RepositoryKeys`. A first repository slice is wired: settings rows, HTTPS sync with first-use
 `key.pem` pinning, archive verification/installation into the user plugin root, and a
 Repositories section on the Plugins page. Installs write a source sidecar, keep the previous
 version for rollback, and expose Update, Roll back and Recycle-Bin Uninstall. A successful
-install is disabled by default and the catalogue reloads immediately. Still open: the full
-manual matrix and a live public-registry end-to-end run.
+install is disabled by default and the catalogue reloads immediately. Done live: the public
+official registry is preseeded, and add/sync/install/update/rollback/uninstall were exercised
+against it. Still open: the remaining manual refusal rows (changed key, corrupt index, zip-slip,
+executable entry) beyond their unit coverage.
 
 **ADR:** 0007 (data plugins), 0008 (signed static repositories)
 
@@ -27,7 +29,7 @@ blocks the repo until the user explicitly re-trusts it.
      auto-update, last sync. Official repo uses the pinned key, never a settings key.
    - Add/remove/re-trust commands with fingerprint comparison.
 3. **Sync service**
-   - Fetch `index.json` + `index.json.sig` over HTTPS, verify exact bytes, enforce 24 h TTL.
+   - Fetch `index.json` + `index.json.sig` over HTTPS, verify exact bytes, enforce 4 h TTL.
    - Cache the verified index; unreachable/invalid repo is logged and skipped.
    - Filter `apiVersion` and `minAppVersion`; show unsupported rows, never install them.
 4. **Install chain**

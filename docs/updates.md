@@ -59,15 +59,40 @@ pwsh scripts/new-update-key.ps1 -Path D:\keys\chirpdesk-update.pem
 
 # per release, after the installer exists
 pwsh scripts/sign-update.ps1 `
-  -Installer dist/Chirpdesk-Setup.exe `
+  -Installer dist/Chirpdesk-Setup-1.3.0.exe `
   -Version 1.3.0 `
-  -Url https://github.com/anik-amd/Chirpdesk/releases/download/v1.3.0/Chirpdesk-Setup.exe `
+  -Url https://github.com/anik-amd/Chirpdesk/releases/download/v1.3.0/Chirpdesk-Setup-1.3.0.exe `
   -KeyPath D:\keys\chirpdesk-update.pem `
   -Out dist/update.json
 ```
 
 The script hashes the installer, signs the canonical bytes, writes `update.json`, then reads it
 back and verifies both the signature and the payload before exiting non-zero on any mismatch.
+
+## Release automation
+
+`.github/workflows/release.yml` runs on a `v*` tag (or manual dispatch with a version) and:
+
+1. refuses a tag whose version does not match `src/Chirpdesk/Chirpdesk.csproj`;
+2. restores, builds and runs the unit tests;
+3. packs the installer and portable zip;
+4. creates a **draft** GitHub release with those two assets.
+
+Signing stays on the release machine because the private key is offline by design. Download the
+draft's installer, sign it, upload the manifest, then publish:
+
+```powershell
+gh release download v1.3.0 --pattern Chirpdesk-Setup-1.3.0.exe -D dist
+pwsh scripts/sign-update.ps1 -Installer dist/Chirpdesk-Setup-1.3.0.exe -Version 1.3.0 `
+  -Url https://github.com/anik-amd/Chirpdesk/releases/download/v1.3.0/Chirpdesk-Setup-1.3.0.exe `
+  -KeyPath D:\keys\chirpdesk-update.pem -Out dist/update.json
+gh release upload v1.3.0 dist/update.json
+gh release edit v1.3.0 --draft=false --notes-file notes.md
+```
+
+A draft is invisible to `releases/latest`, so an unfinished release cannot reach the updater.
+Do not create the release locally first: the tag push has to reach the workflow so the draft owns
+the build.
 
 ## Client policy
 

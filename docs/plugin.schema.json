@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/anik-amd/Chirpdesk/blob/main/docs/plugin.schema.json",
+  "title": "Chirpdesk plugin manifest",
+  "description": "Shape of plugin.json for every plugin kind. Chirpdesk.Core.Plugins.PluginLoader is the authority at runtime; this file documents the contract for plugin authors and editors. Unknown properties are ignored, so a newer manifest still loads on an older app unless a required value is unsupported.",
+  "type": "object",
+  "required": ["id", "kind", "name", "version", "apiVersion"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+      "description": "Lowercase, immutable across versions. Must match the folder name and the service definition."
+    },
+    "kind": {
+      "enum": ["service", "theme", "filter", "tool", "integration"]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$",
+      "description": "The plugin's own version. The repository index must sign the same value."
+    },
+    "apiVersion": {
+      "const": 1,
+      "description": "Host API this plugin targets. A higher number is refused."
+    },
+    "author": {
+      "type": "string"
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "accent": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "css",
+          "notifications",
+          "filters",
+          "tools",
+          "read-storage",
+          "trim-cache",
+          "storage",
+          "inject-js",
+          "process"
+        ]
+      },
+      "description": "tools, read-storage, trim-cache and storage are bundled-only in v1. inject-js and process are refused in v1."
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "allOf": [
+          { "not": { "pattern": "[\\\\/]" } },
+          { "not": { "pattern": "\\.\\." } }
+        ]
+      },
+      "description": "Plain file names inside the plugin folder. No separators, no parent segments."
+    }
+  },
+  "additionalProperties": true
+}

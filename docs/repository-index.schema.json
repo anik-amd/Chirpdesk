@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/anik-amd/Chirpdesk/blob/main/docs/repository-index.schema.json",
+  "title": "Chirpdesk repository index",
+  "description": "Shape of index.json inside a static plugin repository. The signature in index.json.sig covers the exact bytes of this file, so any edit needs a new signature. Chirpdesk.Core.Plugins.RepositoryIndexCodec is the authority at runtime.",
+  "type": "object",
+  "required": ["schema", "name", "keyFingerprint", "plugins"],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "keyFingerprint": {
+      "type": "string",
+      "pattern": "^ecdsa-p256:[0-9a-f]{16}$",
+      "description": "First 16 hex characters of SHA-256 over the SPKI DER of the signing key."
+    },
+    "plugins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/plugin" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "plugin": {
+      "type": "object",
+      "required": ["id", "kind", "name", "version", "apiVersion", "sha256", "size", "url"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "kind": {
+          "enum": ["service", "theme", "filter", "tool", "integration"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must match the version inside the signed archive's plugin.json."
+        },
+        "apiVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minAppVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(\\.\\d+)?$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{64}$"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5242880
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A safe relative path inside the repository, or an absolute https URL. No leading slash, no backslash, no colon, no '.' or '..' segments."
+        },
+        "permissions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
