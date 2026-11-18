@@ -763,6 +763,30 @@ public partial class PluginsPage : UserControl
         AddConsentLine("Repository key", repository.KeyFingerprint);
         AddConsentLine("Archive SHA-256", plugin.Sha256);
 
+        var alternatives = FindAlternativeSources(repository, plugin.Id);
+
+        if (alternatives.Count > 0)
+        {
+            ConsentBody.Children.Add(new TextBlock
+            {
+                Text = "Multiple repositories offer this plugin. Choose the source explicitly:",
+                FontSize = 12,
+                Foreground = Token("CdText"),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 12, 0, 6),
+            });
+
+            var choices = new WrapPanel();
+            choices.Children.Add(SourceChoice(repository, index, plugin, selected: true));
+
+            foreach (var alternative in alternatives)
+            {
+                choices.Children.Add(SourceChoice(alternative.Repository, alternative.Index, alternative.Plugin, selected: false));
+            }
+
+            ConsentBody.Children.Add(choices);
+        }
+
         ConsentBody.Children.Add(new TextBlock
         {
             Text = "Permissions",
@@ -824,6 +848,49 @@ public partial class PluginsPage : UserControl
         _pendingInstall = null;
         ConsentLayer.Visibility = Visibility.Collapsed;
         await InstallPluginAsync(pending.Repository, pending.Index, pending.Plugin);
+    }
+
+    private List<(RepositorySetting Repository, RepositoryIndex Index, RepositoryPlugin Plugin)> FindAlternativeSources(
+        RepositorySetting selected,
+        string pluginId)
+    {
+        var alternatives = new List<(RepositorySetting, RepositoryIndex, RepositoryPlugin)>();
+
+        foreach (var repository in _settings.Repositories)
+        {
+            if (string.Equals(repository.Url, selected.Url, StringComparison.OrdinalIgnoreCase)
+                || !_synced.TryGetValue(repository.Url, out var index))
+            {
+                continue;
+            }
+
+            var plugin = index.Plugins.FirstOrDefault(item =>
+                string.Equals(item.Id, pluginId, StringComparison.Ordinal));
+
+            if (plugin is not null)
+            {
+                alternatives.Add((repository, index, plugin));
+            }
+        }
+
+        return alternatives;
+    }
+
+    private Button SourceChoice(
+        RepositorySetting repository,
+        RepositoryIndex index,
+        RepositoryPlugin plugin,
+        bool selected)
+    {
+        var button = new Button
+        {
+            Content = $"{repository.Name ?? repository.Url} · {plugin.Version}",
+            Style = (Style)FindResource(selected ? "PillButton" : "GhostButton"),
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 6, 6),
+        };
+        button.Click += (_, _) => OpenInstallConsent(repository, index, plugin);
+        return button;
     }
 
     private void AddConsentLine(string label, string? value)
