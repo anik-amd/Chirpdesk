@@ -24,6 +24,8 @@ param(
 
     [string] $PluginsDir = 'plugins',
 
+    [string] $ExtraPluginsDir = 'registry-src',
+
     [string] $OutDir = 'dist/registry',
 
     [string] $Name = 'Chirpdesk Official',
@@ -36,6 +38,7 @@ $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
 $pluginsRoot = if ([IO.Path]::IsPathRooted($PluginsDir)) { $PluginsDir } else { Join-Path $repo $PluginsDir }
+$extraRoot = if ([IO.Path]::IsPathRooted($ExtraPluginsDir)) { $ExtraPluginsDir } else { Join-Path $repo $ExtraPluginsDir }
 $out = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $repo $OutDir }
 
 if (-not (Test-Path -LiteralPath $KeyPath)) {
@@ -70,8 +73,13 @@ try {
     ).ToLowerInvariant().Substring(0, 16)
 
     $entries = @()
+    $seenIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $pluginRoots = @($pluginsRoot)
+    if (Test-Path -LiteralPath $extraRoot) {
+        $pluginRoots += $extraRoot
+    }
 
-    foreach ($folder in Get-ChildItem -LiteralPath $pluginsRoot -Directory | Sort-Object Name) {
+    foreach ($folder in @($pluginRoots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Directory } | Sort-Object Name)) {
         $manifestPath = Join-Path $folder.FullName 'plugin.json'
         if (-not (Test-Path -LiteralPath $manifestPath)) {
             Write-Warning "Skipping $($folder.Name): no plugin.json"
@@ -90,6 +98,11 @@ try {
 
         if ($kind -in @('tool', 'integration')) {
             Write-Warning "Skipping $($folder.Name): $kind plugins are bundled-only in v1"
+            continue
+        }
+
+        if (-not $seenIds.Add($id)) {
+            Write-Warning "Skipping $($folder.Name): duplicate plugin id '$id'"
             continue
         }
 

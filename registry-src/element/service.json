@@ -1,0 +1,9 @@
+{
+  "url": "https://app.element.io/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["element", "matrix"],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

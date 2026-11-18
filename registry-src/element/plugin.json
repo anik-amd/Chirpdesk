@@ -1,0 +1,11 @@
+{
+  "id": "element",
+  "kind": "service",
+  "name": "Element",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Element Matrix chat. Activate to add an account; the session stays in its own profile.",
+  "permissions": [],
+  "accent": "#0DBD8B"
+}
