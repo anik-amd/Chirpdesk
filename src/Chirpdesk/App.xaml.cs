@@ -2690,9 +2690,19 @@ public partial class App : Application
         }
 
         var moved = Interop.RecycleBin.Send(path, _log!);
+
         if (moved)
         {
             _log?.Info($"plugin uninstalled to Recycle Bin: {pluginId}");
+
+            // A helper's data may hold session tokens. Remove it with the plugin by default;
+            // the Recycle Bin keeps the choice reversible.
+            var integrationData = Path.Combine(AppPaths.DataRoot, "integrations", pluginId);
+
+            if (Directory.Exists(integrationData))
+            {
+                Interop.RecycleBin.Send(integrationData, _log!);
+            }
         }
 
         return Task.FromResult(moved);

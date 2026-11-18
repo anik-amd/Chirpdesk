@@ -165,8 +165,8 @@ Installing an integration shows the normal plugin details sheet, then a second s
 - a checkbox that must be ticked before **Install integration** enables.
 
 Updates that change the executable hash, the permission set or the command list require the
-second screen again. Uninstall offers to move the helper's data directory to the Recycle Bin,
-default on, because it may contain session tokens.
+second screen again. Uninstall moves the helper's data directory to the Recycle Bin together with
+the plugin folder, because it may contain session tokens; the Recycle Bin makes that reversible.
 
 ## Storage and logging
 
