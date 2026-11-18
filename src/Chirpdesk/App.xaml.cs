@@ -466,6 +466,7 @@ public partial class App : Application
             NotificationMode = resolved.NotificationMode,
             PageDarkMode = resolved.PageDarkMode,
             Blocking = instance.Blocking,
+            Accent = instance.Accent ?? _catalog?.Find(instance.DefinitionId)?.Accent,
             DefinitionId = resolved.DefinitionId,
             ProfileId = instance.ProfileId ?? resolved.InstanceId,
         };

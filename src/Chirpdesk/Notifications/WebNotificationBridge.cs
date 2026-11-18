@@ -21,6 +21,7 @@ internal sealed class WebNotificationBridge
     private readonly string _serviceId;
     private readonly string _serviceName;
     private readonly string? _definitionId;
+    private readonly string? _accent;
     private readonly string? _allowedHost;
     private readonly DateTimeOffset _startedAt;
 
@@ -33,6 +34,7 @@ internal sealed class WebNotificationBridge
         string serviceId,
         string serviceName,
         string? definitionId,
+        string? accent,
         string? allowedHost,
         DateTimeOffset startedAt)
     {
@@ -44,6 +46,7 @@ internal sealed class WebNotificationBridge
         _serviceId = serviceId;
         _serviceName = serviceName;
         _definitionId = definitionId;
+        _accent = accent;
         _allowedHost = allowedHost;
         _startedAt = startedAt;
     }
@@ -133,7 +136,7 @@ internal sealed class WebNotificationBridge
 
         Shown++;
         _log.Info($"toast shown for '{_serviceName}' (#{Shown}), title length {title.Length}");
-        _toast.Show(new ToastMessage(title, body, LocalIcon(notification.IconUri) ?? ToastIcons.ForService(_definitionId, _serviceName), _serviceId));
+        _toast.Show(new ToastMessage(title, body, LocalIcon(notification.IconUri) ?? ToastIcons.ForService(_definitionId, _serviceName, _accent), _serviceId));
     }
 
     /// <summary>IconUri is a string; only a local file can be attached to a toast.</summary>

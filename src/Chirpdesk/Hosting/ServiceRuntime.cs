@@ -539,6 +539,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             _instance.InstanceId,
             _instance.Name,
             _instance.DefinitionId,
+            _instance.Accent,
             HostOf(_instance.Url),
             _startedAt);
 
@@ -904,7 +905,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _toast.Show(new ToastMessage(
             _instance.Name,
             "New message",
-            ToastIcons.ForService(_instance.DefinitionId, _instance.Name),
+            ToastIcons.ForService(_instance.DefinitionId, _instance.Name, _instance.Accent),
             _instance.InstanceId));
     }
 
