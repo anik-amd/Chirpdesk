@@ -378,7 +378,7 @@ Plugin management is built-in shell UI, never a tool action.
 
 ## 13. Plugin repositories
 
-A repo is a static HTTPS directory with `index.json`, `index.json.sig` (ECDSA P-256 over the exact index bytes), and `key.pem` (the public SPKI key used for first-use pinning). Each entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`. On first sync the app fetches `key.pem`, checks that the index `keyFingerprint` matches it, and stores the key; later syncs use the stored key and block on a mismatch.
+The official repo is `https://raw.githubusercontent.com/anik-amd/Chirpdesk/main/registry/` and is offered once on startup. A repo is a static HTTPS directory with `index.json`, `index.json.sig` (ECDSA P-256 over the exact index bytes), and `key.pem` (the public SPKI key used for first-use pinning). Each entry carries `id`, `kind`, `version`, `apiVersion`, `minAppVersion`, `sha256`, `size`, `url`, `permissions`. On first sync the app fetches `key.pem`, checks that the index `keyFingerprint` matches it, and stores the key; later syncs use the stored key and block on a mismatch.
 
 Install order, aborting on any failure: fetch index + signature → verify against the pinned repo key → skip incompatible entries → download archive, verify `sha256` **from the signed index** and `size` → unpack rejecting absolute paths, `..`, reparse points and zip-slip → validate `plugin.json` + payload → move into `%APPDATA%\Chirpdesk\plugins\<id>\` → enable only if the user asked.
 
