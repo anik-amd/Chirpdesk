@@ -14,6 +14,22 @@ pwsh -NoProfile -File scripts/gate.ps1 -SoakSeconds 10
 `dotnet build` must stay warning-free. Tests tagged `Integration` need a real desktop and a
 signed-in service; they are not run in CI.
 
+## Testing the plugin install and consent flow
+
+The stub integration exists so the repository, consent and helper lifecycle can be exercised
+without a real messenger:
+
+```powershell
+pwsh scripts/test-registry.ps1
+# Add the printed raw URL in Plugins -> Browse -> Add repository.
+# Install the stub, tick the second consent, then activate it.
+pwsh scripts/test-registry.ps1 -Remove
+```
+
+The script signs a one-plugin registry with a stable local key under
+`%LOCALAPPDATA%\Chirpdesk\dev\`, pushes it to a throwaway branch, and deletes the branch on
+`-Remove`. Nothing is added to the official registry.
+
 ## Rules that are not negotiable
 
 Read `AGENTS.md` before touching code. In particular:
