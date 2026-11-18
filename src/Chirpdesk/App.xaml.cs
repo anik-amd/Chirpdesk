@@ -1642,7 +1642,11 @@ public partial class App : Application
         {
             var result = await _integrations.SendCommandAsync(pluginId, commandId, null);
 
-            if (!result.Ok)
+            if (result.Ok)
+            {
+                _log?.Info($"integration command '{pluginId}/{commandId}' completed");
+            }
+            else
             {
                 _log?.Warn($"integration command '{pluginId}/{commandId}' failed: {result.Error}");
             }
