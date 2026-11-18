@@ -61,7 +61,9 @@ desktop session.
 ## About and repositories
 
 - Sidebar **About** opens a page with the app version, creator, repository link, build credits and license links.
-- Plugins page: **Add Plugins Repo** opens the add modal with URL instructions; **Manage plugin repos** lists each repo with Update, Edit, Delete and Trust new key.
+- Plugins page **Installed** tab lists every installed plugin with version, active state and source, and shows Update, Roll back and Uninstall where they apply. **Browse** tab owns **Add repository** and **Manage repositories**, and groups repository plugins by source.
+- Selecting a plugin in Browse opens a details sheet with source, version, compatibility, permissions, archive size and hash, and the key fingerprint. Install or Update is the explicit confirmation.
+- **Manage repositories** lists each repo with Update, Edit, Delete, Trust new key and the auto-update switch.
 - A synced repo shows only compatible plugins; unsupported entries remain visible with their reason.
 
 ## Command palette

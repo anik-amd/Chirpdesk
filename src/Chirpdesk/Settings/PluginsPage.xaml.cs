@@ -667,7 +667,7 @@ public partial class PluginsPage : UserControl
         {
             ManageRepositoriesPanel.Children.Add(new TextBlock
             {
-                Text = "No repositories yet. Use Add Plugins Repo to add one.",
+                Text = "No repositories yet. Use Add repository in the Browse tab to add one.",
                 FontSize = 12,
                 Foreground = Token("CdTextMuted"),
                 TextWrapping = TextWrapping.Wrap,
