@@ -9,7 +9,10 @@ with permission mapping, and bounded payload readers. Task 3 has the Core sessio
 (handshake, dispatch, timeouts, restart backoff, crash handling) with 12 tests, plus the Windows
 launcher with a kill-on-close job object, first-instance named pipe and NUL-drained stdout. Task 6
 has install-time integration validation and the executable hash recorded in the source sidecar.
-The stub helper exists at `tests/helpers/StubIntegration`; live launch and UI wiring remain.
+The stub helper lives at `tests/helpers/StubIntegration`; `--integration-smoke=<folder>` launches it
+through the real Windows launcher and proved handshake, notify, unread, command and stop live with
+no orphan process. Remaining: the app runtime wiring (toasts, badge, cards, commands) and the
+second consent screen.
 
 **ADR:** 0007 (data plugins, code out-of-process), 0016 (this boundary)
 **Plan:** `PLAN.md` §4.1, phase 7 row

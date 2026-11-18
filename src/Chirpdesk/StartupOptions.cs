@@ -15,12 +15,14 @@ internal sealed record StartupOptions(
     bool NotifyTest,
     bool WarmAll,
     bool Autostart,
-    string? Page)
+    string? Page,
+    string? IntegrationSmoke)
 {
     private const string SoakPrefix = "--soak-seconds=";
     private const string QuitPrefix = "--quit-after=";
     private const string OpenPrefix = "--open";
     private const string PagePrefix = "--page=";
+    private const string IntegrationSmokePrefix = "--integration-smoke=";
 
     public static StartupOptions Parse(string[] args)
     {
@@ -32,6 +34,8 @@ internal sealed record StartupOptions(
         var autostart = Array.Exists(args, a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase));
         var pageArg = args.FirstOrDefault(a => a.StartsWith(PagePrefix, StringComparison.OrdinalIgnoreCase));
         var page = pageArg is null ? null : pageArg[PagePrefix.Length..].Trim();
+        var smokeArg = args.FirstOrDefault(a => a.StartsWith(IntegrationSmokePrefix, StringComparison.OrdinalIgnoreCase));
+        var smoke = smokeArg is null ? null : smokeArg[IntegrationSmokePrefix.Length..].Trim();
 
         var soak = TimeSpan.FromSeconds(60);
         TimeSpan? quitAfter = null;
@@ -64,7 +68,7 @@ internal sealed record StartupOptions(
             }
         }
 
-        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, warmAll, autostart, page);
+        return new StartupOptions(selfTest, testToast, soak, open, quitAfter, hidden, notifyTest, warmAll, autostart, page, smoke);
     }
 
     /// <summary>Any timeout is clamped to something a human would accept (10 s to 1 h).</summary>

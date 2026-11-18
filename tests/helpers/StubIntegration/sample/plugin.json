@@ -1,0 +1,10 @@
+{
+  "id": "stub-integration",
+  "kind": "integration",
+  "name": "Stub Integration",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Test-only helper that proves the out-of-process integration host.",
+  "permissions": ["process", "notifications", "unread", "commands"]
+}

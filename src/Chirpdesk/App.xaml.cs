@@ -9,6 +9,7 @@ using Chirpdesk.CommandBar;
 using Chirpdesk.Core.Blocking;
 using Chirpdesk.Core.CommandBar;
 using Chirpdesk.Core.Definitions;
+using Chirpdesk.Core.Integrations;
 using Chirpdesk.Core.Lifecycle;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Plugins;
@@ -18,6 +19,7 @@ using Chirpdesk.Core.Time;
 using Chirpdesk.Definitions;
 using Chirpdesk.Diagnostics;
 using Chirpdesk.Hosting;
+using Chirpdesk.Integrations;
 using Chirpdesk.Interop;
 using Chirpdesk.Logging;
 using Chirpdesk.Notifications;
@@ -150,6 +152,12 @@ public partial class App : Application
         _host.RailSettingsRequested += (_, _) => OpenSettings();
         _host.RailAboutRequested += (_, _) => OpenAbout();
 
+        if (options.IntegrationSmoke is { Length: > 0 } integrationFolder)
+        {
+            _ = RunIntegrationSmokeAsync(integrationFolder);
+            return;
+        }
+
         if (options.SelfTest)
         {
             _ = RunSelfTestAsync(options);
@@ -280,6 +288,75 @@ public partial class App : Application
         }
 
         Terminate(exitCode);
+    }
+
+    /// <summary>
+    /// Hidden diagnostic: launches a real helper through the Windows launcher and proves the
+    /// handshake, one notification, one unread count and one command, then stops it. Used to
+    /// verify the process boundary before any UI exists. Never part of normal startup.
+    /// </summary>
+    private async Task RunIntegrationSmokeAsync(string folder)
+    {
+        try
+        {
+            var manifest = IntegrationLoader.Read(folder, out var integrationErrors);
+
+            if (manifest is null)
+            {
+                ConsoleBridge.Write($"integration smoke: invalid folder: {string.Join("; ", integrationErrors)}");
+                Terminate(2);
+                return;
+            }
+
+            var plugin = PluginLoader.ReadInstalledManifest(folder, out var pluginErrors);
+
+            if (plugin is null)
+            {
+                ConsoleBridge.Write($"integration smoke: invalid plugin.json: {string.Join("; ", pluginErrors)}");
+                Terminate(2);
+                return;
+            }
+
+            var permissions = new HashSet<string>(plugin.Permissions ?? [], StringComparer.Ordinal);
+            var notification = new TaskCompletionSource<IntegrationNotifyMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var unread = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using var session = new IntegrationSession(
+                manifest,
+                plugin.Id,
+                Path.Combine(folder, manifest.Executable),
+                Path.Combine(AppPaths.DataRoot, "integrations", plugin.Id),
+                permissions,
+                new WindowsIntegrationLauncher(_log!),
+                new SystemIntegrationDelay(),
+                _log,
+                new IntegrationSessionOptions
+                {
+                    AppVersion = typeof(App).Assembly.GetName().Version?.ToString() ?? "0.0.0",
+                });
+
+            session.NotificationReceived += message => notification.TrySetResult(message);
+            session.UnreadChanged += count => unread.TrySetResult(count);
+
+            await session.StartAsync();
+            var started = session.State;
+
+            var note = await notification.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var count = await unread.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var command = await session.SendCommandAsync("open", null);
+            await session.StopAsync();
+
+            ConsoleBridge.Write(
+                $"integration smoke: started={started} notify='{note.Title}' body={!string.IsNullOrEmpty(note.Body)} "
+                + $"unread={count} command={command.Ok}/{command.Message} final={session.State}");
+
+            Terminate(started == IntegrationState.Running && command.Ok ? 0 : 5);
+        }
+        catch (Exception ex)
+        {
+            ConsoleBridge.Write($"integration smoke failed: {ex.GetType().Name}: {ex.Message}");
+            Terminate(6);
+        }
     }
 
     /// <summary>Proves the toast identity alone, with no webview involved.</summary>

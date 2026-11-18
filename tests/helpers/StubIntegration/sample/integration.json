@@ -1,0 +1,18 @@
+{
+  "protocolVersion": 1,
+  "executable": "stub-integration.exe",
+  "commands": [
+    {
+      "id": "open",
+      "title": "Stub: open",
+      "description": "Ask the stub helper to confirm a command.",
+      "argument": "none"
+    },
+    {
+      "id": "send",
+      "title": "Stub: send",
+      "description": "Send text to the stub helper.",
+      "argument": "text"
+    }
+  ]
+}
