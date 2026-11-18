@@ -57,6 +57,10 @@ try {
         $dotnet = Resolve-Dotnet
         & $dotnet build --nologo | Out-Null
         Write-Check 'build' ($LASTEXITCODE -eq 0) "dotnet build exited $LASTEXITCODE"
+
+        & $dotnet build (Join-Path $repo 'tests/helpers/StubIntegration/StubIntegration.csproj') --nologo | Out-Null
+        Write-Check 'build-stub' ($LASTEXITCODE -eq 0) "stub helper exited $LASTEXITCODE"
+        if ($LASTEXITCODE -ne 0) { exit 1 }
         if ($LASTEXITCODE -ne 0) { exit 1 }
     }
 
@@ -71,6 +75,29 @@ try {
     $running = @(Get-Process Chirpdesk -ErrorAction SilentlyContinue)
     Write-Check 'no-running-instance' ($running.Count -eq 0) "Chirpdesk processes: $($running.Count) (quit from the tray first)"
     if ($running.Count -gt 0) { exit 1 }
+
+    # 0. Integration boundary: launch the stub helper through the real Windows launcher and
+    # require a handshake, a notification, an unread count and a command before a clean stop.
+    $stubDir = Join-Path $repo 'artifacts\bin\StubIntegration\debug'
+    if (Test-Path (Join-Path $stubDir 'stub-integration.exe')) {
+        $smokeDir = Join-Path ([IO.Path]::GetTempPath()) ("chirpdesk-integration-smoke-" + [Guid]::NewGuid().ToString('N'))
+        try {
+            New-Item -ItemType Directory -Force -Path $smokeDir | Out-Null
+            Copy-Item (Join-Path $stubDir '*') $smokeDir -Recurse
+            Copy-Item (Join-Path $repo 'tests\helpers\StubIntegration\sample\*') $smokeDir -Force
+
+            $smoke = Start-Process -FilePath $exe -ArgumentList "--integration-smoke=$smokeDir" -PassThru -Wait
+            Start-Sleep -Seconds 1
+            $orphan = @(Get-Process stub-integration -ErrorAction SilentlyContinue).Count
+            Write-Check 'integration-smoke' ($smoke.ExitCode -eq 0 -and $orphan -eq 0) "exit $($smoke.ExitCode), orphan helpers: $orphan"
+        }
+        finally {
+            Remove-Item -LiteralPath $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    else {
+        Write-Check 'integration-smoke' $false "stub helper not built at $stubDir"
+    }
 
     # 1. The headless gate. Its own PASS/FAIL lines go to logs/selftest.log and the console.
     $selfTest = Start-Process -FilePath $exe -ArgumentList '--selftest', "--soak-seconds=$SoakSeconds" -PassThru -Wait
