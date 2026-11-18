@@ -73,10 +73,15 @@ internal sealed class WebNotificationBridge
 
         // Phase 0: grant notifications for the service's own origin only. The full per-origin
         // policy (camera, mic, geolocation denial) lands in phase 2.
-        if (IsAllowedOrigin(e.Uri))
+        var allowed = IsAllowedOrigin(e.Uri);
+
+        if (allowed)
         {
             e.State = CoreWebView2PermissionState.Allow;
         }
+
+        _log.Info(
+            $"notification permission requested for '{_serviceName}' host={HostOf(e.Uri) ?? "none"} allowed={allowed}");
     }
 
     private void OnNotificationReceived(object? sender, CoreWebView2NotificationReceivedEventArgs e)
@@ -135,6 +140,9 @@ internal sealed class WebNotificationBridge
         && uri.IsFile
         ? uri.LocalPath
         : null;
+
+    private static string? HostOf(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : null;
 
     private bool IsAllowedOrigin(string? origin)
     {

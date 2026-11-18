@@ -857,8 +857,10 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _log.Info($"unread {count} for '{_instance.InstanceId}'");
         UnreadChanged?.Invoke(this, EventArgs.Empty);
 
-        if (count > previous && count > 0 && _gate?.IsOpen == true)
+        if (count > previous && count > 0)
         {
+            // Always arm the fallback. A message can arrive while the warm-up gate is still
+            // closed; the task waits for the gate instead of dropping the event.
             _ = ShowTitleOnlyFallbackAsync();
         }
     }
@@ -873,6 +875,12 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private async Task ShowTitleOnlyFallbackAsync()
     {
         var shownBefore = _bridge?.Shown ?? 0;
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
+
+        while (!_disposed && _gate is { IsOpen: false } && DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+        }
 
         await Task.Delay(TimeSpan.FromSeconds(3));
 
