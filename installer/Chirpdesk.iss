@@ -45,6 +45,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
+[InstallDelete]
+; 0.3.3 briefly bundled these four services. They ship from the registry now, so an upgrade
+; must remove the bundled copies or the repository entries would be shadowed forever.
+Type: filesandordirs; Name: "{app}\plugins\mastodon"
+Type: filesandordirs; Name: "{app}\plugins\bluesky"
+Type: filesandordirs; Name: "{app}\plugins\linkedin"
+Type: filesandordirs; Name: "{app}\plugins\discord"
+
 [Files]
 Source: "..\dist\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
