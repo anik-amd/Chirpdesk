@@ -70,8 +70,13 @@ internal sealed class RepositoryService
 
             string publicKeyPem;
             var keyUri = new Uri(baseUri, "key.pem");
+            var official = IsOfficial(repository.Url);
 
-            if (string.IsNullOrWhiteSpace(repository.PublicKeyPem))
+            if (official)
+            {
+                publicKeyPem = RepositoryKeys.OfficialPublicKey;
+            }
+            else if (string.IsNullOrWhiteSpace(repository.PublicKeyPem))
             {
                 if (!string.IsNullOrWhiteSpace(repository.KeyFingerprint))
                 {
@@ -89,8 +94,22 @@ internal sealed class RepositoryService
 
             var fingerprint = RepositorySignature.Fingerprint(publicKeyPem);
 
+            if (official && !string.Equals(fingerprint, RepositoryKeys.OfficialFingerprint, StringComparison.OrdinalIgnoreCase))
+            {
+                return new RepositorySyncResult(
+                    false,
+                    "The official repository key does not match the pinned key. Update Chirpdesk.");
+            }
+
             if (!RepositorySignature.Verify(indexBytes, signatureText, publicKeyPem, out var signatureError))
             {
+                if (official)
+                {
+                    return new RepositorySyncResult(
+                        false,
+                        "The official repository index is not signed by the pinned key. Update Chirpdesk.");
+                }
+
                 // A failed signature with a pinned key is the changed-key case. Fetch the key the
                 // repository currently publishes so the user can compare both fingerprints.
                 var candidate = await Http.GetStringAsync(keyUri, cancellationToken);
@@ -381,6 +400,12 @@ internal sealed class RepositoryService
             _log.Warn($"repository cache write failed: {ex.Message}");
         }
     }
+
+    private static bool IsOfficial(string url) =>
+        string.Equals(
+            url.TrimEnd('/'),
+            RepositoryKeys.OfficialUrl.TrimEnd('/'),
+            StringComparison.OrdinalIgnoreCase);
 
     private static bool TryBaseUri(string? value, out Uri baseUri, out string error)
     {

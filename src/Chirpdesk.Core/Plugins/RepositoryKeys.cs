@@ -6,6 +6,8 @@ namespace Chirpdesk.Core.Plugins;
 /// </summary>
 public static class RepositoryKeys
 {
+    public const string OfficialUrl = "https://raw.githubusercontent.com/anik-amd/Chirpdesk/main/registry/";
+
     public const string OfficialFingerprint = "ecdsa-p256:569dd2be908bd358";
 
     public const string OfficialPublicKey = """

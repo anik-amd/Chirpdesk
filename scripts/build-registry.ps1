@@ -88,6 +88,11 @@ try {
             continue
         }
 
+        if ($kind -in @('tool', 'integration')) {
+            Write-Warning "Skipping $($folder.Name): $kind plugins are bundled-only in v1"
+            continue
+        }
+
         $archiveName = "$id-$version.zip"
         $archivePath = Join-Path (Join-Path $out 'plugins') $archiveName
 

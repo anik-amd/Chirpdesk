@@ -1,0 +1,106 @@
+{
+  "schema": 1,
+  "name": "Chirpdesk Official",
+  "generated": "2026-11-18T10:44:05.1641706+00:00",
+  "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
+  "plugins": [
+    {
+      "id": "catppuccin",
+      "kind": "theme",
+      "name": "Catppuccin",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "a87fd03f2a5e72fb4d8692ae9d96f4ef00f2b4caebbed42f5cb088632b31422a",
+      "size": 571,
+      "url": "plugins/catppuccin-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "facebook",
+      "kind": "service",
+      "name": "Facebook",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "526fdc326160ef3c9af8ed8d6e324c417590fb740b2ea24b00505844536cdf16",
+      "size": 523,
+      "url": "plugins/facebook-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "filters-core",
+      "kind": "filter",
+      "name": "Ad and tracker blocking",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "9061f5a0322372f903ee58cd7b14fd85c0448bb9968d9eec34a25223fef6ee0a",
+      "size": 860,
+      "url": "plugins/filters-core-1.0.0.zip",
+      "permissions": [
+        "filters"
+      ]
+    },
+    {
+      "id": "instagram",
+      "kind": "service",
+      "name": "Instagram",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "2b0ef86ff74ab6b428c3df96a3f98c760e0edf45422288b1e571835d1e97d296",
+      "size": 542,
+      "url": "plugins/instagram-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "messenger",
+      "kind": "service",
+      "name": "Messenger",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "cfd540c8febf80aedc55cad19ec1a5f0d55bd5f53775c56d928ed66f0cde6058",
+      "size": 525,
+      "url": "plugins/messenger-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "page-dark",
+      "kind": "theme",
+      "name": "Page dark mode",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "a436542be3909f329b1f46dcdffd62985285e3f70b3cc825bdb893b6b97dab55",
+      "size": 330,
+      "url": "plugins/page-dark-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "telegram",
+      "kind": "service",
+      "name": "Telegram",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "e4d4fff0d833e417cabb1361e963a0745a14b479dcc544201112313ff66df855",
+      "size": 526,
+      "url": "plugins/telegram-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "whatsapp",
+      "kind": "service",
+      "name": "WhatsApp",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "bc8722ad94879abd690f4b59962aa4d1e948f72a28cabc79de7bd881e32cbc1a",
+      "size": 545,
+      "url": "plugins/whatsapp-1.0.0.zip",
+      "permissions": []
+    }
+  ]
+}

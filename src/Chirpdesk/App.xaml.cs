@@ -181,6 +181,7 @@ public partial class App : Application
         RefreshServiceRail();
 
         InitializeTheme();
+        EnsureOfficialRepository();
         SyncAutostartMirror();
         UpdateTrayStatus();
 
@@ -2228,6 +2229,47 @@ public partial class App : Application
         _host.SetPage(page);
         _host.ShowPage();
         _host.Focus();
+    }
+
+    /// <summary>
+    /// Offers the official signed registry once. Removing it sets the seeded flag, so a later
+    /// launch does not silently put it back.
+    /// </summary>
+    private void EnsureOfficialRepository()
+    {
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+
+            if (settings.OfficialRepositorySeeded)
+            {
+                return;
+            }
+
+            settings.OfficialRepositorySeeded = true;
+
+            if (!settings.Repositories.Any(item => string.Equals(
+                    item.Url.TrimEnd('/'),
+                    RepositoryKeys.OfficialUrl.TrimEnd('/'),
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                settings.Repositories.Add(new RepositorySetting
+                {
+                    Url = RepositoryKeys.OfficialUrl,
+                    Name = "Chirpdesk Official",
+                    PublicKeyPem = RepositoryKeys.OfficialPublicKey,
+                    KeyFingerprint = RepositoryKeys.OfficialFingerprint,
+                });
+            }
+
+            store.Save(settings);
+            _log?.Info("official plugin repository offered");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not seed the official repository: {ex.Message}");
+        }
     }
 
     private void LinkLegacyInstances()

@@ -59,4 +59,7 @@ public sealed class AppSettings
 
     /// <summary>Static HTTPS plugin repositories the user added.</summary>
     public List<RepositorySetting> Repositories { get; set; } = [];
+
+    /// <summary>True once the bundled official repository has been offered; removal is respected.</summary>
+    public bool OfficialRepositorySeeded { get; set; }
 }
