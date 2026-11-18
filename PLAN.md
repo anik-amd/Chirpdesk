@@ -232,7 +232,7 @@ Chirpdesk.exe (single instance, mutex-guarded)
 │   └─ Command Bar overlay (cycle + search modes) and its backdrop
 │
 ├─ Tray icon (unread state, menu, DND)
-├─ Toast pipeline (WinRT, AUMID, click → activate service)
+├─ Toast pipeline (WinRT, AUMID, click → open service)
 ├─ Request filter engine (shared matcher, per-webview hooks)
 ├─ Storage service (size scan, trim, orphan scan)
 ├─ Updater (GitHub Releases, signature-verified, opt-in)
@@ -479,7 +479,7 @@ Ordering: open services first, then asleep/cold, then commands; prefix beats sub
 
 **Window behaviour:** opening a service shows the single window and switches it to a normal taskbar/Alt+Tab window; the close button and "hide" return it off-screen and restore `WS_EX_TOOLWINDOW`. Nothing unloads, so the webview keeps its scroll position and half-typed text. `Ctrl+W` closes a tab; deactivating a plugin sleeps its service instead. `Esc` never hides the window: inside the palette/page it goes back, and inside a site it stays the site's key.
 
-**Settings and plugins interface.** Settings is a **page in the main window**, opened from the command palette or the tray; there is no separate settings window. The Plugins page lists installed service plugins with their own usage description and Active/Inactive state: **Activate** creates the first account and opens it, **Add account** creates another instance, **Deactivate** sleeps the runtimes without signing out. Browse/install UI is a placeholder until the signed repository lands in phase 5. Installed-but-inactive plugins also appear in the command palette and can be activated from there.
+**Settings and plugins interface.** Settings is a **page in the main window**, opened from the command palette or the tray; there is no separate settings window. The Plugins page lists installed service plugins with their own usage description and Open/Closed state: **Open** creates the first account and warms it, **Add account** creates another instance, **Close** sleeps the runtimes without signing out. Browse/install UI is a placeholder until the signed repository lands in phase 5. Closed service plugins also appear in the command palette and can be opened from there.
 
 **Interception:** `Ctrl+K`, `Ctrl+Shift+K` and `Ctrl+Tab` are handled by one foreground-filtered low-level keyboard hook, because the WebView2 message hook did not fire reliably while the page had focus. Once the bar opens it handles `Tab`, arrows, `Ctrl+1..9`, `Ctrl+W`, `Esc` and text itself. `Ctrl+P` is the explicit passthrough. Cycle commit is driven by a 30 ms `GetAsyncKeyState(VK_CONTROL)` poll, because WebView2 does not reliably deliver modifier key-up when focus is inside the page. The global summon is deferred.
 

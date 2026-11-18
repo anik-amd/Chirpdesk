@@ -28,7 +28,7 @@ The installer checks both and points you at the official download if one is miss
 ## First run
 
 1. Start Chirpdesk. It opens once to teach the tray, the palette and the plugin page.
-2. Open **Plugins & services** and activate WhatsApp, Telegram, Messenger or Facebook.
+2. Open **Plugins & services** and open WhatsApp, Telegram, Messenger or Facebook.
 3. Scan the QR code or sign in in the window that opens. Close the window when you are done.
 
 After that Chirpdesk lives in the tray. Closing the window keeps chats warm. Use **Quit** from the
@@ -47,7 +47,7 @@ tray menu to stop it.
 | Second account | Plugins & services → Add account |
 | Blocking for one tab | `Ctrl+K` → “Turn blocking off for this tab” |
 
-The palette lists open chats and inactive service plugins. Type to search tabs, plugins and
+The palette lists open chats and closed service plugins. Type to search tabs, plugins and
 commands.
 
 ## What it does
@@ -57,7 +57,7 @@ commands.
 - **Windows toasts.** Real Action Center notifications with the service icon, dedupe and a short
   warm-up gate so a reconnect cannot replay a backlog.
 - **A minimal service sidebar.** Open chats sit on the left edge with a 1/2 badge when one plugin has
-  two accounts. The **+** button opens the palette to activate another chat; palette, plugins and
+  two accounts. The **+** button opens the palette to open another chat; palette, plugins and
   settings are one click from the same strip. It can be always on, edge-hover or hidden in Settings.
 - **Accounts stay separate.** Every account gets its own WebView2 profile and session. Two WhatsApp
   accounts can be signed in side by side.

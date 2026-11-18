@@ -1415,7 +1415,7 @@ public partial class App : Application
             {
                 candidates.Add(new SearchCandidate(
                     $"plugin-off:{definition.Id}",
-                    $"Deactivate {definition.Name}",
+                    $"Close {definition.Name}",
                     SearchKind.Command,
                     (definition.Aliases ?? []).Append("plugin").Append("deactivate").ToList(),
                     State: "active",

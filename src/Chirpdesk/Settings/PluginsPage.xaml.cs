@@ -199,7 +199,7 @@ public partial class PluginsPage : UserControl
             });
             title.Children.Add(new TextBlock
             {
-                Text = enabled ? $"Active · {active} account(s)" : "Inactive",
+                Text = enabled ? $"Open · {active} account(s)" : "Closed",
                 FontSize = 11,
                 Foreground = enabled ? Token("CdAccent") : Token("CdTextMuted"),
             });
@@ -210,7 +210,7 @@ public partial class PluginsPage : UserControl
             content.Children.Add(new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(definition.Description)
-                    ? "Activate to add this service; add another account for a second login."
+                    ? "Open to add this service; add another account for a second login."
                     : definition.Description,
                 FontSize = 12,
                 Foreground = Token("CdTextMuted"),
@@ -238,7 +238,7 @@ public partial class PluginsPage : UserControl
             var actions = new WrapPanel();
             var primary = new Button
             {
-                Content = enabled ? "Add account" : "Activate",
+                Content = enabled ? "Add account" : "Open",
                 Width = 104,
                 Margin = new Thickness(0, 0, 6, 6),
                 Style = (Style)FindResource("PillButton"),
@@ -248,7 +248,7 @@ public partial class PluginsPage : UserControl
 
             var off = new Button
             {
-                Content = "Deactivate",
+                Content = "Close",
                 Width = 86,
                 IsEnabled = enabled,
                 Style = (Style)FindResource("GhostButton"),
@@ -360,8 +360,8 @@ public partial class PluginsPage : UserControl
             title.Children.Add(new TextBlock
             {
                 Text = toggleable
-                    ? pluginEnabled ? $"Active · {plugin.Kind} plugin" : "Inactive"
-                    : "Active · bundled tool",
+                    ? pluginEnabled ? $"Enabled · {plugin.Kind} plugin" : "Disabled"
+                    : "Enabled · bundled tool",
                 FontSize = 11,
                 Foreground = pluginEnabled ? Token("CdAccent") : Token("CdTextMuted"),
             });
@@ -452,7 +452,7 @@ public partial class PluginsPage : UserControl
             {
                 var toggle = new Button
                 {
-                    Content = pluginEnabled ? "Deactivate" : "Activate",
+                    Content = pluginEnabled ? "Disable" : "Enable",
                     Style = (Style)FindResource(pluginEnabled ? "GhostButton" : "PillButton"),
                     Padding = new Thickness(10, 5, 10, 5),
                     Margin = new Thickness(0, 0, 6, 6),

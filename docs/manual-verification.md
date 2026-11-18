@@ -32,8 +32,8 @@ desktop session.
 
 ## Sidebar
 
-- The left rail lists every open chat. Activate two accounts of one plugin: each icon gets a small 1 and 2 badge.
-- The **+** button opens the palette with the plugin list, so another service can be activated; the palette, plugins and settings icons in the rail open their surfaces directly.
+- The sidebar lists every open chat. Open two accounts of one plugin: each icon gets a small 1 and 2 badge.
+- The **+** button opens the palette with the plugin list, so another service can be opened; the palette, plugins and settings icons in the rail open their surfaces directly.
 - Settings → Sidebar: **Always show**, **On left edge** and **Hide completely**. On hover, the rail animates its width from the left edge; the chat must not reflow or reload.
 - Switch between rail modes while a chat is open and confirm the rail animation does not steal keyboard focus from the page.
 
@@ -61,7 +61,7 @@ desktop session.
 ## About and repositories
 
 - Sidebar **About** opens a page with the app version, creator, repository link, build credits and license links.
-- Plugins page **Installed** tab lists every installed plugin with version, active state and source, and shows Update, Roll back and Uninstall where they apply. **Browse** tab owns **Add repository** and **Manage repositories**, and groups repository plugins by source.
+- Plugins page **Installed** tab lists every installed plugin with version, open/closed state and source, and shows Update, Roll back and Uninstall where they apply. **Browse** tab owns **Add repository** and **Manage repositories**, and groups repository plugins by source.
 - Selecting a plugin in Browse opens a details sheet with source, version, compatibility, permissions, archive size and hash, and the key fingerprint. Install or Update is the explicit confirmation.
 - **Manage repositories** lists each repo with Update, Edit, Delete, Trust new key and the auto-update switch.
 - A synced repo shows only compatible plugins; unsupported entries remain visible with their reason.
@@ -81,10 +81,10 @@ desktop session.
 ## Command palette
 
 - `Ctrl+K` opens the **Command palette** with a real text caret. Type normally; `Ctrl+A`, copy/cut/paste, Home/End, Delete and mouse selection work. `Up`/`Down` and `Tab` move the list, `Enter` activates, `Esc` goes back.
-- The empty palette lists open tabs plus inactive service plugins (dimmed icons). Type `settings` or `plugin` to reveal commands.
+- The empty palette lists open tabs plus closed service plugins (dimmed icons). Type `settings` or `plugin` to reveal commands.
 - `Ctrl+Shift+K` opens the same open-tab list as a sticky palette, with the active tab highlighted; `Enter` switches, `Esc` closes.
 - Hold `Ctrl` and press `Tab` (or `Ctrl+Shift+Tab`): the same tab list appears and the highlight cycles; releasing `Ctrl` switches to the highlighted tab.
-- Type `plugin` to see plugin actions: inactive plugins activate on Enter; active plugins show `Deactivate …`.
+- Type `plugin` to see plugin actions: closed service plugins open on Enter; open ones show `Close …`.
 - Service icons are real brand glyphs from Simple Icons (CC0); unread counts show at the right of each tab row.
 - Selecting a cold/asleep service wakes it without re-pairing.
 
