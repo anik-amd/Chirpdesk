@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using Chirpdesk.Core.Logging;
 using Chirpdesk.Core.Notifications;
 using Chirpdesk.Core.Time;
@@ -134,10 +135,103 @@ internal sealed class WebNotificationBridge
             return;
         }
 
-        Shown++;
-        _log.Info($"toast shown for '{_serviceName}' (#{Shown}), title length {title.Length}");
-        _toast.Show(new ToastMessage(title, body, LocalIcon(notification.IconUri) ?? ToastIcons.ForService(_definitionId, _serviceName, _accent), _serviceId));
+        if (body.Length == 0 && string.Equals(_definitionId, "whatsapp", StringComparison.Ordinal))
+        {
+            // WhatsApp's service worker sends the sender but no body. The chat list on the
+            // page already shows the last message, so use it instead of a generic toast.
+            _ = ShowWithPagePreviewAsync(title);
+            return;
+        }
+
+        ShowToast(title, body, notification.IconUri);
     }
+
+    private async Task ShowWithPagePreviewAsync(string title)
+    {
+        string? preview = null;
+
+        try
+        {
+            // The notification lands a moment before the chat list repaints.
+            await Task.Delay(350);
+            preview = await ReadPreviewAsync(title);
+            if (preview is null)
+            {
+                await Task.Delay(700);
+                preview = await ReadPreviewAsync(title);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or JsonException)
+        {
+            _log.Warn($"page preview unavailable for '{_serviceName}': {ex.GetType().Name}");
+        }
+
+        if (preview is not null)
+        {
+            _log.Info($"page preview used for '{_serviceName}' (body length {preview.Length})");
+        }
+
+        ShowToast(title, preview ?? string.Empty, null);
+    }
+
+    private async Task<string?> ReadPreviewAsync(string title)
+    {
+        var raw = await _core.ExecuteScriptAsync(PreviewScript);
+        if (string.IsNullOrWhiteSpace(raw) || raw == "null")
+        {
+            return null;
+        }
+
+        var rows = JsonSerializer.Deserialize<List<PreviewRow>>(raw, JsonOptions);
+        if (rows is null || rows.Count == 0)
+        {
+            return null;
+        }
+
+        var candidates = rows
+            .Select(row => new PreviewCandidate(row.N, row.B))
+            .ToList();
+        return NotificationPreviewSelector.Select(title, candidates);
+    }
+
+    private void ShowToast(string title, string body, string? iconUri)
+    {
+        Shown++;
+        _log.Info($"toast shown for '{_serviceName}' (#{Shown}), title length {title.Length}, body length {body.Length}");
+        _toast.Show(new ToastMessage(title, body, LocalIcon(iconUri) ?? ToastIcons.ForService(_definitionId, _serviceName, _accent), _serviceId));
+    }
+
+    private sealed record PreviewRow(string? N, string? B);
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    /// <summary>
+    /// WhatsApp Web's chat list, as unread rows with the name and last message. Returns data,
+    /// never markup; the host matches the row to the notification title.
+    /// </summary>
+    private const string PreviewScript = """
+        (function () {
+          try {
+            var out = [];
+            var rows = document.querySelectorAll('#pane-side [role="row"]');
+            for (var i = 0; i < rows.length && out.length < 12; i++) {
+              var row = rows[i];
+              if (!row.querySelector('[data-testid="icon-unread-count"]')) { continue; }
+              var nameEl = row.querySelector('[data-testid="cell-frame-title"] span');
+              var bodyEl = row.querySelector('[data-testid="last-msg-status"]')
+                || row.querySelector('[data-testid="chat-msg-symbol"]')
+                || row.querySelector('[data-testid="cell-frame-secondary"] span[dir="auto"]');
+              var body = bodyEl ? (bodyEl.textContent || '') : '';
+              if (!body.trim()) { continue; }
+              out.push({ n: nameEl ? (nameEl.textContent || '') : '', b: body });
+            }
+            return out;
+          } catch (e) { return []; }
+        })()
+        """;
 
     /// <summary>IconUri is a string; only a local file can be attached to a toast.</summary>
     private static string? LocalIcon(string? iconUri) =>

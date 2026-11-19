@@ -104,9 +104,13 @@ folder to `dist/`.
 
 - Sites that refuse embedded sign-in (some Google and Cloudflare flows) show an honest message and
   an **open in browser** action. Cookies cannot be moved between the browser and the webview.
-- There is no global hotkey in v0.1. The tray icon and a second launch are the entry points.
-- The signed plugin repository is not shipped yet; only bundled plugins are installable.
-- Updates are signed and opt-in, but the check/apply UI is still being finished.
+- There is no global hotkey in v0.3. The tray icon, a second launch and the Command Bar are the
+  entry points.
+- Facebook and Messenger notify from a service worker, which WebView2 does not surface with a
+  sender or body. They fall back to an unread-count toast; their page lists expose no accessible
+  unread or preview hooks to read instead. WhatsApp has the same service-worker path, but its chat
+  list is readable, so its toasts carry the message preview.
+- Portable builds do not self-update.
 
 ## Docs
 
