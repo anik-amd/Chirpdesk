@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "apiVersion": 1,
   "author": "Chirpdesk",
-  "description": "Mastodon social web client. Activate to add an account; each instance account keeps its own profile.",
+  "description": "Mastodon. Install, then open to add an account; each instance login keeps its own profile.",
   "permissions": [],
   "accent": "#6364FF"
 }

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-18T19:29:58.2172624+00:00",
+  "generated": "2026-11-19T07:34:13.1236207+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -11,8 +11,8 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "c5a32b3d2eb60e0c90318d2ef55e2a691d611fb556e315b19ac76e8c0894b6bb",
-      "size": 521,
+      "sha256": "925e0bb3e9dc4902db807e28b0b8e01fbf24859d13b860122eec4c618df60c09",
+      "size": 551,
       "url": "plugins/bluesky-1.0.0.zip",
       "permissions": []
     },
@@ -23,7 +23,7 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "a87fd03f2a5e72fb4d8692ae9d96f4ef00f2b4caebbed42f5cb088632b31422a",
+      "sha256": "dcbc627106a8148466632a6677553dcb9f9b6ea887ef70a6e97d0e10c244d90c",
       "size": 571,
       "url": "plugins/catppuccin-1.0.0.zip",
       "permissions": []
@@ -35,8 +35,8 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "f5157467cf56c43cc02e58ffcc7ed8396166224cb01e5c067c2a55b5dd0c6963",
-      "size": 555,
+      "sha256": "3da1f4bb65303f86d9c11cf0a40e1019eabb7b13825daf6e9df1a41796417343",
+      "size": 557,
       "url": "plugins/discord-1.0.0.zip",
       "permissions": []
     },
@@ -47,8 +47,8 @@
       "version": "1.2.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "fc93e71e8936345877bbf82ff215653c9a1dade7023181278361ae1001751bc6",
-      "size": 551,
+      "sha256": "6a19870cc5c076e2200772b1f54fb45c9615d053d6018add1c449a71cd01654d",
+      "size": 553,
       "url": "plugins/element-1.2.0.zip",
       "permissions": []
     },
@@ -85,8 +85,8 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "2b0ef86ff74ab6b428c3df96a3f98c760e0edf45422288b1e571835d1e97d296",
-      "size": 542,
+      "sha256": "93b3af4017dace532ca31824ece3c1f2d0beb8bfa3b3931897d1b6f1b88bfcf0",
+      "size": 563,
       "url": "plugins/instagram-1.0.0.zip",
       "permissions": []
     },
@@ -97,8 +97,8 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "f837c3a44cb5150f05b201c20a1781ba2f74652af95ff9f154fe8542502de8ce",
-      "size": 534,
+      "sha256": "5726a457a258562af32fa13fae2768b796ee56a12b0fc6d2f8cbc9fce37a28a4",
+      "size": 553,
       "url": "plugins/linkedin-1.0.0.zip",
       "permissions": []
     },
@@ -109,8 +109,8 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "542007116ceb77be60ec17083a438c29f161039d45b3185f3383eeead96d9b0d",
-      "size": 560,
+      "sha256": "aa56e95e92d9cf8fdaf36f1edb2cc88d0f0d7466119856f1ee08514cb0307990",
+      "size": 558,
       "url": "plugins/mastodon-1.0.0.zip",
       "permissions": []
     },
@@ -145,8 +145,8 @@
       "version": "1.0.0",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "d518df565f5400c1f5a296a5b60db101f7640751f37c6700ffba5ca646fe2eee",
-      "size": 542,
+      "sha256": "96d0a3c20f4e16b63a24a23bf43e62aad5cbf46ddf7acd3d1e6c8889e62e6c5c",
+      "size": 546,
       "url": "plugins/reddit-1.0.0.zip",
       "permissions": []
     },

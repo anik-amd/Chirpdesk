@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "apiVersion": 1,
   "author": "Chirpdesk",
-  "description": "Bluesky web client. Activate to add an account.",
+  "description": "Bluesky. Install, then open to add an account; the whole social app opens in its own profile.",
   "permissions": [],
   "accent": "#1185FE"
 }

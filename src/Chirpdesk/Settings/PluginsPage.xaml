@@ -95,8 +95,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CdPaletteSelection}" />
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource CdPaletteAccent}" />
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CdControlHover}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource CdAccent}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter Property="Opacity" Value="0.78" />
@@ -248,7 +248,7 @@
                     MaxHeight="620"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource CdPalette}"
+                    Background="{DynamicResource CdCanvas}"
                     BorderBrush="{DynamicResource CdRule}"
                     BorderThickness="1"
                     CornerRadius="14"
@@ -332,7 +332,7 @@
             <Border Width="440"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource CdPalette}"
+                    Background="{DynamicResource CdCanvas}"
                     BorderBrush="{DynamicResource CdRule}"
                     BorderThickness="1"
                     CornerRadius="14"
@@ -385,7 +385,7 @@
             <Border Width="440"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource CdPalette}"
+                    Background="{DynamicResource CdCanvas}"
                     BorderBrush="{DynamicResource CdRule}"
                     BorderThickness="1"
                     CornerRadius="14"
@@ -426,7 +426,7 @@
                     MaxHeight="680"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource CdPalette}"
+                    Background="{DynamicResource CdCanvas}"
                     BorderBrush="{DynamicResource CdRule}"
                     BorderThickness="1"
                     CornerRadius="14"
@@ -470,7 +470,7 @@
                     MaxHeight="560"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource CdPalette}"
+                    Background="{DynamicResource CdCanvas}"
                     BorderBrush="{DynamicResource CdRule}"
                     BorderThickness="1"
                     CornerRadius="14"

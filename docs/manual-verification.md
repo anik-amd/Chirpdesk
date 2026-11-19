@@ -49,6 +49,7 @@ desktop session.
 ## Settings and plugins pages
 
 - Open `Ctrl+K` → **Settings** and confirm it is a full page in the main window, readable in both light and dark at 100 % and 150 % scaling.
+- Light theme: open Add repository, Add account/Rename, a service settings sheet and the install consent. The modal background, headings, body text and buttons stay readable; no dark-on-dark text.
 - Switch the theme in Settings between light, dark and system: the page, palette and pages repaint immediately, with no restart and no flash of the old palette. Accents use Catppuccin Blue in every flavour, not a pink or off-palette hue.
 - In Appearance, pick a light palette (Latte) and a dark palette (Frappé, Macchiato or Mocha) separately. The light choice should apply while the app is light and the dark choice while it is dark.
 - Turn on a Windows contrast theme: Chirpdesk should repaint with system colours; toggling it back should restore the normal palette without a restart.

@@ -200,7 +200,7 @@ internal sealed class SelfTest
         {
             var bundledRoot = new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true);
             var bundled = PluginLoader.LoadServiceDefinitions([bundledRoot], _log);
-            string[] expected = ["whatsapp", "messenger", "telegram", "facebook", "instagram"];
+            string[] expected = ["whatsapp", "messenger", "telegram", "facebook"];
             var present = expected.All(id => bundled.Definitions.Any(definition => definition.Id == id));
             var clean = bundled.Errors.Count == 0;
 

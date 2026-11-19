@@ -29,7 +29,7 @@ Multiple accounts are a first-class case, not a workaround:
 
 **Sibling sites are separate definitions.** Messenger and Facebook belong to the same vendor but are different entry points, so they ship as `messenger` (`https://www.messenger.com/`) and `facebook` (`https://www.facebook.com/`) — never one plugin with a "mode". Opening Messenger opens the messenger client; opening Facebook opens the Facebook client. Each supports multiple accounts the same way, because accounts are instances of the definition.
 
-Current bundled service plugins: `whatsapp`, `messenger`, `telegram`, `facebook`, `instagram`.
+Current bundled service plugins: `whatsapp`, `messenger`, `telegram`, `facebook`. Instagram and the newer services ship from the repository only, so uninstalling one keeps it out until the user installs it again.
 
 > Creating instances is still a settings/Command Bar action to be built in phase 2. Until then, instances exist as rows in `settings.json`; a definition alone never creates one.
 

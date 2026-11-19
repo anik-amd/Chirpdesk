@@ -52,6 +52,9 @@ Type: filesandordirs; Name: "{app}\plugins\mastodon"
 Type: filesandordirs; Name: "{app}\plugins\bluesky"
 Type: filesandordirs; Name: "{app}\plugins\linkedin"
 Type: filesandordirs; Name: "{app}\plugins\discord"
+; Instagram was bundled through 0.3.5. It is registry-only now; remove the old bundled copy so
+; an uninstall no longer comes back on the next upgrade.
+Type: filesandordirs; Name: "{app}\plugins\instagram"
 
 [Files]
 Source: "..\dist\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
