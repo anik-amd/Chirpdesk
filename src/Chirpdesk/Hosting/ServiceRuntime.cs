@@ -66,8 +66,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Host-owned link preview: hides Chromium's bottom-left status bubble and shows the URL
-    /// above the cursor in a small surface that follows the app's light/dark theme.
+    /// Host-owned link preview: hides Chromium's status bubble and shows the URL in the
+    /// bottom-left corner, in a surface that follows the app's light/dark theme.
     /// </summary>
     private const string LinkTooltipScript = """
         (function () {
@@ -83,14 +83,16 @@ internal sealed class ServiceRuntime : IAsyncDisposable
               document.documentElement.appendChild(tip);
             }
 
-            tip.style.cssText = 'position:fixed;z-index:2147483647;display:none;' +
-              'pointer-events:none;max-width:min(520px,80vw);padding:5px 9px;' +
-              'border:1px solid;border-radius:7px;font:12px/1.35 "Segoe UI",system-ui,sans-serif;' +
+            tip.style.cssText = 'position:fixed;z-index:2147483647;left:12px;bottom:12px;' +
+              'pointer-events:none;opacity:0;transform:translateY(4px);' +
+              'max-width:min(680px,calc(100vw - 24px));padding:6px 11px;' +
+              'border:1px solid;border-radius:8px;' +
+              'font:12px/1.4 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;' +
               'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
-              'box-shadow:0 6px 20px rgba(0,0,0,.28);backdrop-filter:blur(8px);';
+              'box-shadow:0 8px 24px rgba(0,0,0,.28);backdrop-filter:blur(10px) saturate(1.1);' +
+              'transition:opacity .12s ease,transform .12s ease;';
+            tip.setAttribute('aria-hidden', 'true');
 
-            var lastX = 0;
-            var lastY = 0;
             var titled = null;
             var savedTitle = null;
 
@@ -128,31 +130,19 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 : 'none';
             }
 
-            function place() {
-              var width = tip.offsetWidth;
-              var height = tip.offsetHeight;
-              var x = lastX + 14;
-              var y = lastY - height - 12;
-
-              if (y < 8) { y = lastY + 18; }
-              if (x + width > innerWidth - 8) { x = lastX - width - 12; }
-
-              tip.style.left = Math.max(8, x) + 'px';
-              tip.style.top = Math.max(8, y) + 'px';
-            }
-
             function show(link, target) {
               if (!link || !link.href || link.href.indexOf('javascript:') === 0) { return; }
               hide();
               suppressNativeTitle(link, target);
               tip.textContent = link.href;
-              tip.style.display = 'block';
               paint();
-              place();
+              tip.style.opacity = '1';
+              tip.style.transform = 'translateY(0)';
             }
 
             function hide() {
-              tip.style.display = 'none';
+              tip.style.opacity = '0';
+              tip.style.transform = 'translateY(4px)';
               restoreNativeTitle();
             }
 
@@ -163,10 +153,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
               if (link) { show(link, event.target); } else { hide(); }
             }, true);
 
-            document.addEventListener('mousemove', function (event) {
-              lastX = event.clientX;
-              lastY = event.clientY;
-              if (tip.style.display === 'block') { place(); }
+            document.addEventListener('mouseout', function (event) {
+              if (!event.relatedTarget) { hide(); }
             }, true);
 
             document.addEventListener('mousedown', hide, true);
