@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-19T07:34:13.1236207+00:00",
+  "generated": "2026-11-19T07:42:08.1460961+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -82,24 +82,24 @@
       "id": "instagram",
       "kind": "service",
       "name": "Instagram",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "93b3af4017dace532ca31824ece3c1f2d0beb8bfa3b3931897d1b6f1b88bfcf0",
+      "sha256": "b1b6898d9d776c4c8603d553fa343bf9380a6433fc8a66745c385ca897e38edf",
       "size": 563,
-      "url": "plugins/instagram-1.0.0.zip",
+      "url": "plugins/instagram-1.0.1.zip",
       "permissions": []
     },
     {
       "id": "linkedin",
       "kind": "service",
       "name": "LinkedIn",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "5726a457a258562af32fa13fae2768b796ee56a12b0fc6d2f8cbc9fce37a28a4",
+      "sha256": "8b49cb579e284b3bc3c6b55a79a6887417f05fcd2c5aa0085941b2f24b80b0bb",
       "size": 553,
-      "url": "plugins/linkedin-1.0.0.zip",
+      "url": "plugins/linkedin-1.0.1.zip",
       "permissions": []
     },
     {
@@ -142,12 +142,12 @@
       "id": "reddit",
       "kind": "service",
       "name": "Reddit",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "apiVersion": 1,
       "minAppVersion": "0.1.0",
-      "sha256": "96d0a3c20f4e16b63a24a23bf43e62aad5cbf46ddf7acd3d1e6c8889e62e6c5c",
-      "size": 546,
-      "url": "plugins/reddit-1.0.0.zip",
+      "sha256": "814a5f6b789344c48aa3119870d03d63b1712157b89c76c3cf8db18b458f5219",
+      "size": 547,
+      "url": "plugins/reddit-1.0.1.zip",
       "permissions": []
     },
     {

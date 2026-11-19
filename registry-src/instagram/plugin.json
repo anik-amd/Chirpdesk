@@ -2,7 +2,7 @@
   "id": "instagram",
   "kind": "service",
   "name": "Instagram",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "author": "Chirpdesk",
   "description": "Instagram. Install, then open to add an account; the whole site opens in its own profile. Add another account for a second login.",
