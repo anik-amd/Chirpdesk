@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Chirpdesk.Core.Plugins;
 
 namespace Chirpdesk.Core.Settings;
 
@@ -39,6 +40,22 @@ internal static partial class SettingsValidator
         foreach (var instance in settings.Services)
             {
                 instance.WarmAtBoot = true;
+            }
+        }
+
+        // Repository sync is on by default from schema 5. Existing official installs were
+        // seeded with it off; turn that one back on without touching user-added repositories.
+        if (settings.SchemaVersion < 5)
+        {
+            foreach (var repository in settings.Repositories ?? [])
+            {
+                if (string.Equals(
+                        repository.Url?.TrimEnd('/'),
+                        RepositoryKeys.OfficialUrl.TrimEnd('/'),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    repository.AutoUpdate = true;
+                }
             }
         }
 

@@ -1,4 +1,5 @@
 using Chirpdesk.Core.Logging;
+using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 
 namespace Chirpdesk.Core.Tests.Settings;
@@ -119,17 +120,42 @@ public sealed class SettingsMigrationTests : IDisposable
     }
 
     [Fact]
-    public void A_v4_file_is_left_alone()
+    public void A_current_schema_file_is_left_alone()
     {
         Directory.CreateDirectory(_dir);
-        var original = """
-            { "schemaVersion": 4, "services": [] }
-            """;
-        File.WriteAllText(SettingsPath, original);
+        var original = $$"""
+            { "schemaVersion": {{AppSettings.CurrentSchemaVersion}}, "services": [] }
+            """;        File.WriteAllText(SettingsPath, original);
 
         _ = new SettingsStore(SettingsPath, NullLog.Instance).Load();
 
         Assert.Equal(original, File.ReadAllText(SettingsPath));
+    }
+
+    [Fact]
+    public void A_v4_file_enables_official_repository_auto_update()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(SettingsPath, $$"""
+            {
+              "schemaVersion": 4,
+              "services": [],
+              "repositories": [
+                {
+                  "url": "{{RepositoryKeys.OfficialUrl}}",
+                  "name": "Chirpdesk Official",
+                  "publicKeyPem": "pem",
+                  "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
+                  "autoUpdate": false
+                }
+              ]
+            }
+            """);
+
+        var loaded = new SettingsStore(SettingsPath, NullLog.Instance).Load();
+
+        Assert.Equal(AppSettings.CurrentSchemaVersion, loaded.SchemaVersion);
+        Assert.True(Assert.Single(loaded.Repositories).AutoUpdate);
     }
 
     [Fact]

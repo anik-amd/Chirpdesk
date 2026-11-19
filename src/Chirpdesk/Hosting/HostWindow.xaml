@@ -186,16 +186,19 @@
                         Content="&#xE921;"
                         Style="{StaticResource CaptionButton}"
                         ToolTip="Minimize"
+                        AutomationProperties.Name="Minimize"
                         Click="OnMinimizeClick" />
                 <Button x:Name="MaximizeButton"
                         Content="&#xE922;"
                         Style="{StaticResource CaptionButton}"
                         ToolTip="Maximize"
+                        AutomationProperties.Name="Maximize"
                         Click="OnMaximizeClick" />
                 <Button x:Name="CloseButton"
                         Content="&#xE8BB;"
                         Style="{StaticResource CloseCaptionButton}"
                         ToolTip="Hide to tray"
+                        AutomationProperties.Name="Hide to tray"
                         Click="OnCloseClick" />
             </StackPanel>
         </Grid>

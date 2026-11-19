@@ -65,7 +65,11 @@ public partial class HostWindow : Window
                     ? Palette("CdPaletteSelection")
                     : Brushes.Transparent,
             };
-            AutomationProperties.SetName(button, entry.Name);
+            var unreadLabel = entry.UnreadCount > 0
+                ? $"{entry.Name}, {entry.UnreadCount} unread"
+                : entry.Name;
+            AutomationProperties.SetName(button, unreadLabel);
+            button.ToolTip = RailTip(unreadLabel);
 
             var content = new Grid { Width = 40, Height = 40 };
             var icon = ServiceIcons.Create(entry.DefinitionId, entry.Name, entry.Accent, 26);
@@ -75,29 +79,60 @@ public partial class HostWindow : Window
 
             if (entry.ShowOrdinal)
             {
-                var badge = new Border
+                var account = new Border
                 {
-                    Width = 16,
-                    Height = 16,
-                    CornerRadius = new CornerRadius(8),
-                    Background = Palette("CdPaletteAccent"),
-                    BorderBrush = Palette("CdPaletteRaised"),
+                    Width = 14,
+                    Height = 14,
+                    CornerRadius = new CornerRadius(7),
+                    Background = Palette("CdPaletteRaised"),
+                    BorderBrush = Palette("CdPaletteRule"),
                     BorderThickness = new Thickness(1),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Bottom,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(-2, -2, 0, 0),
                 };
-                badge.Child = new TextBlock
+                account.Child = new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(entry.Name)
                         ? entry.Ordinal.ToString(CultureInfo.InvariantCulture)
                         : char.ToUpperInvariant(entry.Name.Trim()[0]).ToString(),
+                    FontSize = 7.5,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = Palette("CdPaletteText"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                content.Children.Add(account);
+            }
+
+            if (entry.UnreadCount > 0)
+            {
+                var unread = new Border
+                {
+                    MinWidth = 15,
+                    Height = 15,
+                    CornerRadius = new CornerRadius(7.5),
+                    Background = Palette("CdPaletteAccent"),
+                    BorderBrush = Palette("CdPaletteRaised"),
+                    BorderThickness = new Thickness(1),
+                    Padding = new Thickness(3, 0, 3, 0),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = new Thickness(0, 0, -3, -3),
+                };
+                unread.Child = new TextBlock
+                {
+                    Text = entry.UnreadCount > 99
+                        ? "99+"
+                        : entry.UnreadCount.ToString(CultureInfo.InvariantCulture),
+                    FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
                     FontSize = 8,
                     FontWeight = FontWeights.Bold,
                     Foreground = Palette("CdPaletteSurface"),
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                 };
-                content.Children.Add(badge);
+                content.Children.Add(unread);
             }
 
             button.Content = content;
@@ -137,9 +172,10 @@ public partial class HostWindow : Window
 
         RailActions.Children.Clear();
         RailActions.Children.Add(RailAction("search", "Command palette (Ctrl+K)", (_, _) => RailSearchRequested?.Invoke(this, EventArgs.Empty)));
-        RailActions.Children.Add(RailAction("plugins", "Plugins & services", (_, _) => RailPluginsRequested?.Invoke(this, EventArgs.Empty)));
+        RailActions.Children.Add(BuildPluginsRailAction());
         RailActions.Children.Add(RailAction("settings", "Settings", (_, _) => RailSettingsRequested?.Invoke(this, EventArgs.Empty)));
         RailActions.Children.Add(RailAction("info", "About Chirpdesk", (_, _) => RailAboutRequested?.Invoke(this, EventArgs.Empty)));
+        SetPluginUpdateCount(_pluginUpdateCount);
     }
 
     public void SetRailMode(string? mode)
@@ -336,6 +372,76 @@ public partial class HostWindow : Window
         }
     }
 
+    private Button BuildPluginsRailAction()
+    {
+        var button = RailAction(
+            "plugins",
+            "Plugins & services",
+            (_, _) => RailPluginsRequested?.Invoke(this, EventArgs.Empty));
+        _pluginsRailButton = button;
+
+        var icon = button.Content as UIElement;
+        button.Content = null;
+
+        _pluginUpdateText = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
+            FontSize = 8,
+            FontWeight = FontWeights.Bold,
+            Foreground = Palette("CdPaletteSurface"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        _pluginUpdateBadge = new Border
+        {
+            Width = 15,
+            Height = 15,
+            CornerRadius = new CornerRadius(7.5),
+            Background = Palette("CdPaletteAccent"),
+            BorderBrush = Palette("CdPaletteRaised"),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, -3, -3, 0),
+            Visibility = Visibility.Collapsed,
+            Child = _pluginUpdateText,
+        };
+
+        var grid = new Grid { Width = 40, Height = 40 };
+
+        if (icon is not null)
+        {
+            grid.Children.Add(icon);
+        }
+
+        grid.Children.Add(_pluginUpdateBadge);
+        button.Content = grid;
+        return button;
+    }
+
+    /// <summary>A small count badge on the plugins icon; hidden at zero.</summary>
+    public void SetPluginUpdateCount(int count)
+    {
+        _pluginUpdateCount = Math.Max(0, count);
+
+        if (_pluginUpdateBadge is null || _pluginUpdateText is null || _pluginsRailButton is null)
+        {
+            return;
+        }
+
+        _pluginUpdateBadge.Visibility = _pluginUpdateCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _pluginUpdateText.Text = _pluginUpdateCount > 9
+            ? "9+"
+            : _pluginUpdateCount.ToString(CultureInfo.InvariantCulture);
+
+        var tooltip = _pluginUpdateCount > 0
+            ? $"Plugins & services - {_pluginUpdateCount} update{(_pluginUpdateCount == 1 ? "" : "s")} available"
+            : "Plugins & services";
+        _pluginsRailButton.ToolTip = RailTip(tooltip);
+        AutomationProperties.SetName(_pluginsRailButton, tooltip);
+    }
+
     private Button RailAction(string icon, string tooltip, RoutedEventHandler click, bool accent = false)
     {
         var button = new Button
@@ -362,6 +468,66 @@ public partial class HostWindow : Window
     private readonly DispatcherTimer _railTimer;
     private ServiceRailMode _railMode = ServiceRailMode.Always;
     private bool _railVisible;
+    private bool _pendingMaximized;
+    private Button? _pluginsRailButton;
+    private Border? _pluginUpdateBadge;
+    private TextBlock? _pluginUpdateText;
+    private int _pluginUpdateCount;
+
+    /// <summary>Normal bounds and maximize state saved across sessions.</summary>
+    public sealed record WindowPlacement(double Left, double Top, double Width, double Height, bool Maximized);
+
+    /// <summary>True once a real user-visible placement exists; hidden boot bounds are not saved.</summary>
+    public bool HasUserBounds { get; private set; }
+
+    public WindowPlacement CapturePlacement()
+    {
+        var bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, Width, Height)
+            : RestoreBounds;
+
+        if (bounds.IsEmpty || bounds.Width < 320 || bounds.Height < 240 || bounds.Left <= -10_000)
+        {
+            bounds = new Rect(Left, Top, Width, Height);
+        }
+
+        return new WindowPlacement(
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            WindowState == WindowState.Maximized);
+    }
+
+    public void ApplyPlacement(WindowPlacement placement)
+    {
+        if (placement.Width >= 320 && placement.Height >= 240)
+        {
+            Width = placement.Width;
+            Height = placement.Height;
+            Left = placement.Left;
+            Top = placement.Top;
+        }
+
+        var virtualLeft = SystemParameters.VirtualScreenLeft;
+        var virtualTop = SystemParameters.VirtualScreenTop;
+        var virtualRight = virtualLeft + SystemParameters.VirtualScreenWidth;
+        var virtualBottom = virtualTop + SystemParameters.VirtualScreenHeight;
+        var visible = Left + Width > virtualLeft + 80
+            && Left < virtualRight - 80
+            && Top + Height > virtualTop + 60
+            && Top < virtualBottom - 60;
+
+        if (!visible)
+        {
+            PlaceOnScreen();
+        }
+
+        // Assigning WindowState before Show creates and shows the HWND, which would break the
+        // hidden boot. Remember the wish and apply it once the user actually asks for the window.
+        _pendingMaximized = placement.Maximized;
+        HasUserBounds = true;
+    }
 
     /// <summary>The row of open services on the left edge, plus the three global actions.</summary>
     public enum ServiceRailMode
@@ -377,7 +543,8 @@ public partial class HostWindow : Window
         string? DefinitionId,
         string? Accent,
         int Ordinal,
-        bool ShowOrdinal);
+        bool ShowOrdinal,
+        int UnreadCount = 0);
 
     public event EventHandler<string>? RailServiceSelected;
 
@@ -617,6 +784,13 @@ public partial class HostWindow : Window
         ShowActivated = true;
         Show();
         Activate();
+        HasUserBounds = true;
+
+        if (_pendingMaximized)
+        {
+            _pendingMaximized = false;
+            WindowState = WindowState.Maximized;
+        }
 
         // Activate() alone loses to Windows' foreground lock when the request came from a
         // tray icon, PowerToys or a toast. ForceForeground attaches to the foreground thread,

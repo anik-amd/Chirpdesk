@@ -45,8 +45,12 @@ public partial class App : Application
     };
 
     private FileLog? _log;
+    private bool _pluginUpdateSyncRunning;
     private SingleInstance? _singleInstance;
     private HostWindow? _host;
+    private HostWindow.WindowPlacement? _windowPlacement;
+    private bool _windowPlacementApplied;
+    private int _pluginUpdateCount;
     private TaskbarIcon? _tray;
     private ServiceRegistry? _registry;
     private ServiceCatalog? _catalog;
@@ -143,6 +147,8 @@ public partial class App : Application
         // Both diagnostic modes need the real window, because the thing under test is a hidden
         // WebView2 in it. Neither needs the tray icon.
         _host = new HostWindow();
+        LoadWindowPlacement();
+        _host.StateChanged += (_, _) => SaveWindowPlacement();
         _host.Show();
         TaskbarList.Remove(_host.Handle);
         _host.KeyDown += OnHostKeyDown;
@@ -229,6 +235,7 @@ public partial class App : Application
         EnsureOfficialRepository();
         SyncAutostartMirror();
         UpdateTrayStatus();
+        _ = RefreshPluginUpdatesAsync();
 
         _log.Info("started");
 
@@ -495,7 +502,11 @@ public partial class App : Application
 
         service.ShortcutRequested += OnServiceShortcutRequested;
         service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
-        service.UnreadChanged += (_, _) => Dispatcher.BeginInvoke(new Action(UpdateTrayStatus));
+        service.UnreadChanged += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            UpdateTrayStatus();
+            RefreshServiceRail();
+        }));
 
         await service.ApplyThemeAsync(dark);
         await _registry!.AddAsync(service);
@@ -1628,6 +1639,36 @@ public partial class App : Application
             ["about", "version", "license", "licenses", "credits", "source"], State: null,
             Accent: "#5E5A60", Initial: "A"));
 
+        candidates.Add(new SearchCandidate(
+            "command:theme-system", "Use system theme", SearchKind.Command,
+            ["theme", "appearance", "system", "auto", "follow"], State: null,
+            Accent: "#5E5A60", Initial: "S"));
+        candidates.Add(new SearchCandidate(
+            "command:theme-light", "Use light theme", SearchKind.Command,
+            ["theme", "appearance", "light", "day", "white"], State: null,
+            Accent: "#D8A45A", Initial: "L"));
+        candidates.Add(new SearchCandidate(
+            "command:theme-dark", "Use dark theme", SearchKind.Command,
+            ["theme", "appearance", "dark", "night", "black"], State: null,
+            Accent: "#3A4A63", Initial: "D"));
+
+        foreach (var pack in _themePacks)
+        {
+            var packName = string.IsNullOrWhiteSpace(pack.Name) ? pack.Id : pack.Name;
+
+            foreach (var flavor in pack.Flavors)
+            {
+                candidates.Add(new SearchCandidate(
+                    $"theme-flavor:{pack.Id}:{flavor.Id}",
+                    $"Theme: {packName} {flavor.Name}",
+                    SearchKind.Command,
+                    ["theme", "appearance", pack.Id, packName, flavor.Id, flavor.Name],
+                    State: null,
+                    Accent: flavor.Swatch,
+                    Initial: InitialOf(flavor.Name)));
+            }
+        }
+
         // Only meaningful with a current tab and while the page-dark plugin is active.
         if (_registry.Active is { } active
             && PluginState.IsEnabled(settings, PluginState.PageDarkId))
@@ -1923,6 +1964,11 @@ public partial class App : Application
 
         if (mode == BarMode.Search)
         {
+            if (TryApplyThemeCommand(id))
+            {
+                return;
+            }
+
             if (id.StartsWith("integration:", StringComparison.Ordinal))
             {
                 var rest = id["integration:".Length..];
@@ -2000,6 +2046,11 @@ public partial class App : Application
         if (string.Equals(selected, "command:blocking", StringComparison.Ordinal))
         {
             ToggleBlocking();
+            return;
+        }
+
+        if (TryApplyThemeCommand(selected))
+        {
             return;
         }
 
@@ -2148,6 +2199,9 @@ public partial class App : Application
                     "command:about" => UiIcons.Create("info", accentBrush, 22),
                     "command:page-dark" => UiIcons.Create("moon", accentBrush, 22),
                     "command:blocking" => UiIcons.Create("shield", accentBrush, 22),
+                    _ when id.StartsWith("theme-flavor:", StringComparison.Ordinal)
+                        || id.StartsWith("command:theme-", StringComparison.Ordinal)
+                        => UiIcons.Create("palette", accentBrush, 22),
                     _ => definitionId is null
                         ? ServiceBadge.Create(name, accent, 22)
                         : ServiceIcons.Create(definitionId, name, accent, 22),
@@ -2301,6 +2355,167 @@ public partial class App : Application
         }
     }
 
+    private void LoadWindowPlacement()
+    {
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log!).Load();
+            if (settings.WindowWidth is { } width
+                && settings.WindowHeight is { } height
+                && settings.WindowLeft is { } left
+                && settings.WindowTop is { } top)
+            {
+                _windowPlacement = new HostWindow.WindowPlacement(
+                    left,
+                    top,
+                    width,
+                    height,
+                    settings.WindowMaximized);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not read the window placement: {ex.Message}");
+        }
+    }
+
+    private void EnsureWindowPlacement()
+    {
+        if (_windowPlacementApplied)
+        {
+            return;
+        }
+
+        _windowPlacementApplied = true;
+        ApplyWindowPlacement();
+    }
+
+    private void ApplyWindowPlacement()
+    {
+        if (_windowPlacement is { } placement)
+        {
+            _host?.ApplyPlacement(placement);
+        }
+    }
+
+    private void SaveWindowPlacement()
+    {
+        if (_host is null || !_host.HasUserBounds || _log is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _windowPlacement = _host.CapturePlacement();
+            var store = new SettingsStore(AppPaths.SettingsFile, _log);
+            var settings = store.Load();
+            settings.WindowLeft = _windowPlacement.Left;
+            settings.WindowTop = _windowPlacement.Top;
+            settings.WindowWidth = _windowPlacement.Width;
+            settings.WindowHeight = _windowPlacement.Height;
+            settings.WindowMaximized = _windowPlacement.Maximized;
+            store.Save(settings);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log.Warn($"could not save the window placement: {ex.Message}");
+        }
+    }
+
+    private void SetThemeMode(ThemeMode mode)
+    {
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+            settings.Theme = ThemeDecision.ToStorageValue(mode);
+            store.Save(settings);
+            ApplyTheme();
+            _log?.Info($"theme mode set to {settings.Theme}");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not save the theme mode: {ex.Message}");
+        }
+    }
+
+    private void SetThemeFlavor(ThemePack pack, ThemeFlavor flavor)
+    {
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+
+            if (string.Equals(flavor.Mode, "light", StringComparison.OrdinalIgnoreCase))
+            {
+                settings.LightTheme = flavor.Id;
+                settings.Theme = "light";
+            }
+            else
+            {
+                settings.DarkTheme = flavor.Id;
+                settings.Theme = "dark";
+            }
+
+            PluginState.SetEnabled(settings, pack.Id, true);
+            store.Save(settings);
+            ApplyTheme();
+            _log?.Info($"theme flavor set to {pack.Id}/{flavor.Id}");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not save the theme flavor: {ex.Message}");
+        }
+    }
+
+    private bool TryApplyThemeCommand(string id)
+    {
+        if (string.Equals(id, "command:theme-system", StringComparison.Ordinal))
+        {
+            SetThemeMode(ThemeMode.System);
+            return true;
+        }
+
+        if (string.Equals(id, "command:theme-light", StringComparison.Ordinal))
+        {
+            SetThemeMode(ThemeMode.Light);
+            return true;
+        }
+
+        if (string.Equals(id, "command:theme-dark", StringComparison.Ordinal))
+        {
+            SetThemeMode(ThemeMode.Dark);
+            return true;
+        }
+
+        if (!id.StartsWith("theme-flavor:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var rest = id["theme-flavor:".Length..];
+        var separator = rest.IndexOf(':', StringComparison.Ordinal);
+
+        if (separator <= 0)
+        {
+            return false;
+        }
+
+        var packId = rest[..separator];
+        var flavorId = rest[(separator + 1)..];
+        var pack = _themePacks.FirstOrDefault(item => string.Equals(item.Id, packId, StringComparison.Ordinal));
+        var flavor = pack?.Flavors.FirstOrDefault(item => string.Equals(item.Id, flavorId, StringComparison.Ordinal));
+
+        if (pack is null || flavor is null)
+        {
+            return false;
+        }
+
+        SetThemeFlavor(pack, flavor);
+        return true;
+    }
+
     private void ShowHost()
     {
         if (_host is null)
@@ -2318,8 +2533,9 @@ public partial class App : Application
             CloseCommandBar(restore: true);
         }
 
-        var wasVisible = _host.IsVisible;
-        _registry?.Active?.Activate();
+        EnsureWindowPlacement();
+
+        var wasVisible = _host.IsVisible;        _registry?.Active?.Activate();
         var foreground = _host.ShowForUser();
         UpdateBusyFor(_registry?.Active);
         _registry?.Active?.FocusPage();
@@ -2457,6 +2673,7 @@ public partial class App : Application
             CloseCommandBar(restore: true);
         }
 
+        SaveWindowPlacement();
         _registry?.ParkActive();
         _host?.HideToBackground();
     }
@@ -2624,7 +2841,8 @@ public partial class App : Application
                     instance.DefinitionId,
                     _catalog?.Find(instance.DefinitionId)?.Accent,
                     ordinal,
-                    counts[key] > 1));
+                    counts[key] > 1,
+                    _registry.Find(instance.InstanceId)?.UnreadCount ?? 0));
             }
 
             _host.SetServiceRail(entries, _registry.Active?.InstanceId);
@@ -2788,6 +3006,7 @@ public partial class App : Application
         ApplyTheme();
         RefreshServiceRail();
         UpdateTrayStatus();
+        _ = RefreshPluginUpdatesAsync();
 
         if (_host?.IsPageOpen == true)
         {
@@ -2835,7 +3054,8 @@ public partial class App : Application
                 {
                     RefreshServiceRail();
                     UpdateTrayStatus();
-                });
+                },
+                () => _ = RefreshPluginUpdatesAsync());
         }
 
         ShowPage(_pluginsPage);
@@ -2860,6 +3080,7 @@ public partial class App : Application
         }
 
         _registry.Active?.CollapseForCommandBar();
+        EnsureWindowPlacement();
         _host.ShowForUser();
 
         _host.SetPage(page);
@@ -2871,6 +3092,76 @@ public partial class App : Application
     /// Offers the official signed registry once. Removing it sets the seeded flag, so a later
     /// launch does not silently put it back.
     /// </summary>
+    /// <summary>
+    /// Syncs auto-update repositories in the background and counts installed plugins whose
+    /// signed index has a newer version. The count drives the small badge on the rail's
+    /// plugins icon, so updates are visible without opening the page.
+    /// </summary>
+    private async Task RefreshPluginUpdatesAsync()
+    {
+        if (_repositories is null || _log is null || _pluginUpdateSyncRunning)
+        {
+            return;
+        }
+
+        _pluginUpdateSyncRunning = true;
+
+        try
+        {
+            var settings = new SettingsStore(AppPaths.SettingsFile, _log).Load();
+            var indexes = new Dictionary<string, RepositoryIndex>(StringComparer.OrdinalIgnoreCase);
+            var settingsChanged = false;
+
+            foreach (var repository in settings.Repositories.Where(item => item.AutoUpdate))
+            {
+                var result = await _repositories.SyncAsync(repository);
+
+                if (result.Ok && result.Index is not null)
+                {
+                    indexes[repository.Url] = result.Index;
+                    repository.LastSync = DateTimeOffset.UtcNow;
+                    settingsChanged = true;
+                }
+            }
+
+            if (settingsChanged)
+            {
+                new SettingsStore(AppPaths.SettingsFile, _log).Save(settings);
+            }
+
+            var count = 0;
+
+            foreach (var installed in _installedPlugins.Where(item => item.Source is not null))
+            {
+                if (!indexes.TryGetValue(installed.Source!.RepositoryUrl, out var index)
+                    || !Version.TryParse(installed.Version, out var current))
+                {
+                    continue;
+                }
+
+                if (index.Plugins.Any(candidate =>
+                        string.Equals(candidate.Id, installed.Id, StringComparison.Ordinal)
+                        && Version.TryParse(candidate.Version, out var available)
+                        && available > current))
+                {
+                    count++;
+                }
+            }
+
+            _pluginUpdateCount = count;
+            _host?.SetPluginUpdateCount(count);
+            _log.Info($"plugin updates available: {count}");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log.Warn($"could not check plugin updates: {ex.Message}");
+        }
+        finally
+        {
+            _pluginUpdateSyncRunning = false;
+        }
+    }
+
     private void EnsureOfficialRepository()
     {
         try
@@ -3270,6 +3561,7 @@ public partial class App : Application
     private void Quit()
     {
         _log?.Info("quit requested");
+        SaveWindowPlacement();
         Terminate(0);
     }
 }

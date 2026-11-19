@@ -3,7 +3,7 @@ namespace Chirpdesk.Core.Settings;
 /// <summary>The whole user configuration. Small enough to rewrite atomically on every change.</summary>
 public sealed class AppSettings
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     public const int DefaultCacheBudgetMb = 60;
     public const int DefaultGlobalCacheBudgetMb = 180;
@@ -62,4 +62,16 @@ public sealed class AppSettings
 
     /// <summary>True once the bundled official repository has been offered; removal is respected.</summary>
     public bool OfficialRepositorySeeded { get; set; }
+
+    /// <summary>Saved normal bounds in WPF DIPs; null means the window has no placement yet.</summary>
+    public double? WindowLeft { get; set; }
+
+    public double? WindowTop { get; set; }
+
+    public double? WindowWidth { get; set; }
+
+    public double? WindowHeight { get; set; }
+
+    /// <summary>True when the last user-visible state was maximized; minimized restores as normal.</summary>
+    public bool WindowMaximized { get; set; }
 }

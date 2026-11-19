@@ -66,12 +66,99 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private bool _disposed;
 
     /// <summary>
+    /// Host-owned link preview: hides Chromium's bottom-left status bubble and shows the URL
+    /// above the cursor in a small surface that follows the app's light/dark theme.
+    /// </summary>
+    private const string LinkTooltipScript = """
+        (function () {
+          if (window.__chirpdeskLinkTip) { return; }
+          window.__chirpdeskLinkTip = true;
+
+          function install() {
+            if (!document.documentElement || !document.body) { return; }
+            var tip = document.getElementById('chirpdesk-link-tip');
+            if (!tip) {
+              tip = document.createElement('div');
+              tip.id = 'chirpdesk-link-tip';
+              document.documentElement.appendChild(tip);
+            }
+
+            tip.style.cssText = 'position:fixed;z-index:2147483647;display:none;' +
+              'pointer-events:none;max-width:min(520px,80vw);padding:5px 9px;' +
+              'border:1px solid;border-radius:7px;font:12px/1.35 "Segoe UI",system-ui,sans-serif;' +
+              'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' +
+              'box-shadow:0 6px 20px rgba(0,0,0,.28);backdrop-filter:blur(8px);';
+
+            var lastX = 0;
+            var lastY = 0;
+
+            function paint() {
+              var dark = document.documentElement.getAttribute('data-chirpdesk-theme') === 'dark';
+              tip.style.background = dark ? 'rgba(30,30,46,.95)' : 'rgba(250,248,242,.97)';
+              tip.style.color = dark ? '#cdd6f4' : '#1d2422';
+              tip.style.borderColor = dark ? '#45475a' : '#d3d0c6';
+              tip.style.filter = document.documentElement.classList.contains('cd-dark')
+                ? 'invert(1) hue-rotate(180deg)'
+                : 'none';
+            }
+
+            function place() {
+              var width = tip.offsetWidth;
+              var height = tip.offsetHeight;
+              var x = lastX + 14;
+              var y = lastY - height - 12;
+
+              if (y < 8) { y = lastY + 18; }
+              if (x + width > innerWidth - 8) { x = lastX - width - 12; }
+
+              tip.style.left = Math.max(8, x) + 'px';
+              tip.style.top = Math.max(8, y) + 'px';
+            }
+
+            function show(link) {
+              if (!link || !link.href || link.href.indexOf('javascript:') === 0) { return; }
+              tip.textContent = link.href;
+              tip.style.display = 'block';
+              paint();
+              place();
+            }
+
+            function hide() { tip.style.display = 'none'; }
+
+            document.addEventListener('mouseover', function (event) {
+              var link = event.target && event.target.closest
+                ? event.target.closest('a[href]')
+                : null;
+              if (link) { show(link); } else { hide(); }
+            }, true);
+
+            document.addEventListener('mousemove', function (event) {
+              lastX = event.clientX;
+              lastY = event.clientY;
+              if (tip.style.display === 'block') { place(); }
+            }, true);
+
+            document.addEventListener('mousedown', hide, true);
+            window.addEventListener('scroll', hide, true);
+
+            new MutationObserver(paint).observe(document.documentElement, {
+              attributes: true,
+              attributeFilter: ['data-chirpdesk-theme', 'class']
+            });
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', install, { once: true });
+          } else {
+            install();
+          }
+        })();
+        """;
+
+    /// <summary>
     /// Routes <c>ServiceWorkerRegistration.showNotification</c> through the page's own
     /// <c>new Notification()</c>. WebView2 does not surface service-worker notifications, so
-    /// without this a site that notifies from a registration gets no toast at all. The
-    /// override only applies when the call is made from page context; a worker calling it
-    /// inside its own scope is invisible to every host-side hook, and that site falls back to
-    /// the unread-title toast instead.
+    /// without this a site that notifies from a registration gets no toast at all.
     /// </summary>
     private const string NotificationShimScript = """
         (function () {
@@ -531,6 +618,15 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
         var core = _view.CoreWebView2;
 
+        try
+        {
+            core.Settings.IsStatusBarEnabled = false;
+        }
+        catch (InvalidOperationException)
+        {
+            // Older runtimes: leave the native status bar as-is.
+        }
+
         _gate = new WarmUpGate(_clock, TimeSpan.FromSeconds(5));
         _fallbackDedupe = new NotificationDedupe(_clock, TimeSpan.FromSeconds(3));
         _bridge = new WebNotificationBridge(
@@ -593,6 +689,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             // Installed before navigation so it is in place before any app script runs.
             await core.AddScriptToExecuteOnDocumentCreatedAsync(NotificationShimScript);
             await core.AddScriptToExecuteOnDocumentCreatedAsync(ThemeScript);
+            await core.AddScriptToExecuteOnDocumentCreatedAsync(LinkTooltipScript);
             SetNavigating(true);
             core.Navigate(_instance.Url);
         }
@@ -726,7 +823,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
 
             var argument = filterEnabled ? "true" : "false";
-            var script = "window.__chirpdeskTheme ? window.__chirpdeskTheme(" + argument + ") : ''";
+            var theme = dark ? "dark" : "light";
+            var script = "document.documentElement.dataset.chirpdeskTheme='" + theme + "'; "
+                + "window.__chirpdeskTheme ? window.__chirpdeskTheme(" + argument + ") : ''";
             var result = await core.ExecuteScriptAsync(script);
 
             var policy = forced ? "on" : follow ? "auto" : "off";

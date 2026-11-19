@@ -14,7 +14,7 @@ public sealed class RepositorySetting
 
     public string KeyFingerprint { get; set; } = string.Empty;
 
-    public bool AutoUpdate { get; set; }
+    public bool AutoUpdate { get; set; } = true;
 
     public DateTimeOffset? LastSync { get; set; }
 }

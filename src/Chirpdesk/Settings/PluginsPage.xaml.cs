@@ -42,6 +42,7 @@ public partial class PluginsPage : UserControl
     private readonly Func<string, Task> _openInstance;
     private readonly Func<string, Task> _closeInstance;
     private readonly Action _refreshShell;
+    private readonly Action _pluginUpdatesChanged;
     private ServiceDefinition? _pendingAccountDefinition;
     private string? _pendingRenameInstanceId;
     private string? _pendingRenameDefinitionId;
@@ -71,7 +72,8 @@ public partial class PluginsPage : UserControl
         Func<string, Task>? removeInstance = null,
         Func<string, Task>? openInstance = null,
         Func<string, Task>? closeInstance = null,
-        Action? refreshShell = null)
+        Action? refreshShell = null,
+        Action? pluginUpdatesChanged = null)
     {
         InitializeComponent();
         _catalog = catalog;
@@ -90,6 +92,7 @@ public partial class PluginsPage : UserControl
         _openInstance = openInstance ?? (_ => Task.CompletedTask);
         _closeInstance = closeInstance ?? (_ => Task.CompletedTask);
         _refreshShell = refreshShell ?? (() => { });
+        _pluginUpdatesChanged = pluginUpdatesChanged ?? (() => { });
         _settings = store.Load();
         PageIcon.Content = UiIcons.Create("plugins", Token("CdAccent"), 28);
         Reload();
@@ -167,6 +170,7 @@ public partial class PluginsPage : UserControl
     private void RenderPluginCards()
     {
         PluginsPanel.Children.Clear();
+        var cards = new List<(Border Card, bool HasUpdate, DateTimeOffset UpdatedAt, string Name)>();
 
         foreach (var definition in _catalog.Definitions.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
         {
@@ -379,7 +383,8 @@ public partial class PluginsPage : UserControl
 
             content.Children.Add(actions);
             card.Child = content;
-            PluginsPanel.Children.Add(card);
+            var cardUpdate = installedPlugin is null ? null : FindUpdate(installedPlugin);
+            cards.Add((card, cardUpdate is not null, installedPlugin?.Source?.InstalledAt ?? DateTimeOffset.MinValue, definition.Name));
         }
 
         foreach (var plugin in _inventory.Where(item => !string.Equals(item.Kind, PluginLoader.ServiceKind, StringComparison.Ordinal) && !_removedPlugins.Contains(item.Id)))
@@ -640,7 +645,16 @@ public partial class PluginsPage : UserControl
             }
 
             card.Child = content;
-            PluginsPanel.Children.Add(card);
+            var pluginUpdate = FindUpdate(plugin);
+            cards.Add((card, pluginUpdate is not null, plugin.Source?.InstalledAt ?? DateTimeOffset.MinValue, plugin.Name));
+        }
+
+        foreach (var entry in cards
+            .OrderByDescending(item => item.HasUpdate)
+            .ThenByDescending(item => item.UpdatedAt)
+            .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            PluginsPanel.Children.Add(entry.Card);
         }
 
         InstalledSummary.Text = PluginsPanel.Children.Count == 0
@@ -734,7 +748,10 @@ public partial class PluginsPage : UserControl
 
             var grid = new WrapPanel { Orientation = Orientation.Horizontal };
 
-            foreach (var plugin in index.Plugins)
+            foreach (var plugin in index.Plugins
+                .OrderByDescending(item => HasUpdate(item, repository))
+                .ThenByDescending(item => VersionOrZero(item.Version))
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
             {
                 grid.Children.Add(BuildBrowseCard(repository, index, plugin, app, repositoryName));
             }
@@ -746,6 +763,20 @@ public partial class PluginsPage : UserControl
             ? $"{_settings.Repositories.Count} repository(ies) configured. Sync one to see plugins."
             : $"Showing plugins from {rendered} synced repository(ies). Select a plugin to inspect it.";
     }
+
+    private bool HasUpdate(RepositoryPlugin plugin, RepositorySetting repository)
+    {
+        var installed = _inventory.FirstOrDefault(item =>
+            string.Equals(item.Id, plugin.Id, StringComparison.Ordinal));
+
+        return installed is not null
+            && Version.TryParse(installed.Version, out var current)
+            && Version.TryParse(plugin.Version, out var available)
+            && available > current;
+    }
+
+    private static Version VersionOrZero(string? value) =>
+        Version.TryParse(value, out var version) ? version : new Version(0, 0, 0, 0);
 
     private Border BuildBrowseCard(
         RepositorySetting repository,
@@ -1115,6 +1146,7 @@ public partial class PluginsPage : UserControl
         repository.LastSync = DateTimeOffset.UtcNow;
         _store.Save(_settings);
         _synced[repository.Url] = result.Index;
+        _pluginUpdatesChanged();
         RepositoryStatus.Text = result.Message;
         RenderPluginCards();
         RenderAvailablePlugins();

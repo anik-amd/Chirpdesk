@@ -370,6 +370,7 @@ public static partial class PluginLoader
                 }
 
                 pack.Id = manifest.Id;
+                pack.Name = manifest.Name;
                 pack.Flavors = pack.Flavors
                     .Where(flavor => IsValidFlavor(flavor, folderName, errors))
                     .GroupBy(flavor => flavor.Id, StringComparer.Ordinal)
