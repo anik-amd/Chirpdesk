@@ -91,6 +91,32 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
             var lastX = 0;
             var lastY = 0;
+            var titled = null;
+            var savedTitle = null;
+
+            function suppressNativeTitle(link, target) {
+              var node = target && target.closest ? target.closest('[title]') : null;
+              if (!node || (link.contains && !link.contains(node))) { node = link; }
+
+              var value = node && node.getAttribute ? node.getAttribute('title') : null;
+              if (!value) { return; }
+
+              // Sites often put the destination in title="", which Chromium paints as a native
+              // white tooltip next to ours. Keep human-readable titles, drop URL duplicates.
+              if (/^https?:\/\//i.test(value) || value === link.href) {
+                titled = node;
+                savedTitle = value;
+                node.removeAttribute('title');
+              }
+            }
+
+            function restoreNativeTitle() {
+              if (titled && savedTitle !== null) {
+                titled.setAttribute('title', savedTitle);
+              }
+              titled = null;
+              savedTitle = null;
+            }
 
             function paint() {
               var dark = document.documentElement.getAttribute('data-chirpdesk-theme') === 'dark';
@@ -115,21 +141,26 @@ internal sealed class ServiceRuntime : IAsyncDisposable
               tip.style.top = Math.max(8, y) + 'px';
             }
 
-            function show(link) {
+            function show(link, target) {
               if (!link || !link.href || link.href.indexOf('javascript:') === 0) { return; }
+              hide();
+              suppressNativeTitle(link, target);
               tip.textContent = link.href;
               tip.style.display = 'block';
               paint();
               place();
             }
 
-            function hide() { tip.style.display = 'none'; }
+            function hide() {
+              tip.style.display = 'none';
+              restoreNativeTitle();
+            }
 
             document.addEventListener('mouseover', function (event) {
               var link = event.target && event.target.closest
                 ? event.target.closest('a[href]')
                 : null;
-              if (link) { show(link); } else { hide(); }
+              if (link) { show(link, event.target); } else { hide(); }
             }, true);
 
             document.addEventListener('mousemove', function (event) {
