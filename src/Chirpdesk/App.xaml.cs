@@ -66,6 +66,12 @@ public partial class App : Application
     private (string PluginId, string CommandId)? _pendingIntegrationArgument;
     private ModifierWatcher? _barWatcher;
     private IReadOnlyList<SearchCandidate> _searchCandidates = Array.Empty<SearchCandidate>();
+    private string? _accountPickerDefinitionId;
+    private bool _accountPickerClosing;
+    private string? _accountPickerTitle;
+    private string? _accountPickerHint;
+    private string? _accountPickerEmptyText;
+    private string? _accountPickerReturnQuery;
     private bool _barOpening;
     private IntPtr _keyboardHook;
     private NativeMethods.LowLevelKeyboardProc? _keyboardHookProc;
@@ -678,6 +684,35 @@ public partial class App : Application
         }
     }
 
+    private async Task OpenAccountAsync(string instanceId)
+    {
+        if (_log is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log);
+            var settings = store.Load();
+            var instance = settings.Services.FirstOrDefault(
+                item => string.Equals(item.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+
+            if (instance is { Enabled: false })
+            {
+                instance.Enabled = true;
+                store.Save(settings);
+                _log.Info($"enabled account '{instanceId}' for opening");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log.Warn($"could not enable account '{instanceId}': {ex.Message}");
+        }
+
+        await ActivateServiceAsync(instanceId);
+    }
+
     private static ServiceInstance? ResolveInstance(AppSettings settings, string requestedId, SettingsStore store)
     {
         var match = string.IsNullOrEmpty(requestedId)
@@ -979,6 +1014,23 @@ public partial class App : Application
 
             // Everything else belongs to the text field.
             return;
+        }
+
+        if (_accountPickerDefinitionId is not null)
+        {
+            if (e.Key == Key.Escape)
+            {
+                e.Handled = true;
+                ExitAccountPicker();
+                return;
+            }
+
+            if (e.Key == Key.Back && string.IsNullOrEmpty(_barState.Query))
+            {
+                e.Handled = true;
+                ExitAccountPicker();
+                return;
+            }
         }
 
         var action = BarKeys.Decide(_barState, ToBarKey(e.Key), ToBarModifiers());
@@ -1297,6 +1349,7 @@ public partial class App : Application
 
         var keep = _barState.Selected;
         _barWatcher?.Stop();
+        ResetAccountPicker();
 
         _barState = BarState.ForSearch();
         _searchCandidates = BuildSearchCandidates();
@@ -1316,6 +1369,7 @@ public partial class App : Application
 
         var keep = _barState.Selected;
         _barWatcher?.Stop();
+        ResetAccountPicker();
 
         _barState = BarState.ForTabs(_registry.Order, keep ?? _registry.Active?.InstanceId);
         RenderCommandBar();
@@ -1368,9 +1422,32 @@ public partial class App : Application
             byId[instance.InstanceId] = instance;
         }
 
+        // Accounts are grouped per definition. A service with more than one account gets one
+        // Open row that drills into the account list, so the palette never repeats Facebook
+        // once per login.
+        var accountsByDefinition = new Dictionary<string, List<ServiceInstance>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var instance in settings.Services)
+        {
+            var definitionId = _catalog?.Resolve(instance)?.DefinitionId;
+            var key = string.IsNullOrWhiteSpace(definitionId)
+                ? $"instance:{instance.InstanceId}"
+                : definitionId;
+
+            if (!accountsByDefinition.TryGetValue(key, out var accounts))
+            {
+                accounts = [];
+                accountsByDefinition[key] = accounts;
+            }
+
+            accounts.Add(instance);
+        }
+
+        static bool IsGrouped(List<ServiceInstance>? accounts) => accounts is { Count: > 1 };
+
         var candidates = new List<SearchCandidate>();
 
-        // Open tabs first, in MRU order.
+        // Open tabs first, in MRU order. Grouped services are represented by their Open row.
         foreach (var id in _registry.Order)
         {
             byId.TryGetValue(id, out var instance);
@@ -1381,6 +1458,14 @@ public partial class App : Application
             }
 
             var resolved = instance is null ? null : _catalog?.Resolve(instance);
+
+            if (resolved?.DefinitionId is { } groupedId
+                && accountsByDefinition.TryGetValue(groupedId, out var groupedAccounts)
+                && IsGrouped(groupedAccounts))
+            {
+                continue;
+            }
+
             var aliases = resolved?.DefinitionId is { } definitionId
                 ? _catalog?.Find(definitionId)?.Aliases
                 : null;
@@ -1401,7 +1486,7 @@ public partial class App : Application
                 DefinitionId: resolved?.DefinitionId ?? _registry.Find(id)?.DefinitionId));
         }
 
-        // Enabled instances that are not warm yet: asleep or cold.
+        // Enabled single-account instances that are not warm yet.
         foreach (var instance in settings.Services.Where(service => service.Enabled).OrderBy(service => service.Order))
         {
             if (_registry.IsWarm(instance.InstanceId))
@@ -1415,18 +1500,24 @@ public partial class App : Application
                 continue;
             }
 
+            if (resolved.DefinitionId is { } groupedId
+                && accountsByDefinition.TryGetValue(groupedId, out var groupedAccounts)
+                && IsGrouped(groupedAccounts))
+            {
+                continue;
+            }
+
             var aliases = resolved.DefinitionId is { } definitionId
                 ? _catalog?.Find(definitionId)?.Aliases
                 : null;
 
-            var state = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm ? "open" : "closed";
             candidates.Add(new SearchCandidate(
                 instance.InstanceId,
                 AccountAwareName(settings, instance, resolved.Name),
                 SearchKind.Cold,
                 aliases,
                 HostOf(resolved.Url),
-                State: state,
+                State: "closed",
                 Accent: AccentOf(resolved.DefinitionId),
                 Initial: InitialOf(resolved.Name),
                 DefinitionId: resolved.DefinitionId));
@@ -1443,33 +1534,87 @@ public partial class App : Application
 
         foreach (var definition in definitions.Where(definition => servicePlugins.Contains(definition.Id)))
         {
-            var hasEnabledInstance = settings.Services.Any(
-                instance => instance.Enabled
-                    && string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase));
+            accountsByDefinition.TryGetValue(definition.Id, out var accounts);
+            var accountCount = accounts?.Count ?? 0;
+            var aliases = (definition.Aliases ?? []).Append("plugin");
+            var anyWarm = accounts?.Any(account => _registry.IsWarm(account.InstanceId)) == true;
 
-            if (hasEnabledInstance)
+            if (accountCount > 1)
             {
                 candidates.Add(new SearchCandidate(
-                    $"plugin-off:{definition.Id}",
-                    $"Close {definition.Name}",
+                    $"service-open:{definition.Id}",
+                    $"Open {definition.Name}",
                     SearchKind.Command,
-                    (definition.Aliases ?? []).Append("plugin").Append("close").ToList(),
-                    State: "open",
+                    aliases.Append("open").Append("accounts").ToList(),
+                    State: anyWarm ? "open" : "closed",
+                    Accent: definition.Accent,
+                    Initial: InitialOf(definition.Name),
+                    DefinitionId: definition.Id));
+
+                if (anyWarm)
+                {
+                    candidates.Add(new SearchCandidate(
+                        $"service-close:{definition.Id}",
+                        $"Close {definition.Name}",
+                        SearchKind.Command,
+                        aliases.Append("close").ToList(),
+                        State: "open",
+                        Accent: definition.Accent,
+                        Initial: InitialOf(definition.Name),
+                        DefinitionId: definition.Id));
+                }
+
+                continue;
+            }
+
+            if (accountCount == 0)
+            {
+                candidates.Add(new SearchCandidate(
+                    $"service-open:{definition.Id}",
+                    $"Open {definition.Name}",
+                    SearchKind.Command,
+                    aliases.Append("open").ToList(),
+                    State: "closed",
                     Accent: definition.Accent,
                     Initial: InitialOf(definition.Name),
                     DefinitionId: definition.Id));
                 continue;
             }
 
-            candidates.Add(new SearchCandidate(
-                $"plugin:{definition.Id}",
-                definition.Name,
-                SearchKind.Cold,
-                (definition.Aliases ?? []).Append("plugin").Append("open").ToList(),
-                State: "closed",
-                Accent: definition.Accent,
-                Initial: InitialOf(definition.Name),
-                DefinitionId: definition.Id));
+            var single = accounts![0];
+
+            if (single.Enabled)
+            {
+                if (_registry.IsWarm(single.InstanceId))
+                {
+                    candidates.Add(new SearchCandidate(
+                        $"service-close:{definition.Id}",
+                        $"Close {definition.Name}",
+                        SearchKind.Command,
+                        aliases.Append("close").ToList(),
+                        State: "open",
+                        Accent: definition.Accent,
+                        Initial: InitialOf(definition.Name),
+                        DefinitionId: definition.Id));
+                }
+
+                continue;
+            }
+
+            var resolvedSingle = _catalog?.Resolve(single);
+            if (resolvedSingle is not null)
+            {
+                candidates.Add(new SearchCandidate(
+                    single.InstanceId,
+                    AccountAwareName(settings, single, resolvedSingle.Name),
+                    SearchKind.Cold,
+                    aliases.Append("open").ToList(),
+                    HostOf(resolvedSingle.Url),
+                    State: "closed",
+                    Accent: definition.Accent,
+                    Initial: InitialOf(resolvedSingle.Name),
+                    DefinitionId: resolvedSingle.DefinitionId));
+            }
         }
 
         candidates.Add(new SearchCandidate(
@@ -1583,11 +1728,174 @@ public partial class App : Application
                 _searchCandidates
                     .Where(candidate =>
                         (candidate.Kind == SearchKind.Warm && candidate.State == "open")
-                        || candidate.State == "closed")
+                        || candidate.State == "closed"
+                        || candidate.Id.StartsWith("service-open:", StringComparison.Ordinal))
                     .ToList())
             : SearchIndex.Rank(_barState.Query, _searchCandidates);
         _barState.ShowResults(ranked.Select(candidate => candidate.Id).ToList(), keepSelected);
         RenderCommandBar();
+    }
+
+    private void BeginAccountPicker(string definitionId, bool close)
+    {
+        if (_barState is null || _catalog is null)
+        {
+            return;
+        }
+
+        var definition = _catalog.Find(definitionId);
+        if (definition is null)
+        {
+            return;
+        }
+
+        var settings = LoadSearchSettings();
+        var accounts = settings.Services
+            .Where(instance => string.Equals(instance.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase))
+            .Where(instance => !close || _registry?.IsWarm(instance.InstanceId) == true)
+            .OrderBy(instance => instance.Order)
+            .ToList();
+
+        if (accounts.Count == 0)
+        {
+            return;
+        }
+
+        _accountPickerDefinitionId = definitionId;
+        _accountPickerClosing = close;
+        _accountPickerReturnQuery = _barState.Query;
+        _accountPickerTitle = $"{(close ? "Close" : "Open")} {definition.Name}";
+        _accountPickerHint = close ? "Enter to close - Esc back" : "Enter to open - Esc back";
+        _accountPickerEmptyText = close ? "No open accounts." : "No accounts.";
+
+        _searchCandidates = accounts.Select(instance =>
+        {
+            var resolved = _catalog.Resolve(instance);
+            var name = string.IsNullOrWhiteSpace(instance.Name)
+                ? resolved?.Name ?? definition.Name
+                : instance.Name;
+            var warm = _registry?.IsWarm(instance.InstanceId) == true;
+
+            return new SearchCandidate(
+                instance.InstanceId,
+                name,
+                warm ? SearchKind.Warm : SearchKind.Cold,
+                State: warm ? "open" : "closed",
+                Accent: definition.Accent,
+                Initial: InitialOf(name),
+                DefinitionId: definitionId);
+        }).ToList();
+
+        _barState.SetQuery(string.Empty);
+        UpdateSearchResults(keepSelected: null);
+        _bar?.FocusQuery();
+    }
+
+    private bool TryHandleServicePicker(string selected)
+    {
+        if (_barState is null || _barState.Mode != BarMode.Search)
+        {
+            return false;
+        }
+
+        if (_accountPickerDefinitionId is not null)
+        {
+            CommitAccountPicker(selected);
+            return true;
+        }
+
+        if (selected.StartsWith("service-open:", StringComparison.Ordinal))
+        {
+            var openDefinitionId = selected["service-open:".Length..];
+            var accounts = LoadSearchSettings().Services
+                .Where(instance => string.Equals(instance.DefinitionId, openDefinitionId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (accounts.Count == 0)
+            {
+                _barState.Commit();
+                CloseCommandBar(restore: true);
+
+                if (_catalog?.Find(openDefinitionId) is { } definition)
+                {
+                    _ = EnablePluginAsync(definition);
+                }
+
+                return true;
+            }
+
+            BeginAccountPicker(openDefinitionId, close: false);
+            return true;
+        }
+
+        if (!selected.StartsWith("service-close:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var definitionId = selected["service-close:".Length..];
+        var warm = LoadSearchSettings().Services
+            .Where(instance => string.Equals(instance.DefinitionId, definitionId, StringComparison.OrdinalIgnoreCase))
+            .Where(instance => _registry?.IsWarm(instance.InstanceId) == true)
+            .ToList();
+
+        if (warm.Count == 0)
+        {
+            return true;
+        }
+
+        if (warm.Count == 1)
+        {
+            _barState.Commit();
+            CloseCommandBar(restore: true);
+            _ = CloseServiceInstanceAsync(warm[0].InstanceId);
+            return true;
+        }
+
+        BeginAccountPicker(definitionId, close: true);
+        return true;
+    }
+
+    private void CommitAccountPicker(string instanceId)
+    {
+        var closing = _accountPickerClosing;
+        ResetAccountPicker();
+        _barState?.Commit();
+        CloseCommandBar(restore: true);
+
+        if (closing)
+        {
+            _ = CloseServiceInstanceAsync(instanceId);
+            return;
+        }
+
+        ClosePage();
+        _ = OpenAccountAsync(instanceId);
+    }
+
+    private void ExitAccountPicker()
+    {
+        if (_accountPickerDefinitionId is null || _barState is null)
+        {
+            return;
+        }
+
+        var query = _accountPickerReturnQuery ?? string.Empty;
+        ResetAccountPicker();
+        _searchCandidates = BuildSearchCandidates();
+        _barState.SetQuery(query);
+        UpdateSearchResults(keepSelected: null);
+        _bar?.FocusQuery();
+    }
+
+    private void ResetAccountPicker()
+    {
+        _accountPickerDefinitionId = null;
+        _accountPickerClosing = false;
+        _accountPickerTitle = null;
+        _accountPickerHint = null;
+        _accountPickerEmptyText = null;
+        _accountPickerReturnQuery = null;
     }
 
     private void CommitBarIndex(int index)
@@ -1599,6 +1907,11 @@ public partial class App : Application
 
         var id = _barState.Entries[index];
         var mode = _barState.Mode;
+
+        if (mode == BarMode.Search && TryHandleServicePicker(id))
+        {
+            return;
+        }
 
         if (mode == BarMode.Search && TryBeginIntegrationArgument(id))
         {
@@ -1643,6 +1956,11 @@ public partial class App : Application
 
         var selected = _barState.Selected;
         if (selected is null)
+        {
+            return;
+        }
+
+        if (TryHandleServicePicker(selected))
         {
             return;
         }
@@ -1693,30 +2011,6 @@ public partial class App : Application
             if (separator > 0)
             {
                 _ = RunIntegrationCommandAsync(rest[..separator], rest[(separator + 1)..], null);
-            }
-
-            return;
-        }
-
-        if (selected.StartsWith("plugin:", StringComparison.Ordinal))
-        {
-            var definition = _catalog?.Find(selected["plugin:".Length..]);
-            if (definition is not null)
-            {
-                _log?.Info($"command bar activating plugin '{definition.Id}'");
-                _ = EnablePluginAsync(definition);
-            }
-
-            return;
-        }
-
-        if (selected.StartsWith("plugin-off:", StringComparison.Ordinal))
-        {
-            var definition = _catalog?.Find(selected["plugin-off:".Length..]);
-            if (definition is not null)
-            {
-                _log?.Info($"command bar deactivating plugin '{definition.Id}'");
-                _ = DisablePluginAsync(definition);
             }
 
             return;
@@ -1834,7 +2128,9 @@ public partial class App : Application
                 var runtime = _registry.Find(id);
                 var name = candidate?.Name ?? runtime?.Name ?? id;
 
-                if (!string.IsNullOrWhiteSpace(candidate?.State)
+                if (candidate is not null
+                    && candidate.Kind is not SearchKind.Command
+                    && !string.IsNullOrWhiteSpace(candidate.State)
                     && candidate.State is not "open")
                 {
                     name = $"{name} \u00b7 {(candidate.State == "closed" ? "Closed" : candidate.State)}";
@@ -1870,7 +2166,15 @@ public partial class App : Application
             })
             .ToList();
 
-        _bar.Render(rows, _barState.Highlight, _barState.Mode, _barState.Query, _host.IsDark);
+        _bar.Render(
+            rows,
+            _barState.Highlight,
+            _barState.Mode,
+            _barState.Query,
+            _host.IsDark,
+            _accountPickerTitle,
+            _accountPickerHint,
+            _accountPickerEmptyText);
     }
 
     private void CloseCommandBar(bool restore)
@@ -1879,6 +2183,7 @@ public partial class App : Application
         _barState?.Cancel();
         _barState = null;
         _pendingIntegrationArgument = null;
+        ResetAccountPicker();
 
         _host?.HideCommandBar();
 
@@ -2516,9 +2821,7 @@ public partial class App : Application
                 new SettingsStore(AppPaths.SettingsFile, _log),
                 _registry,
                 _log,
-                EnablePluginAsync,
                 AddAccountAsync,
-                DisablePluginAsync,
                 SetPluginEnabledAsync,
                 ClosePage,
                 _repositories ?? new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log),
@@ -2526,7 +2829,7 @@ public partial class App : Application
                 ReloadPluginCatalog,
                 _integrations,
                 RemoveInstanceAsync,
-                ActivateServiceAsync,
+                OpenAccountAsync,
                 CloseServiceInstanceAsync,
                 () =>
                 {
@@ -2727,35 +3030,6 @@ public partial class App : Application
 
         ClosePage();
         await OpenInstanceAsync(instance, show: true, probe: false);
-    }
-
-    private async Task DisablePluginAsync(ServiceDefinition definition)
-    {
-        if (_log is null || _registry is null)
-        {
-            return;
-        }
-
-        var store = new SettingsStore(AppPaths.SettingsFile, _log);
-        var settings = store.Load();
-        var instances = settings.Services
-            .Where(instance => string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        foreach (var instance in instances)
-        {
-            instance.Enabled = false;
-
-            if (_registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
-            {
-                await _registry.SleepAsync(instance.InstanceId);
-            }
-        }
-
-        store.Save(settings);
-        RefreshServiceRail();
-        UpdateTrayStatus();
-        _log.Info($"plugin '{definition.Id}' turned off; sessions preserved");
     }
 
     /// <summary>

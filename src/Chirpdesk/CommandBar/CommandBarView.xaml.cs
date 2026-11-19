@@ -46,13 +46,21 @@ public partial class CommandBarView : UserControl
         }
     }
 
-    public void Render(IReadOnlyList<BarRow> rows, int highlight, BarMode mode, string query, bool dark)
+    public void Render(
+        IReadOnlyList<BarRow> rows,
+        int highlight,
+        BarMode mode,
+        string query,
+        bool dark,
+        string? header = null,
+        string? hint = null,
+        string? empty = null)
     {
         ApplyPalette(dark);
 
         if (mode == BarMode.Search)
         {
-            Header.Text = "Search tabs, plugins, commands…";
+            Header.Text = header ?? "Search tabs, plugins, commands…";
             Header.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
             QueryBox.Visibility = Visibility.Visible;
 
@@ -85,17 +93,17 @@ public partial class CommandBarView : UserControl
             QueryBox.Visibility = Visibility.Collapsed;
         }
 
-        Hint.Text = mode switch
+        Hint.Text = hint ?? (mode switch
         {
             BarMode.Search => "Enter to run - Esc back",
             BarMode.Argument => "Enter to send - Esc cancel",
             _ => "Tab to move - release Ctrl to switch",
-        };
+        });
         Hint.Foreground = Token("CdPaletteMuted");
 
         Rows.ItemsSource = rows;
         Rows.SelectedIndex = highlight >= 0 && highlight < rows.Count ? highlight : -1;
-        EmptyText.Text = mode == BarMode.Search ? "No matches." : "No open services.";
+        EmptyText.Text = empty ?? (mode == BarMode.Search ? "No matches." : "No open services.");
         EmptyText.Visibility = rows.Count == 0 && mode != BarMode.Argument
             ? Visibility.Visible
             : Visibility.Collapsed;

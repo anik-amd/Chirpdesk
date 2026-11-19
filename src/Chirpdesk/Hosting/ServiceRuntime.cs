@@ -58,6 +58,9 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private NotificationDedupe? _fallbackDedupe;
     private RequestMatcher? _matcher;
     private int _lastUnread;
+    private DateTimeOffset _lastUnreadChangeAt = DateTimeOffset.MinValue;
+    private bool _unreadBaselinePending = true;
+    private int _navigationToken;
     private int _blockedRequests;
     private bool _darkTheme;
     private bool _disposed;
@@ -546,7 +549,14 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _bridge.Attach();
         SetupBlocking(core);
         core.DocumentTitleChanged += OnDocumentTitleChanged;
-        core.NavigationStarting += (_, _) => SetNavigating(true);
+        core.NavigationStarting += (_, _) =>
+        {
+            _unreadBaselinePending = true;
+            _lastUnreadChangeAt = _clock.UtcNow;
+            _navigationToken++;
+            _ = ClearUnreadBaselineAsync(_navigationToken);
+            SetNavigating(true);
+        };
         core.NavigationCompleted += (_, args) =>
         {
             SetNavigating(false);
@@ -841,6 +851,22 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// A page that stays at zero unread for a minute has no restored backlog. Clear the
+    /// baseline so the next real message can still produce a title-only toast.
+    /// </summary>
+    private async Task ClearUnreadBaselineAsync(int token)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(60));
+
+        if (_disposed || token != _navigationToken || _lastUnread != 0)
+        {
+            return;
+        }
+
+        _unreadBaselinePending = false;
+    }
+
     /// <summary>Counts only: a title is user content and never goes to the log.</summary>
     private void OnDocumentTitleChanged(object? sender, object e)
     {
@@ -848,8 +874,33 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _gate?.ObserveTitle(count);
 
         var previous = _lastUnread;
+        var now = _clock.UtcNow;
+        var quietFor = now - _lastUnreadChangeAt;
         _lastUnread = count;
         UnreadCount = count;
+
+        if (count != previous)
+        {
+            _lastUnreadChangeAt = now;
+        }
+
+        // A page load restores the site's existing unread backlog. The first non-zero title
+        // after navigation is therefore a baseline, never a "new message"; a title that stays
+        // empty for a minute also clears the baseline so a later real message still toasts.
+        if (_unreadBaselinePending)
+        {
+            if (count > 0)
+            {
+                _unreadBaselinePending = false;
+            }
+
+            if (count != previous)
+            {
+                UnreadChanged?.Invoke(this, EventArgs.Empty);
+            }
+
+            return;
+        }
 
         if (count == previous)
         {
@@ -861,9 +912,15 @@ internal sealed class ServiceRuntime : IAsyncDisposable
 
         if (count > previous && count > 0)
         {
-            // Always arm the fallback. A message can arrive while the warm-up gate is still
-            // closed; the task waits for the gate instead of dropping the event.
-            _ = ShowTitleOnlyFallbackAsync();
+            // Require a quiet title first: a reconnect restores the backlog in bursts
+            // (5, 6, 7 in a few seconds), and only the first increase would be mistaken for a
+            // message. Fifteen quiet seconds is enough to tell a real arrival from the replay.
+            var quietEnough = TimeSpan.FromSeconds(15);
+
+            if ((_gate?.IsOpen ?? false) && quietFor >= quietEnough)
+            {
+                _ = ShowTitleOnlyFallbackAsync();
+            }
         }
     }
 

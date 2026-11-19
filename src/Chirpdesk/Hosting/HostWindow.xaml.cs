@@ -619,8 +619,9 @@ public partial class HostWindow : Window
         Activate();
 
         // Activate() alone loses to Windows' foreground lock when the request came from a
-        // toast; asking directly is the only lever a desktop app has.
-        return Interop.NativeMethods.SetForegroundWindow(Handle);
+        // tray icon, PowerToys or a toast. ForceForeground attaches to the foreground thread,
+        // raises the window and asks for foreground.
+        return Interop.NativeMethods.ForceForeground(Handle);
     }
 
     /// <summary>Hide without tearing anything down: the webviews keep running.</summary>

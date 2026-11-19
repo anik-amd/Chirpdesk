@@ -34,6 +34,7 @@ desktop session.
 
 - The sidebar lists every open chat. Open two accounts of one plugin: each icon gets the account initial as its badge, and hovering an item reveals a small themed close button. Both the item and close tooltips use the active palette, sit to the right of the rail, and never show a grey system tooltip under the cursor.
 - The **+** button opens the palette with the plugin list, so another service can be opened; the palette, plugins and settings icons in the rail open their surfaces directly.
+- Summon Chirpdesk from the tray or PowerToys while another app is in front: the window comes to the foreground above that app, with keyboard focus, instead of opening behind it.
 - Settings → Sidebar: **Always show**, **On left edge** and **Hide completely**. On hover, the rail animates its width from the left edge; the chat must not reflow or reload.
 - Switch between rail modes while a chat is open and confirm the rail animation does not steal keyboard focus from the page.
 
@@ -41,7 +42,9 @@ desktop session.
 
 - Taskbar, Alt+Tab, the window title bar and the tray all show the paper-bubble mark; the tray glyph stays readable on a light and a dark taskbar.
 - At 100 % and 150 % scaling, the 16 px frame still reads as a bubble with the amber pin, not a blurry square.
+- Restart with an existing unread badge on WhatsApp: the first restored unread count is a baseline and does not produce a "New message" toast. A real message after the page has been quiet produces one normally.
 - Send an unread message: the tray shows a red badge with a white ring on the top-right of the bubble; it is visible on both a light and a dark taskbar, and the tooltip names the unread total.
+- A real message toast shows the service's white brand glyph on its accent circle, with clear padding around the circle; it should not fill the app-logo slot edge to edge.
 
 ## Settings and plugins pages
 
@@ -54,7 +57,7 @@ desktop session.
 - Toggle `page-dark` off: open pages stop being inverted; toggle it on again and they invert without a restart.
 - Toggle `filters-core` off: the next page load has no ad rules; toggle it on again and rules return.
 - Turn on **Messenger** (or Facebook): it should add the account, open its page, and appear in `Ctrl+K` afterwards.
-- Add a second account from the same plugin; both should appear in the palette with their own sessions. Rename either one from the service settings sheet (Rename → Save name) and confirm the sidebar, sheet and command bar update.
+- Add a second account from the same plugin; the card's **Open** asks which account to open and the card's **Close** asks which open account to close. Both should appear in the palette as one **Open Name** row; drill in to choose the account. Rename either one from the service settings sheet (Rename → Save name) and confirm the sidebar, sheet and command bar update.
 - Turn the plugin off: runtimes sleep, sessions are not signed out. Turn it on again: the session should still be there.
 - Tray → Settings must show the same page, not a popup.
 
@@ -81,10 +84,10 @@ desktop session.
 ## Command palette
 
 - `Ctrl+K` opens the **Command palette** with a real text caret. Type normally; `Ctrl+A`, copy/cut/paste, Home/End, Delete and mouse selection work. `Up`/`Down` and `Tab` move the list, `Enter` activates, `Esc` goes back.
-- The empty palette lists open tabs plus closed service plugins (dimmed icons). Type `settings` or `plugin` to reveal commands.
+- The empty palette lists open tabs plus closed service plugins (dimmed icons). Type `settings` or `plugin` to reveal commands. A service with more than one account collapses to one **Open Name** row instead of repeating the service per login.
 - `Ctrl+Shift+K` opens the same open-tab list as a sticky palette, with the active tab highlighted; `Enter` switches, `Esc` closes.
 - Hold `Ctrl` and press `Tab` (or `Ctrl+Shift+Tab`): the same tab list appears and the highlight cycles; releasing `Ctrl` switches to the highlighted tab.
-- Type `plugin` to see plugin actions: closed service plugins open on Enter; open ones show `Close …`.
+- Type `facebook` on a multi-account service: **Open Facebook** and **Close Facebook** appear once. Enter on Open lists the account names in the bar (Open or Closed beside each); choosing one opens or switches it. Enter on Close lists only the open accounts; choosing one closes it. `Esc` returns to the main results, and a second `Esc` closes the bar.
 - Service icons are real brand glyphs from Simple Icons (CC0); unread counts show at the right of each tab row.
 - Selecting a closed service opens it without re-pairing.
 

@@ -74,6 +74,38 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="AccountPickRow" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource CdSurfaceAlt}" />
+            <Setter Property="Foreground" Value="{DynamicResource CdText}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CdRule}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CdPaletteSelection}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource CdPaletteAccent}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Opacity" Value="0.78" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid x:Name="RootGrid" Margin="28,22,28,22">
@@ -339,6 +371,47 @@
                                 Margin="8,0,0,0"
                                 Click="OnConfirmAccountName" />
                     </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Account chooser: Open and Close on a multi-account service show this before
+             touching a runtime, so the account is never guessed. -->
+        <Grid x:Name="AccountPickerLayer"
+              Grid.RowSpan="3"
+              Panel.ZIndex="85"
+              Background="#99000000"
+              Visibility="Collapsed">
+            <Border Width="440"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource CdPalette}"
+                    BorderBrush="{DynamicResource CdRule}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="24">
+                <StackPanel>
+                    <TextBlock x:Name="AccountPickerTitle"
+                               Text="Open account"
+                               FontFamily="{StaticResource CdDisplayFont}"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource CdText}" />
+                    <TextBlock x:Name="AccountPickerDescription"
+                               Text="Choose which account to open."
+                               FontSize="12"
+                               Foreground="{DynamicResource CdTextMuted}"
+                               TextWrapping="Wrap"
+                               Margin="0,4,0,12" />
+                    <ScrollViewer MaxHeight="330" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="AccountPickerList" />
+                    </ScrollViewer>
+                    <Button Content="Cancel"
+                            Style="{StaticResource GhostButton}"
+                            Padding="14,7"
+                            HorizontalAlignment="Right"
+                            Margin="0,14,0,0"
+                            Click="OnCloseAccountPicker" />
                 </StackPanel>
             </Border>
         </Grid>

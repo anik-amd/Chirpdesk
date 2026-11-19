@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -30,9 +31,7 @@ public partial class PluginsPage : UserControl
     private readonly SettingsStore _store;
     private readonly ServiceRegistry _registry;
     private readonly ILog _log;
-    private readonly Func<ServiceDefinition, Task> _enable;
     private readonly Func<ServiceDefinition, string?, Task> _addAccount;
-    private readonly Func<ServiceDefinition, Task> _disable;
     private readonly Func<string, bool, Task> _setPluginEnabled;
     private readonly Action _back;
     private readonly RepositoryService _repositories;
@@ -62,9 +61,7 @@ public partial class PluginsPage : UserControl
         SettingsStore store,
         ServiceRegistry registry,
         ILog log,
-        Func<ServiceDefinition, Task> enable,
         Func<ServiceDefinition, string?, Task> addAccount,
-        Func<ServiceDefinition, Task> disable,
         Func<string, bool, Task> setPluginEnabled,
         Action back,
         RepositoryService repositories,
@@ -82,9 +79,7 @@ public partial class PluginsPage : UserControl
         _store = store;
         _registry = registry;
         _log = log;
-        _enable = enable;
         _addAccount = addAccount;
-        _disable = disable;
         _setPluginEnabled = setPluginEnabled;
         _back = back;
         _repositories = repositories;
@@ -178,8 +173,8 @@ public partial class PluginsPage : UserControl
             var instances = _settings.Services
                 .Where(instance => string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            var enabled = instances.Any(instance => instance.Enabled);
-            var active = instances.Count(instance => instance.Enabled);
+            var accountCount = instances.Count;
+            var openCount = instances.Count(instance => _registry.StateOf(instance.InstanceId) == RuntimeState.Warm);
             var installedPlugin = _inventory.FirstOrDefault(item =>
                 string.Equals(item.Id, definition.Id, StringComparison.Ordinal));
 
@@ -198,7 +193,7 @@ public partial class PluginsPage : UserControl
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var badge = ServiceIcons.Create(definition.Id, definition.Name, definition.Accent, 34);
-            badge.Opacity = enabled ? 1 : 0.45;
+            badge.Opacity = openCount > 0 ? 1 : 0.45;
             Grid.SetColumn(badge, 0);
             header.Children.Add(badge);
 
@@ -212,9 +207,13 @@ public partial class PluginsPage : UserControl
             });
             title.Children.Add(new TextBlock
             {
-                Text = enabled ? $"Open · {active} account(s)" : "Closed",
+                Text = accountCount == 0
+                    ? "Not set up"
+                    : openCount == 0
+                        ? "Closed"
+                        : $"Open · {openCount} of {accountCount}",
                 FontSize = 11,
-                Foreground = enabled ? Token("CdAccent") : Token("CdTextMuted"),
+                Foreground = openCount > 0 ? Token("CdAccent") : Token("CdTextMuted"),
             });
             Grid.SetColumn(title, 1);
             header.Children.Add(title);
@@ -251,33 +250,65 @@ public partial class PluginsPage : UserControl
             var actions = new WrapPanel();
             var primary = new Button
             {
-                Content = enabled ? "Add account" : "Open",
+                Content = accountCount == 0 ? "Open" : "Add account",
                 Width = 104,
                 Margin = new Thickness(0, 0, 6, 6),
                 Style = (Style)FindResource("PillButton"),
             };
-            primary.Click += async (_, _) =>
-            {
-                if (enabled)
-                {
-                    OpenAccountNamePrompt(definition);
-                    return;
-                }
-
-                await Run(_enable, definition);
-            };
+            primary.Click += (_, _) => OpenAccountNamePrompt(definition);
             actions.Children.Add(primary);
 
-            var off = new Button
+            if (accountCount > 0)
             {
-                Content = "Close",
-                Width = 86,
-                IsEnabled = enabled,
-                Style = (Style)FindResource("GhostButton"),
-                Margin = new Thickness(0, 0, 6, 6),
-            };
-            off.Click += async (_, _) => await Run(_disable, definition);
-            actions.Children.Add(off);
+                var open = new Button
+                {
+                    Content = "Open",
+                    Width = 80,
+                    Style = (Style)FindResource("GhostButton"),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                open.Click += async (_, _) =>
+                {
+                    if (accountCount == 1)
+                    {
+                        await _openInstance(instances[0].InstanceId);
+                        _back();
+                        return;
+                    }
+
+                    OpenAccountPicker(definition, close: false);
+                };
+                actions.Children.Add(open);
+
+                var close = new Button
+                {
+                    Content = "Close",
+                    Width = 80,
+                    IsEnabled = openCount > 0,
+                    Style = (Style)FindResource("GhostButton"),
+                    Margin = new Thickness(0, 0, 6, 6),
+                };
+                close.Click += async (_, _) =>
+                {
+                    var warm = instances
+                        .Where(instance => _registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
+                        .ToList();
+
+                    if (warm.Count <= 1)
+                    {
+                        if (warm.Count == 1)
+                        {
+                            await _closeInstance(warm[0].InstanceId);
+                        }
+
+                        Reload();
+                        return;
+                    }
+
+                    OpenAccountPicker(definition, close: true);
+                };
+                actions.Children.Add(close);
+            }
 
             var serviceSettings = new Button
             {
@@ -645,20 +676,6 @@ public partial class PluginsPage : UserControl
         }
 
         return null;
-    }
-
-    private async Task Run(Func<ServiceDefinition, Task> action, ServiceDefinition definition)
-    {
-        try
-        {
-            await action(definition);
-            Reload();
-        }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidSettingsException or ArgumentException)
-        {
-            _log.Error($"plugins page: action failed for '{definition.Id}'", ex);
-            MessageBox.Show(ex.Message, "Plugins", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
     }
 
     private async Task RunPlugin(string pluginId, bool enabled)
@@ -1627,6 +1644,87 @@ public partial class PluginsPage : UserControl
         await _addAccount(definition, name);
         Reload();
     }
+
+    private void OpenAccountPicker(ServiceDefinition definition, bool close)
+    {
+        var accounts = _settings.Services
+            .Where(instance => string.Equals(instance.DefinitionId, definition.Id, StringComparison.OrdinalIgnoreCase))
+            .Where(instance => !close || _registry.StateOf(instance.InstanceId) == RuntimeState.Warm)
+            .OrderBy(instance => instance.Order)
+            .ToList();
+
+        if (accounts.Count == 0)
+        {
+            return;
+        }
+
+        AccountPickerTitle.Text = $"{(close ? "Close" : "Open")} {definition.Name}";
+        AccountPickerDescription.Text = close
+            ? "Choose which account to close. Its session is kept."
+            : "Choose which account to open.";
+        AccountPickerList.Children.Clear();
+
+        foreach (var instance in accounts)
+        {
+            var warm = _registry.StateOf(instance.InstanceId) == RuntimeState.Warm;
+            var row = new Button
+            {
+                Style = (Style)FindResource("AccountPickRow"),
+                Margin = new Thickness(0, 0, 0, 6),
+            };
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var name = new TextBlock
+            {
+                Text = instance.Name,
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Token("CdText"),
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            var state = new TextBlock
+            {
+                Text = warm ? "Open" : "Closed",
+                FontSize = 11,
+                Foreground = warm ? Token("CdAccent") : Token("CdTextMuted"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(12, 0, 0, 0),
+            };
+
+            Grid.SetColumn(name, 0);
+            Grid.SetColumn(state, 1);
+            grid.Children.Add(name);
+            grid.Children.Add(state);
+            row.Content = grid;
+            AutomationProperties.SetName(row, close ? $"Close {instance.Name}" : $"Open {instance.Name}");
+
+            row.Click += async (_, _) =>
+            {
+                AccountPickerLayer.Visibility = Visibility.Collapsed;
+
+                if (close)
+                {
+                    await _closeInstance(instance.InstanceId);
+                    Reload();
+                    return;
+                }
+
+                await _openInstance(instance.InstanceId);
+                _back();
+            };
+
+            AccountPickerList.Children.Add(row);
+        }
+
+        AccountPickerLayer.Visibility = Visibility.Visible;
+    }
+
+    private void OnCloseAccountPicker(object sender, RoutedEventArgs e) =>
+        AccountPickerLayer.Visibility = Visibility.Collapsed;
 
     private void OnClosePluginSettings(object sender, RoutedEventArgs e) =>
         PluginSettingsLayer.Visibility = Visibility.Collapsed;

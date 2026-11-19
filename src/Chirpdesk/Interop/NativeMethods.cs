@@ -59,6 +59,25 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hWnd);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool BringWindowToTop(nint hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    internal const int SwRestore = 9;
+    internal const uint SwpShowWindow = 0x0040;
+    internal static readonly nint HwndTop = 0;
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetWindowRect(nint hWnd, out WindowRect rect);
@@ -183,6 +202,43 @@ internal static class NativeMethods
     internal static bool IsShiftDown() => IsKeyDown(VkShift);
 
     internal static bool IsKeyDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+    /// <summary>
+    /// A user-requested show that has to win against Windows' foreground lock. The request
+    /// often comes from another process (tray, PowerToys, a toast), so this process did not
+    /// receive the last input and plain <see cref="SetForegroundWindow"/> is denied. Attach to
+    /// the foreground thread for the call, raise the window to the top of the normal
+    /// z-order, ask for foreground and then detach.
+    /// </summary>
+    internal static bool ForceForeground(nint hwnd)
+    {
+        var foreground = GetForegroundWindow();
+        var foregroundThread = foreground == 0 ? 0 : GetWindowThreadProcessId(foreground, out _);
+        var currentThread = GetCurrentThreadId();
+        var attached = false;
+
+        if (foregroundThread != 0 && foregroundThread != currentThread)
+        {
+            attached = AttachThreadInput(currentThread, foregroundThread, true);
+        }
+
+        try
+        {
+            _ = ShowWindow(hwnd, SwRestore);
+            _ = SetWindowPos(hwnd, HwndTop, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpShowWindow);
+            _ = BringWindowToTop(hwnd);
+            var granted = SetForegroundWindow(hwnd);
+            _ = SetFocus(hwnd);
+            return granted || GetForegroundWindow() == hwnd;
+        }
+        finally
+        {
+            if (attached)
+            {
+                _ = AttachThreadInput(currentThread, foregroundThread, false);
+            }
+        }
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     internal struct WindowRect
