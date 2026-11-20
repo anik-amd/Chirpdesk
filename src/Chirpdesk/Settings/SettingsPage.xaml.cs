@@ -36,9 +36,6 @@ public partial class SettingsPage : UserControl
     private readonly Action _back;
     private readonly UpdateService _updates;
     private readonly Func<UpdateCheckResult, Task<bool>> _installUpdate;
-    private readonly Action _openUserscripts;
-    private readonly Action _openPluginsBrowse;
-    private readonly bool _userscriptsInstalled;
     private UpdateCheckResult? _pendingUpdate;
     private AppSettings _settings;
     private bool _loading;
@@ -55,10 +52,7 @@ public partial class SettingsPage : UserControl
         Action? stateChanged,
         Action back,
         UpdateService updates,
-        Func<UpdateCheckResult, Task<bool>> installUpdate,
-        Action openUserscripts,
-        Action openPluginsBrowse,
-        bool userscriptsInstalled)
+        Func<UpdateCheckResult, Task<bool>> installUpdate)
     {
         InitializeComponent();
         _store = store;
@@ -72,9 +66,6 @@ public partial class SettingsPage : UserControl
         _back = back;
         _updates = updates;
         _installUpdate = installUpdate;
-        _openUserscripts = openUserscripts;
-        _openPluginsBrowse = openPluginsBrowse;
-        _userscriptsInstalled = userscriptsInstalled;
         _settings = store.Load();
 
         PageIcon.Content = UiIcons.Create("settings", Token("CdAccent"), 24);
@@ -88,9 +79,6 @@ public partial class SettingsPage : UserControl
     {
         _settings = _store.Load();
         LoadControls();
-        UserscriptsState.Text = _userscriptsInstalled
-            ? "The Userscripts plugin is installed. Open it to install scripts and choose update behaviour."
-            : "The Userscripts plugin is not installed. Install it from Browse first.";
     }
 
     public void SetDark(bool dark)
@@ -425,20 +413,6 @@ public partial class SettingsPage : UserControl
     }
 
     private static string Megabytes(long bytes) => $"{bytes / (1024d * 1024d):0.0} MB";
-
-    private void OnManageUserscripts(object sender, RoutedEventArgs e)
-    {
-        if (_userscriptsInstalled)
-        {
-            _openUserscripts();
-        }
-        else
-        {
-            _openPluginsBrowse();
-        }
-    }
-
-    private void OnBrowseUserscripts(object sender, RoutedEventArgs e) => _openPluginsBrowse();
 
     private void OnBack(object sender, RoutedEventArgs e) => _back();
 }

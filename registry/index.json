@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-20T15:41:28.8898421+00:00",
+  "generated": "2026-11-20T15:51:42.3015713+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -223,20 +223,6 @@
       "size": 526,
       "url": "plugins/telegram-1.0.0.zip",
       "permissions": []
-    },
-    {
-      "id": "userscripts",
-      "kind": "integration",
-      "name": "Userscripts",
-      "version": "1.0.0",
-      "apiVersion": 1,
-      "minAppVersion": "0.1.0",
-      "sha256": "ff630419216a3fb94fa20fafcb1b876618476d92d95bec647de4d8b1a4549e09",
-      "size": 184258,
-      "url": "plugins/userscripts-1.0.0.zip",
-      "permissions": [
-        "process"
-      ]
     },
     {
       "id": "whatsapp",

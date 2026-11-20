@@ -406,32 +406,6 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="User scripts" Style="{StaticResource SectionTitle}" />
-
-                <Border Style="{StaticResource CdPanel}">
-                    <StackPanel>
-                        <TextBlock Text="Userscripts are a plugin. It runs as a separate helper, installs .user.js files from sources you choose, and can check or install updates. Chirpdesk does not sign those scripts."
-                                   Style="{StaticResource MutedText}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,10" />
-                        <TextBlock x:Name="UserscriptsState"
-                                   Style="{StaticResource MutedText}"
-                                   FontSize="12"
-                                   Margin="0,0,0,10" />
-                        <WrapPanel>
-                            <Button Content="Manage user scripts"
-                                    Style="{StaticResource GhostButton}"
-                                    Padding="12,7"
-                                    Margin="0,0,8,0"
-                                    Click="OnManageUserscripts" />
-                            <Button Content="Browse plugins"
-                                    Style="{StaticResource GhostButton}"
-                                    Padding="12,7"
-                                    Click="OnBrowseUserscripts" />
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
-
             </StackPanel>
         </ScrollViewer>
     </Grid>
