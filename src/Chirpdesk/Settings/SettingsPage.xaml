@@ -305,16 +305,27 @@
 
                 <Border Style="{StaticResource CdPanel}">
                     <StackPanel>
-                        <CheckBox x:Name="EnterToSendBox"
-                                  Content="Enter sends messages"
-                                  Foreground="{DynamicResource CdText}"
-                                  Checked="OnEnterToSendChanged"
-                                  Unchecked="OnEnterToSendChanged" />
-                        <TextBlock Text="Clicks the site's send button when you press Enter without Shift. Shift+Enter stays a new line, and a page without a send button keeps its own behavior."
-                                   Style="{StaticResource MutedText}"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"
-                                   Margin="0,6,0,0" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="Enter sends messages" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Clicks the site's send button when you press Enter without Shift. Shift+Enter stays a new line, and a page without a send button keeps its own behavior."
+                                           Style="{StaticResource MutedText}"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Margin="0,3,0,0" />
+                            </StackPanel>
+                            <CheckBox x:Name="EnterToSendBox"
+                                      AutomationProperties.Name="Enter sends messages"
+                                      Grid.Column="1"
+                                      Style="{StaticResource CdSwitch}"
+                                      VerticalAlignment="Center"
+                                      Checked="OnEnterToSendChanged"
+                                      Unchecked="OnEnterToSendChanged" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
