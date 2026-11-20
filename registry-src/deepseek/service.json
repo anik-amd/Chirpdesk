@@ -1,0 +1,9 @@
+{
+  "url": "https://chat.deepseek.com/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["deepseek", "deep-seek"],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

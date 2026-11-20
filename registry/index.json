@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-20T14:27:05.5047249+00:00",
+  "generated": "2026-11-20T14:56:42.5909865+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -26,6 +26,30 @@
       "sha256": "390b39a6e11f22faa69a62ded586a61f8db70d8f8d7f9aa95b0371dca78c703a",
       "size": 570,
       "url": "plugins/catppuccin-1.0.1.zip",
+      "permissions": []
+    },
+    {
+      "id": "chatgpt",
+      "kind": "service",
+      "name": "ChatGPT",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "442214b6a88919dd237b4c7665cf607c8c883c7e8769bc7ca46b7d13312313e4",
+      "size": 559,
+      "url": "plugins/chatgpt-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "deepseek",
+      "kind": "service",
+      "name": "DeepSeek",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "58ecfb8d48ecccd77b26d5dac6dd08a81f9b80d554f71ce6cb2ea00c61bf2fa0",
+      "size": 557,
+      "url": "plugins/deepseek-1.0.0.zip",
       "permissions": []
     },
     {
@@ -93,6 +117,18 @@
       ]
     },
     {
+      "id": "gemini",
+      "kind": "service",
+      "name": "Gemini",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "cb4175aaaf42277207774365249b171ce4e8f2e82dc2b3aaaa361384af81b9a5",
+      "size": 570,
+      "url": "plugins/gemini-1.0.0.zip",
+      "permissions": []
+    },
+    {
       "id": "instagram",
       "kind": "service",
       "name": "Instagram",
@@ -150,6 +186,18 @@
       "sha256": "a436542be3909f329b1f46dcdffd62985285e3f70b3cc825bdb893b6b97dab55",
       "size": 330,
       "url": "plugins/page-dark-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "qwen",
+      "kind": "service",
+      "name": "Qwen",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "de27e8224470326e2b22b9ce7af04a67d5be91571f406fe5182c0f49f026b469",
+      "size": 561,
+      "url": "plugins/qwen-1.0.0.zip",
       "permissions": []
     },
     {

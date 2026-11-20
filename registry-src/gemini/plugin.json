@@ -1,0 +1,11 @@
+{
+  "id": "gemini",
+  "kind": "service",
+  "name": "Gemini",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Google Gemini. Install, then open to add an account; Google sign-in can refuse an embedded browser.",
+  "permissions": [],
+  "accent": "#4285F4"
+}

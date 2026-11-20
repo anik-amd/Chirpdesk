@@ -1,0 +1,11 @@
+{
+  "id": "qwen",
+  "kind": "service",
+  "name": "Qwen",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "Qwen chat. Install, then open to add an account; sign in with email or a linked provider.",
+  "permissions": [],
+  "accent": "#615CED"
+}

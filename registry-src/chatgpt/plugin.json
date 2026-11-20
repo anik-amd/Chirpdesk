@@ -1,0 +1,11 @@
+{
+  "id": "chatgpt",
+  "kind": "service",
+  "name": "ChatGPT",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "ChatGPT. Install, then open to add an account; each account keeps its own profile and history.",
+  "permissions": [],
+  "accent": "#10A37F"
+}

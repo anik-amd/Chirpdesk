@@ -1,0 +1,9 @@
+{
+  "url": "https://chatgpt.com/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["chatgpt", "gpt", "openai"],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

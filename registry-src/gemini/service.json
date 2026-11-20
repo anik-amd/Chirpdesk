@@ -1,0 +1,9 @@
+{
+  "url": "https://gemini.google.com/app",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["gemini", "bard", "google-gemini"],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}

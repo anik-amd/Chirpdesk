@@ -1,0 +1,9 @@
+{
+  "url": "https://chat.qwen.ai/",
+  "notificationMode": "native",
+  "pageDarkMode": "auto",
+  "unreadRegex": "\\((\\d+)\\)",
+  "aliases": ["qwen", "tongyi", "qwen-chat"],
+  "apiVersion": 1,
+  "minApiVersion": 1
+}
