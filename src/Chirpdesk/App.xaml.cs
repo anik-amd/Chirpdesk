@@ -29,6 +29,7 @@ using Chirpdesk.Settings;
 using Chirpdesk.Theming;
 using Chirpdesk.Ui;
 using Chirpdesk.Updates;
+using Chirpdesk.Userscripts;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Chirpdesk;
@@ -47,6 +48,7 @@ public partial class App : Application
     private ServiceCatalog? _catalog;
     private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
     private IReadOnlyList<InstalledPlugin> _installedPlugins = Array.Empty<InstalledPlugin>();
+    private UserscriptService? _userscripts;
     private IReadOnlyList<FilterPack> _filterPacks = Array.Empty<FilterPack>();
     private IReadOnlyList<ThemePack> _themePacks = Array.Empty<ThemePack>();
     private SettingsPage? _settingsPage;
@@ -88,10 +90,23 @@ public partial class App : Application
             && !options.SelfTest
             && !options.TestToast;
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
+        _userscripts = new UserscriptService(_log);
         _updates = new UpdateService(_log);
         _updates.Cleanup();
         _repositories = new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log);
         _registry = new ServiceRegistry(_log);
+        _userscripts!.Changed += (_, _) =>
+        {
+            if (_registry is null)
+            {
+                return;
+            }
+
+            foreach (var id in _registry.Order)
+            {
+                _ = _registry.Find(id)?.ApplyUserscriptsAsync();
+            }
+        };
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
         _installedPlugins = PluginCatalog.LoadInstalled(_log);
@@ -490,7 +505,8 @@ public partial class App : Application
             DateTimeOffset.UtcNow,
             dark,
             filterPacks,
-            () => FacebookChatsAreCoveredByMessenger(effective));
+            () => FacebookChatsAreCoveredByMessenger(effective),
+            url => _userscripts?.EnabledFor(url) ?? []);
 
         service.ShortcutRequested += OnServiceShortcutRequested;
         service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
@@ -2964,7 +2980,8 @@ public partial class App : Application
                 UpdateTrayStatus,
                 ClosePage,
                 _updates ?? new UpdateService(_log),
-                InstallUpdateAsync);
+                InstallUpdateAsync,
+                _userscripts!);
         }
 
         ShowPage(_settingsPage);

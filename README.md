@@ -51,6 +51,17 @@ tray menu to stop it.
 The palette lists open chats and closed service plugins. Type to search tabs, plugins and
 commands.
 
+## User scripts
+
+**Settings → User scripts** installs third-party `.user.js` files from an https URL or a local file.
+They are not plugins: Chirpdesk does not sign them, distribute them or update them on its own.
+
+Each install shows the name, version, `@match`/`@include` patterns, source and SHA-256, and warns
+that the script runs in the page with your signed-in session. Supported APIs: `GM_addStyle`,
+`GM_setValue`, `GM_getValue`, `GM_deleteValue`, `GM_log`, `GM_info`, `unsafeWindow`. Not supported:
+`GM_xmlhttpRequest`, `@require`, and `@run-at document-start` (scripts run after the page loads).
+Disabling or removing a script takes effect the next time its page loads.
+
 ## What it does
 
 - **Ready in the tray.** Services stay loaded so their WebSockets keep receiving messages. Pinned

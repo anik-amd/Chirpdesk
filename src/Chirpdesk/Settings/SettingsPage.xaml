@@ -406,6 +406,44 @@
                     </StackPanel>
                 </Border>
 
+                <TextBlock Text="User scripts" Style="{StaticResource SectionTitle}" />
+
+                <Border Style="{StaticResource CdPanel}">
+                    <StackPanel>
+                        <TextBlock Text="Third-party code from a source you choose. Scripts run in the page with your signed-in session, so install only what you trust. Chirpdesk does not sign them and does not auto-update them."
+                                   Style="{StaticResource MutedText}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10" />
+                        <StackPanel x:Name="UserScriptsPanel" />
+                        <TextBlock x:Name="UserScriptsEmpty"
+                                   Text="No scripts installed."
+                                   Style="{StaticResource MutedText}"
+                                   FontSize="12"
+                                   Margin="0,0,0,8" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button Content="Add from URL"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="12,7"
+                                    Margin="0,0,8,0"
+                                    Click="OnAddUserscript" />
+                            <Button Content="Import file"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="12,7"
+                                    Margin="0,0,8,0"
+                                    Click="OnImportUserscript" />
+                            <Button Content="Open folder"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="12,7"
+                                    Margin="0,0,8,0"
+                                    Click="OnOpenUserscripts" />
+                            <Button Content="Rescan"
+                                    Style="{StaticResource GhostButton}"
+                                    Padding="12,7"
+                                    Click="OnRescanUserscripts" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
             </StackPanel>
         </ScrollViewer>
     </Grid>

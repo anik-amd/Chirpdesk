@@ -10,6 +10,7 @@ using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Time;
 using Chirpdesk.Interop;
 using Chirpdesk.Notifications;
+using Chirpdesk.Userscripts;
 using Microsoft.Web.WebView2.Wpf;
 
 namespace Chirpdesk.Hosting;
@@ -51,6 +52,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private readonly IToastSink _toast;
     private readonly DateTimeOffset _startedAt;
     private readonly Func<bool>? _suppressTitleFallback;
+    private readonly Func<string, IReadOnlyList<InstalledUserscript>>? _userscripts;
     private readonly WebView2 _view = new();
     private IReadOnlyList<FilterPack> _filterPacks;
 
@@ -318,7 +320,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         DateTimeOffset startedAt,
         bool darkTheme,
         IReadOnlyList<FilterPack> filterPacks,
-        Func<bool>? suppressTitleFallback)
+        Func<bool>? suppressTitleFallback,
+        Func<string, IReadOnlyList<InstalledUserscript>>? userscripts)
     {
         _host = host;
         _instance = instance;
@@ -329,6 +332,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _darkTheme = darkTheme;
         _filterPacks = filterPacks;
         _suppressTitleFallback = suppressTitleFallback;
+        _userscripts = userscripts;
         _view.MessageHook += OnMessageHook;
     }
 
@@ -529,7 +533,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         DateTimeOffset startedAt,
         bool darkTheme,
         IReadOnlyList<FilterPack>? filterPacks = null,
-        Func<bool>? suppressTitleFallback = null)
+        Func<bool>? suppressTitleFallback = null,
+        Func<string, IReadOnlyList<InstalledUserscript>>? userscripts = null)
     {
         var runtime = new ServiceRuntime(
             host,
@@ -540,7 +545,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             startedAt,
             darkTheme,
             filterPacks ?? [],
-            suppressTitleFallback);
+            suppressTitleFallback,
+            userscripts);
         await runtime.InitializeAsync();
         return runtime;
     }
@@ -687,6 +693,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 _ = LogPageCapabilitiesAsync(core);
                 _ = ApplyThemeAsync(_darkTheme);
                 _ = ApplyCosmeticFiltersAsync(core);
+                _ = ApplyUserscriptsAsync(core);
             }
             else
             {
@@ -940,6 +947,48 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     /// Tier 2: hide promoted containers with a single injected stylesheet. Selectors that look
     /// like they could break out of the rule are dropped; a bad selector is a visual bug only.
     /// </summary>
+    /// <summary>
+    /// Runs the enabled third-party scripts whose @match covers this page. They execute in the
+    /// page's own world after load; nothing is loaded in-process and nothing is signed.
+    /// </summary>
+    private async Task ApplyUserscriptsAsync(Microsoft.Web.WebView2.Core.CoreWebView2 core)
+    {
+        if (_userscripts is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<InstalledUserscript> scripts;
+        try
+        {
+            scripts = _userscripts(core.Source);
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+
+        foreach (var script in scripts)
+        {
+            try
+            {
+                await core.ExecuteScriptAsync(UserscriptService.Wrap(script));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException
+                or System.Runtime.InteropServices.COMException)
+            {
+                _log.Warn($"userscript '{script.Script.Name}' failed for '{_instance.InstanceId}': {ex.GetType().Name}");
+            }
+        }
+    }
+
+    /// <summary>Re-runs new scripts against the page that is already loaded; the wrapper dedupes.</summary>
+    public Task ApplyUserscriptsAsync()
+    {
+        var core = _view.CoreWebView2;
+        return core is null ? Task.CompletedTask : ApplyUserscriptsAsync(core);
+    }
+
     private async Task ApplyCosmeticFiltersAsync(Microsoft.Web.WebView2.Core.CoreWebView2 core)
     {
         var selectors = _matcher?.CosmeticSelectors;
