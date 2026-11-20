@@ -31,6 +31,9 @@ public sealed class AppSettings
     /// <summary>Close hides to the tray instead of quitting. True preserves the tray-app behavior.</summary>
     public bool CloseToTray { get; set; } = true;
 
+    /// <summary>Enter clicks the site's send button; Shift+Enter keeps the newline.</summary>
+    public bool EnterToSend { get; set; }
+
     /// <summary><c>always</c>, <c>hover</c> or <c>hidden</c> for the service rail.</summary>
     public string RailMode { get; set; } = "always";
 

@@ -491,7 +491,8 @@ public partial class App : Application
             DateTimeOffset.UtcNow,
             dark,
             filterPacks,
-            () => FacebookChatsAreCoveredByMessenger(effective));
+            () => FacebookChatsAreCoveredByMessenger(effective),
+            EnterToSendEnabled());
 
         service.ShortcutRequested += OnServiceShortcutRequested;
         service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
@@ -2851,6 +2852,44 @@ public partial class App : Application
             string.Equals(_registry.Find(id)?.DefinitionId, "messenger", StringComparison.Ordinal));
     }
 
+    private bool EnterToSendEnabled()
+    {
+        try
+        {
+            return new SettingsStore(AppPaths.SettingsFile, _log!).Load().EnterToSend;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private void ApplyEnterToSend(bool enabled)
+    {
+        try
+        {
+            var store = new SettingsStore(AppPaths.SettingsFile, _log!);
+            var settings = store.Load();
+            settings.EnterToSend = enabled;
+            store.Save(settings);
+            _log?.Info($"enter-to-send {(enabled ? "on" : "off")}");
+        }
+        catch (Exception ex) when (ex is IOException or InvalidSettingsException or UnauthorizedAccessException)
+        {
+            _log?.Warn($"could not save Enter-to-send: {ex.Message}");
+        }
+
+        if (_registry is null)
+        {
+            return;
+        }
+
+        foreach (var id in _registry.Order)
+        {
+            _ = _registry.Find(id)?.SetEnterSendAsync(enabled);
+        }
+    }
+
     private void UpdateTrayStatus()
     {
         if (_tray is null)
@@ -2965,7 +3004,8 @@ public partial class App : Application
                 UpdateTrayStatus,
                 ClosePage,
                 _updates ?? new UpdateService(_log),
-                InstallUpdateAsync);
+                InstallUpdateAsync,
+                ApplyEnterToSend);
         }
 
         ShowPage(_settingsPage);

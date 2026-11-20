@@ -51,6 +51,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private readonly IToastSink _toast;
     private readonly DateTimeOffset _startedAt;
     private readonly Func<bool>? _suppressTitleFallback;
+    private bool _enterSend;
     private readonly WebView2 _view = new();
     private IReadOnlyList<FilterPack> _filterPacks;
 
@@ -65,6 +66,60 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private int _blockedRequests;
     private bool _darkTheme;
     private bool _disposed;
+
+    /// <summary>
+    /// Enter sends: clicks the composer's send button instead of letting the site decide.
+    /// Shift/Ctrl/Alt and IME composition are left alone, and a page with no send button keeps
+    /// its own behavior.
+    /// </summary>
+    private const string EnterSendScript = """
+        (function () {
+          window.__chirpdeskEnterSendEnabled = true;
+          if (window.__chirpdeskEnterSendInstalled) { return; }
+          window.__chirpdeskEnterSendInstalled = true;
+
+          function composer(node) {
+            if (!node) { return null; }
+            if (node.tagName === 'TEXTAREA') { return node; }
+            if (node.isContentEditable) { return node; }
+            return node.closest ? node.closest('[contenteditable="true"]') : null;
+          }
+
+          function sendButton(from) {
+            var selectors = [
+              'button[data-testid="send-button"]',
+              'button[data-testid*="send" i]',
+              'button[aria-label="Send message"]',
+              'button[aria-label*="send" i]',
+              '[role="button"][aria-label*="send" i]',
+              'button[title*="send" i]',
+              'button[type="submit"]'
+            ];
+            var root = from.closest('form') || from.closest('[role="main"]') || document;
+            for (var i = 0; i < selectors.length; i++) {
+              var nodes = root.querySelectorAll(selectors[i]);
+              for (var j = nodes.length - 1; j >= 0; j--) {
+                var b = nodes[j];
+                var r = b.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0 && !b.disabled && b.getAttribute('aria-disabled') !== 'true') { return b; }
+              }
+            }
+            return null;
+          }
+
+          document.addEventListener('keydown', function (event) {
+            if (!window.__chirpdeskEnterSendEnabled) { return; }
+            if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) { return; }
+            var field = composer(event.target);
+            if (!field) { return; }
+            var button = sendButton(field);
+            if (!button) { return; }
+            event.preventDefault();
+            event.stopPropagation();
+            button.click();
+          }, true);
+        })();
+        """;
 
     /// <summary>
     /// Host-owned link preview: hides Chromium's status bubble and shows the URL in the
@@ -318,7 +373,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         DateTimeOffset startedAt,
         bool darkTheme,
         IReadOnlyList<FilterPack> filterPacks,
-        Func<bool>? suppressTitleFallback)
+        Func<bool>? suppressTitleFallback,
+        bool enterSend)
     {
         _host = host;
         _instance = instance;
@@ -329,6 +385,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _darkTheme = darkTheme;
         _filterPacks = filterPacks;
         _suppressTitleFallback = suppressTitleFallback;
+        _enterSend = enterSend;
         _view.MessageHook += OnMessageHook;
     }
 
@@ -529,7 +586,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         DateTimeOffset startedAt,
         bool darkTheme,
         IReadOnlyList<FilterPack>? filterPacks = null,
-        Func<bool>? suppressTitleFallback = null)
+        Func<bool>? suppressTitleFallback = null,
+        bool enterSend = false)
     {
         var runtime = new ServiceRuntime(
             host,
@@ -540,7 +598,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             startedAt,
             darkTheme,
             filterPacks ?? [],
-            suppressTitleFallback);
+            suppressTitleFallback,
+            enterSend);
         await runtime.InitializeAsync();
         return runtime;
     }
@@ -596,6 +655,29 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _host.UpdateLayout();
 
         _log.Info($"webview '{_instance.InstanceId}' synced to {width:0}x{height:0}");
+    }
+
+    /// <summary>Turns the Enter-to-send behavior on or off for the page that is already loaded.</summary>
+    public async Task SetEnterSendAsync(bool enabled)
+    {
+        _enterSend = enabled;
+        var core = _view.CoreWebView2;
+        if (core is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await core.ExecuteScriptAsync(enabled
+                ? EnterSendScript
+                : "window.__chirpdeskEnterSendEnabled = false;");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException
+            or System.Runtime.InteropServices.COMException)
+        {
+            _log.Warn($"could not change Enter-to-send for '{_instance.InstanceId}': {ex.GetType().Name}");
+        }
     }
 
     /// <summary>
@@ -687,6 +769,11 @@ internal sealed class ServiceRuntime : IAsyncDisposable
                 _ = LogPageCapabilitiesAsync(core);
                 _ = ApplyThemeAsync(_darkTheme);
                 _ = ApplyCosmeticFiltersAsync(core);
+
+                if (_enterSend)
+                {
+                    _ = core.ExecuteScriptAsync(EnterSendScript);
+                }
             }
             else
             {

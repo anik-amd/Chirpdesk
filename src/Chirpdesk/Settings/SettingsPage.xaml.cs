@@ -36,6 +36,7 @@ public partial class SettingsPage : UserControl
     private readonly Action _back;
     private readonly UpdateService _updates;
     private readonly Func<UpdateCheckResult, Task<bool>> _installUpdate;
+    private readonly Action<bool> _applyEnterToSend;
     private UpdateCheckResult? _pendingUpdate;
     private AppSettings _settings;
     private bool _loading;
@@ -52,7 +53,8 @@ public partial class SettingsPage : UserControl
         Action? stateChanged,
         Action back,
         UpdateService updates,
-        Func<UpdateCheckResult, Task<bool>> installUpdate)
+        Func<UpdateCheckResult, Task<bool>> installUpdate,
+        Action<bool> applyEnterToSend)
     {
         InitializeComponent();
         _store = store;
@@ -66,6 +68,7 @@ public partial class SettingsPage : UserControl
         _back = back;
         _updates = updates;
         _installUpdate = installUpdate;
+        _applyEnterToSend = applyEnterToSend;
         _settings = store.Load();
 
         PageIcon.Content = UiIcons.Create("settings", Token("CdAccent"), 24);
@@ -204,6 +207,7 @@ public partial class SettingsPage : UserControl
         AutostartBox.IsChecked = _settings.Autostart;
         MinimizeToTrayBox.IsChecked = _settings.MinimizeToTray;
         CloseToTrayBox.IsChecked = _settings.CloseToTray;
+        EnterToSendBox.IsChecked = _settings.EnterToSend;
         UpdateAutoBox.IsChecked = _settings.UpdateAutoCheck;
 
         var dndIndex = 0;
@@ -413,6 +417,16 @@ public partial class SettingsPage : UserControl
     }
 
     private static string Megabytes(long bytes) => $"{bytes / (1024d * 1024d):0.0} MB";
+
+    private void OnEnterToSendChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _applyEnterToSend(EnterToSendBox.IsChecked == true);
+    }
 
     private void OnBack(object sender, RoutedEventArgs e) => _back();
 }
