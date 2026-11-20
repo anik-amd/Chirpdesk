@@ -769,11 +769,15 @@ public partial class PluginsPage : UserControl
         var installed = _inventory.FirstOrDefault(item =>
             string.Equals(item.Id, plugin.Id, StringComparison.Ordinal));
 
-        return installed is not null
-            && Version.TryParse(installed.Version, out var current)
+        // Bundled plugins have no repository source. Offering them an "update" would write a
+        // second copy into the user folder that shadows the bundled one, so they stay put.
+        return IsRepositoryInstalled(installed)
+            && Version.TryParse(installed!.Version, out var current)
             && Version.TryParse(plugin.Version, out var available)
             && available > current;
     }
+
+    private static bool IsRepositoryInstalled(InstalledPlugin? installed) => installed?.Source is not null;
 
     private static Version VersionOrZero(string? value) =>
         Version.TryParse(value, out var version) ? version : new Version(0, 0, 0, 0);
@@ -790,7 +794,8 @@ public partial class PluginsPage : UserControl
             string.Equals(item.Id, plugin.Id, StringComparison.Ordinal));
         var installedVersion = installed?.Version;
         var upToDate = string.Equals(installedVersion, plugin.Version, StringComparison.Ordinal);
-        var updateAvailable = installedVersion is not null
+        var bundled = installed is not null && !IsRepositoryInstalled(installed);
+        var updateAvailable = IsRepositoryInstalled(installed)
             && Version.TryParse(installedVersion, out var current)
             && Version.TryParse(plugin.Version, out var available)
             && available > current;
@@ -847,7 +852,9 @@ public partial class PluginsPage : UserControl
                     ? "Installed and up to date."
                     : updateAvailable
                         ? $"Installed {installedVersion} · update available."
-                        : "Not installed.",
+                        : bundled
+                            ? $"Bundled version {installedVersion}."
+                            : "Not installed.",
             FontSize = 11,
             Foreground = compatible ? Token("CdAccent") : Token("CdTextMuted"),
             TextWrapping = TextWrapping.Wrap,
@@ -858,8 +865,8 @@ public partial class PluginsPage : UserControl
         var actions = new WrapPanel();
         var primary = new Button
         {
-            Content = upToDate ? "Installed" : updateAvailable ? "Update" : "Install",
-            IsEnabled = compatible && !upToDate,
+            Content = upToDate ? "Installed" : updateAvailable ? "Update" : bundled ? "Bundled" : "Install",
+            IsEnabled = compatible && !upToDate && !bundled,
             Style = (Style)FindResource("PillButton"),
             Padding = new Thickness(12, 6, 12, 6),
             Margin = new Thickness(0, 0, 6, 0),
@@ -1174,8 +1181,9 @@ public partial class PluginsPage : UserControl
             string.Equals(item.Id, plugin.Id, StringComparison.Ordinal));
         var installedVersion = installed?.Version;
         var upToDate = string.Equals(installedVersion, plugin.Version, StringComparison.Ordinal);
-        var update = installed is not null && !upToDate;
-        var canInstall = compatible && !upToDate;
+        var repositoryInstalled = IsRepositoryInstalled(installed);
+        var update = repositoryInstalled && !upToDate;
+        var canInstall = compatible && !upToDate && (installed is null || repositoryInstalled);
 
         _pendingInstall = canInstall ? (repository, index, plugin) : null;
         _integrationConsentConfirmed = false;
@@ -1183,7 +1191,13 @@ public partial class PluginsPage : UserControl
         ConsentTitle.Text = $"{plugin.Name} {plugin.Version}";
         ConsentBody.Children.Clear();
 
-        ConsentPrimaryButton.Content = upToDate ? "Installed" : update ? "Update" : "Install";
+        ConsentPrimaryButton.Content = upToDate
+            ? "Installed"
+            : update
+                ? "Update"
+                : installed is not null
+                    ? "Bundled"
+                    : "Install";
         ConsentPrimaryButton.IsEnabled = true;
         ConsentPrimaryButton.Visibility = canInstall ? Visibility.Visible : Visibility.Collapsed;
         ConsentSecondaryButton.Content = canInstall ? "Cancel" : "Close";
