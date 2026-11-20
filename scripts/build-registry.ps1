@@ -7,6 +7,8 @@
     Creates one zip per plugin, computes its SHA-256 and size, writes a deterministic-by-id
     index.json, copies key.pem and signs the exact index bytes into index.json.sig. The output
     folder can be published as-is on any static HTTPS host (GitHub Pages, raw files, S3).
+    By default only registry-src is published: bundled plugins already travel with the app and
+    publishing them again would offer a second, shadowing copy.
 
 .EXAMPLE
     pwsh scripts/build-registry.ps1 `
@@ -22,7 +24,7 @@ param(
     [Parameter(Mandatory)]
     [string] $PublicKeyPath,
 
-    [string] $PluginsDir = 'plugins',
+    [string] $PluginsDir = '',
 
     [string] $ExtraPluginsDir = 'registry-src',
 
@@ -37,8 +39,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$pluginsRoot = if ([IO.Path]::IsPathRooted($PluginsDir)) { $PluginsDir } else { Join-Path $repo $PluginsDir }
-$extraRoot = if ([IO.Path]::IsPathRooted($ExtraPluginsDir)) { $ExtraPluginsDir } else { Join-Path $repo $ExtraPluginsDir }
+$pluginsRoot = if ([string]::IsNullOrWhiteSpace($PluginsDir)) { '' }
+    elseif ([IO.Path]::IsPathRooted($PluginsDir)) { $PluginsDir }
+    else { Join-Path $repo $PluginsDir }
+$extraRoot = if ([string]::IsNullOrWhiteSpace($ExtraPluginsDir)) { '' }
+    elseif ([IO.Path]::IsPathRooted($ExtraPluginsDir)) { $ExtraPluginsDir }
+    else { Join-Path $repo $ExtraPluginsDir }
 $out = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $repo $OutDir }
 
 if (-not (Test-Path -LiteralPath $KeyPath)) {
@@ -49,8 +55,12 @@ if (-not (Test-Path -LiteralPath $PublicKeyPath)) {
     throw "Public key not found: $PublicKeyPath"
 }
 
-if (-not (Test-Path -LiteralPath $pluginsRoot)) {
-    throw "Plugin folder not found: $pluginsRoot"
+$pluginRoots = @()
+if ($pluginsRoot -and (Test-Path -LiteralPath $pluginsRoot)) { $pluginRoots += $pluginsRoot }
+if ($extraRoot -and (Test-Path -LiteralPath $extraRoot)) { $pluginRoots += $extraRoot }
+
+if ($pluginRoots.Count -eq 0) {
+    throw "No plugin folders found. Pass -PluginsDir or -ExtraPluginsDir."
 }
 
 if (Test-Path -LiteralPath $out) {
@@ -74,10 +84,6 @@ try {
 
     $entries = @()
     $seenIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-    $pluginRoots = @($pluginsRoot)
-    if (Test-Path -LiteralPath $extraRoot) {
-        $pluginRoots += $extraRoot
-    }
 
     foreach ($folder in @($pluginRoots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Directory } | Sort-Object Name)) {
         $manifestPath = Join-Path $folder.FullName 'plugin.json'

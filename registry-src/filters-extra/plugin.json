@@ -1,0 +1,13 @@
+{
+  "id": "filters-extra",
+  "kind": "filter",
+  "name": "Extended tracking protection",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "Chirpdesk",
+  "description": "A second, conservative pack: analytics and attribution networks the core pack leaves alone. Never auth, WebSocket or update hosts.",
+  "permissions": [
+    "filters"
+  ],
+  "accent": "#6B4E9B"
+}
