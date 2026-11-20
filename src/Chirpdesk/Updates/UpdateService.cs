@@ -98,11 +98,22 @@ internal sealed class UpdateService
             if (!UpdateVerifier.IsAcceptable(manifest, PublicKey, CurrentVersion(), out var policyError))
             {
                 _log.Info($"update check refused: {policyError}");
+
+                // A published release that is not newer is the normal "nothing to do" case,
+                // not an error; the verifier's wording is for the log, not the settings UI.
+                if (Version.TryParse(manifest.Version, out var published)
+                    && CurrentVersion() >= published)
+                {
+                    return new UpdateCheckResult(
+                        false,
+                        "You are using the latest version.");
+                }
+
                 return new UpdateCheckResult(false, policyError);
             }
 
             _log.Info($"update available: {manifest.Version}");
-            return new UpdateCheckResult(true, $"Chirpdesk {manifest.Version} is available.", manifest);
+            return new UpdateCheckResult(true, "An update is available.", manifest);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
         {
