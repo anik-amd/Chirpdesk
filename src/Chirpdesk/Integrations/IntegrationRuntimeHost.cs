@@ -90,9 +90,12 @@ internal sealed class IntegrationRuntimeHost
     {
         lock (_lock)
         {
+            // Dotted ids are internal RPC the host UI calls directly; they are still declared in
+            // the manifest (so consent can list them) but must not clutter the command bar.
             return _entries.Values
-                .SelectMany(entry => entry.Manifest.Commands.Select(command =>
-                    (entry.PluginId, entry.PluginName, command)))
+                .SelectMany(entry => entry.Manifest.Commands
+                    .Where(command => !command.Id.Contains('.'))
+                    .Select(command => (entry.PluginId, entry.PluginName, command)))
                 .ToList();
         }
     }

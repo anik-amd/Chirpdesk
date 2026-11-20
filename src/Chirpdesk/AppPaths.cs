@@ -14,8 +14,6 @@ public static class AppPaths
 
     public static string ProfilesRoot => Path.Combine(LocalRoot, "profiles");
 
-    /// <summary>Third-party userscripts the user installed. Code, so never bundled or shared.</summary>
-    public static string UserscriptsDirectory => Path.Combine(DataRoot, "userscripts");
 
     /// <summary>Verified installers waiting to be applied. Safe to clear on boot.</summary>
     public static string UpdatesRoot => Path.Combine(DataRoot, "updates");

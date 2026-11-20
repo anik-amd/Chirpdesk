@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -16,6 +17,7 @@ using Chirpdesk.Core.Plugins;
 using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Theming;
 using Chirpdesk.Core.Time;
+using Chirpdesk.Core.Userscripts;
 using Chirpdesk.Definitions;
 using Chirpdesk.Diagnostics;
 using Chirpdesk.Hosting;
@@ -29,7 +31,6 @@ using Chirpdesk.Settings;
 using Chirpdesk.Theming;
 using Chirpdesk.Ui;
 using Chirpdesk.Updates;
-using Chirpdesk.Userscripts;
 using Hardcodet.Wpf.TaskbarNotification;
 
 namespace Chirpdesk;
@@ -48,7 +49,6 @@ public partial class App : Application
     private ServiceCatalog? _catalog;
     private IReadOnlyList<PanelDefinition> _panels = Array.Empty<PanelDefinition>();
     private IReadOnlyList<InstalledPlugin> _installedPlugins = Array.Empty<InstalledPlugin>();
-    private UserscriptService? _userscripts;
     private IReadOnlyList<FilterPack> _filterPacks = Array.Empty<FilterPack>();
     private IReadOnlyList<ThemePack> _themePacks = Array.Empty<ThemePack>();
     private SettingsPage? _settingsPage;
@@ -90,23 +90,10 @@ public partial class App : Application
             && !options.SelfTest
             && !options.TestToast;
         _log = new FileLog(AppPaths.LogsRoot, "chirpdesk.log");
-        _userscripts = new UserscriptService(_log);
         _updates = new UpdateService(_log);
         _updates.Cleanup();
         _repositories = new RepositoryService(new SettingsStore(AppPaths.SettingsFile, _log), _log);
         _registry = new ServiceRegistry(_log);
-        _userscripts!.Changed += (_, _) =>
-        {
-            if (_registry is null)
-            {
-                return;
-            }
-
-            foreach (var id in _registry.Order)
-            {
-                _ = _registry.Find(id)?.ApplyUserscriptsAsync();
-            }
-        };
         _catalog = PluginCatalog.Load(_log);
         _panels = PluginCatalog.LoadPanels(_log);
         _installedPlugins = PluginCatalog.LoadInstalled(_log);
@@ -506,7 +493,7 @@ public partial class App : Application
             dark,
             filterPacks,
             () => FacebookChatsAreCoveredByMessenger(effective),
-            url => _userscripts?.EnabledFor(url) ?? []);
+            UserscriptsForAsync);
 
         service.ShortcutRequested += OnServiceShortcutRequested;
         service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
@@ -2866,6 +2853,33 @@ public partial class App : Application
             string.Equals(_registry.Find(id)?.DefinitionId, "messenger", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The userscript plugin owns the scripts and their updates; the host only asks which ones
+    /// match a page and injects their bodies.
+    /// </summary>
+    private async Task<IReadOnlyList<InjectedScript>> UserscriptsForAsync(string url)
+    {
+        if (_integrations is null)
+        {
+            return [];
+        }
+
+        try
+        {
+            var result = await _integrations.SendCommandAsync("userscripts", "userscripts.scripts", url);
+            if (!result.Ok || string.IsNullOrWhiteSpace(result.Message))
+            {
+                return [];
+            }
+
+            return JsonSerializer.Deserialize<List<InjectedScript>>(result.Message) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return [];
+        }
+    }
+
     private void UpdateTrayStatus()
     {
         if (_tray is null)
@@ -2981,7 +2995,9 @@ public partial class App : Application
                 ClosePage,
                 _updates ?? new UpdateService(_log),
                 InstallUpdateAsync,
-                _userscripts!);
+                OpenUserscriptsPage,
+                () => OpenPlugins(browse: true),
+                _installedPlugins.Any(plugin => string.Equals(plugin.Id, "userscripts", StringComparison.Ordinal)));
         }
 
         ShowPage(_settingsPage);
@@ -3037,6 +3053,22 @@ public partial class App : Application
 
         _aboutPage ??= new AboutPage(ClosePage);
         ShowPage(_aboutPage);
+    }
+
+    private void OpenUserscriptsPage()
+    {
+        if (_host is null)
+        {
+            return;
+        }
+
+        var page = new UserscriptsPage(
+            (command, argument) => _integrations is null
+                ? Task.FromResult(IntegrationCommandResult.Failure("The Userscripts plugin is not installed."))
+                : _integrations.SendCommandAsync("userscripts", command, argument),
+            ClosePage);
+
+        ShowPage(page);
     }
 
     private void OpenPlugins(bool browse = false)

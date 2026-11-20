@@ -10,7 +10,7 @@ using Chirpdesk.Core.Settings;
 using Chirpdesk.Core.Time;
 using Chirpdesk.Interop;
 using Chirpdesk.Notifications;
-using Chirpdesk.Userscripts;
+using Chirpdesk.Core.Userscripts;
 using Microsoft.Web.WebView2.Wpf;
 
 namespace Chirpdesk.Hosting;
@@ -52,7 +52,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private readonly IToastSink _toast;
     private readonly DateTimeOffset _startedAt;
     private readonly Func<bool>? _suppressTitleFallback;
-    private readonly Func<string, IReadOnlyList<InstalledUserscript>>? _userscripts;
+    private readonly Func<string, Task<IReadOnlyList<InjectedScript>>>? _userscripts;
     private readonly WebView2 _view = new();
     private IReadOnlyList<FilterPack> _filterPacks;
 
@@ -321,7 +321,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         bool darkTheme,
         IReadOnlyList<FilterPack> filterPacks,
         Func<bool>? suppressTitleFallback,
-        Func<string, IReadOnlyList<InstalledUserscript>>? userscripts)
+        Func<string, Task<IReadOnlyList<InjectedScript>>>? userscripts)
     {
         _host = host;
         _instance = instance;
@@ -534,7 +534,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         bool darkTheme,
         IReadOnlyList<FilterPack>? filterPacks = null,
         Func<bool>? suppressTitleFallback = null,
-        Func<string, IReadOnlyList<InstalledUserscript>>? userscripts = null)
+        Func<string, Task<IReadOnlyList<InjectedScript>>>? userscripts = null)
     {
         var runtime = new ServiceRuntime(
             host,
@@ -958,13 +958,15 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             return;
         }
 
-        IReadOnlyList<InstalledUserscript> scripts;
+        IReadOnlyList<InjectedScript> scripts;
         try
         {
-            scripts = _userscripts(core.Source);
+            scripts = await _userscripts(core.Source);
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is InvalidOperationException
+            or System.Runtime.InteropServices.COMException)
         {
+            _log.Warn($"userscripts unavailable for '{_instance.InstanceId}': {ex.GetType().Name}");
             return;
         }
 
@@ -972,12 +974,12 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         {
             try
             {
-                await core.ExecuteScriptAsync(UserscriptService.Wrap(script));
+                await core.ExecuteScriptAsync(UserscriptWrapper.Build(script));
             }
             catch (Exception ex) when (ex is InvalidOperationException
                 or System.Runtime.InteropServices.COMException)
             {
-                _log.Warn($"userscript '{script.Script.Name}' failed for '{_instance.InstanceId}': {ex.GetType().Name}");
+                _log.Warn($"userscript '{script.Name}' failed for '{_instance.InstanceId}': {ex.GetType().Name}");
             }
         }
     }
