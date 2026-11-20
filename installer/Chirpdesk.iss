@@ -58,6 +58,15 @@ Type: filesandordirs; Name: "{app}\plugins\instagram"
 ; Catppuccin was bundled through 0.3.6. Themes live in the registry now, so remove the bundled
 ; copy on upgrade; keeping both would mean two copies of the same theme.
 Type: filesandordirs; Name: "{app}\plugins\catppuccin"
+; 0.3.7 ships no content plugins at all. Remove every previously bundled folder so the installed
+; copy can only come from the signed repository.
+Type: filesandordirs; Name: "{app}\plugins\whatsapp"
+Type: filesandordirs; Name: "{app}\plugins\telegram"
+Type: filesandordirs; Name: "{app}\plugins\facebook"
+Type: filesandordirs; Name: "{app}\plugins\messenger"
+Type: filesandordirs; Name: "{app}\plugins\filters-core"
+Type: filesandordirs; Name: "{app}\plugins\page-dark"
+Type: filesandordirs; Name: "{app}\plugins\tool-cleaner"
 
 [Files]
 Source: "..\dist\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

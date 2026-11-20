@@ -28,8 +28,9 @@ The installer checks both and points you at the official download if one is miss
 ## First run
 
 1. Start Chirpdesk. It opens once to teach the tray, the palette and the plugin page.
-2. Open **Plugins & services** and open WhatsApp, Telegram, Messenger or Facebook.
-3. Scan the QR code or sign in in the window that opens. Close the window when you are done.
+2. The installer ships no content. **Plugins & services → Browse** is where you install the chats
+   you use (WhatsApp, Telegram, Messenger, Facebook and the rest), a theme, and the protection pack.
+3. Open an installed chat and scan the QR code or sign in. Close the window when you are done.
 
 After that Chirpdesk lives in the tray. Closing the window keeps chats open in the background. Use **Quit** from the
 tray menu to stop it.
@@ -110,6 +111,8 @@ folder to `dist/`.
   sender or body. They fall back to an unread-count toast; their page lists expose no accessible
   unread or preview hooks to read instead. WhatsApp has the same service-worker path, but its chat
   list is readable, so its toasts carry the message preview.
+- The installer ships no plugins. Chats, themes and filter packs install from Browse; until you do,
+  the rail is empty and nothing is blocked. Your accounts and profiles are untouched either way.
 - Portable builds do not self-update.
 
 ## Docs

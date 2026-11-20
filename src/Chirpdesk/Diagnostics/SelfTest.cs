@@ -198,10 +198,25 @@ internal sealed class SelfTest
 
         try
         {
-            var bundledRoot = new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true);
+            // The installer ships no plugins, so the check builds its own fixtures: a well-formed
+            // root, a broken one, and a shadow that overrides an id from the first root.
+            var goodRoot = Path.Combine(temp, "good-root");
+            foreach (var id in new[] { "whatsapp", "messenger" })
+            {
+                var folder = Path.Combine(goodRoot, id);
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, "plugin.json"), $$"""
+                    { "id": "{{id}}", "kind": "service", "name": "{{id}}", "version": "1.0.0", "apiVersion": 1 }
+                    """);
+                File.WriteAllText(Path.Combine(folder, "service.json"), $$"""
+                    { "url": "https://{{id}}.example/" }
+                    """);
+            }
+
+            var bundledRoot = new PluginScanRoot(goodRoot, Bundled: true);
             var bundled = PluginLoader.LoadServiceDefinitions([bundledRoot], _log);
-            string[] expected = ["whatsapp", "messenger", "telegram", "facebook"];
-            var present = expected.All(id => bundled.Definitions.Any(definition => definition.Id == id));
+            var present = bundled.Definitions.Count == 2
+                && bundled.Definitions.All(definition => definition.Url.StartsWith("https://", StringComparison.Ordinal));
             var clean = bundled.Errors.Count == 0;
 
             var bad = Path.Combine(temp, "bad-root", "bad");
@@ -234,7 +249,7 @@ internal sealed class SelfTest
             Check(
                 "definitions",
                 present && clean && skipped.Errors.Count == 1 && skipped.Definitions.Count == 0 && shadowWorks,
-                $"bundled={bundled.Definitions.Count} skipped=1 shadowed=whatsapp");
+                $"loaded={bundled.Definitions.Count} skipped=1 shadowed=whatsapp");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
@@ -248,9 +263,15 @@ internal sealed class SelfTest
 
     private void CheckBlocking()
     {
-        var packs = PluginCatalog.LoadFilters(_log);
-        var bundled = packs.Where(pack => pack.Id == "filters-core").ToList();
-        var matcher = new RequestMatcher("https://web.whatsapp.com/", bundled);
+        // Self-contained: the installer ships no filter pack, so the check builds the rules it
+        // needs. The same matcher then sees an allowlist hit, a blocked host and a cosmetic rule.
+        var fixture = new FilterPack
+        {
+            Id = "selftest",
+            BlockHosts = ["*.doubleclick.net"],
+            Cosmetic = ["[data-testid='ad-banner']"],
+        };
+        var matcher = new RequestMatcher("https://web.whatsapp.com/", [fixture]);
 
         var allowlist = matcher.Evaluate("https://web.whatsapp.com/ws") == RequestVerdict.Allow
             && matcher.Evaluate("https://example.org/oauth/callback") == RequestVerdict.Allow;
@@ -265,8 +286,8 @@ internal sealed class SelfTest
 
         Check(
             "blocking",
-            allowlist && blocks && cosmetic && failOpen && bundled.Count == 1,
-            $"allowlist={allowlist} blocks={blocks} cosmetic={cosmetic} fail-open={failOpen} packs={bundled.Count}");
+            allowlist && blocks && cosmetic && failOpen,
+            $"allowlist={allowlist} blocks={blocks} cosmetic={cosmetic} fail-open={failOpen} packs=fixture");
     }
 
     private void CheckCatalog()

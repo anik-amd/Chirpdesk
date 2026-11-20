@@ -119,6 +119,13 @@ public partial class PluginsPage : UserControl
     /// <summary>Called by the runtime when a helper changes state while the page is open.</summary>
     public void RefreshIntegrationStatus() => Reload();
 
+    /// <summary>First run lands on Browse: with no bundled plugins, that is the useful tab.</summary>
+    public void ShowBrowse()
+    {
+        BrowseTabButton.IsChecked = true;
+        OnShowBrowse(this, new RoutedEventArgs());
+    }
+
     private void OnShowInstalled(object sender, RoutedEventArgs e)
     {
         if (InstalledTab is null || BrowseTab is null)

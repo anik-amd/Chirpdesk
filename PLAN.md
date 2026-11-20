@@ -765,7 +765,9 @@ Decided:
 - Stack **WPF + WebView2**; evaluate-and-reject recorded in §4.
 - One Command Bar for navigation, commands and theme switching.
 - **Plugin-shaped architecture**: shipped service **definitions**, themes (with dark+light variants), filter packs and bundled tool panels are plugins with one manifest; data-only in v1; code only out-of-process, phase 7. **A site exists only as a service plugin; running it is an instance in `settings.json` (ADR 0011).**
-- **Shell first**: v1 ships the loader, Command Bar, host, notifications and storage primitives, with a minimal bundled catalogue; the rest of the catalogue lands as plugins.
+- **Shell first, no bundled content**: the installer ships the loader, Command Bar, host, notifications,
+  storage primitives and the disk cleaner. Chats, themes and filter packs install from the signed
+  registry (ADR 0017).
 - **Visibility is user-requested**: one window, hidden at boot, shown on tray/Command Bar/toast, never shown to fix a lifecycle problem.
 - **Global summon hotkey deferred**; tray left-click is the entry while hidden.
 - Adblock packs ship as `filter` plugins, maintained in the repo's `plugins/` + `registry/`, installable from the official repo or any user-added repo.

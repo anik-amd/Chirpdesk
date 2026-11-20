@@ -35,15 +35,6 @@ namespace Chirpdesk;
 
 public partial class App : Application
 {
-    /// <summary>The phase-0 gate service. Phase 1 replaces this with shipped definitions.</summary>
-    private static readonly ServiceInstance WhatsAppSeed = new()
-    {
-        InstanceId = "whatsapp",
-        Name = "WhatsApp",
-        Url = "https://web.whatsapp.com/",
-        WarmAtBoot = true,
-    };
-
     private FileLog? _log;
     private bool _pluginUpdateSyncRunning;
     private SingleInstance? _singleInstance;
@@ -443,7 +434,7 @@ public partial class App : Application
         {
             var store = new SettingsStore(AppPaths.SettingsFile, _log!);
             var settings = store.Load();
-            var instance = ResolveInstance(settings, requestedId, store);
+            var instance = ResolveInstance(settings, requestedId);
 
             if (instance is null)
             {
@@ -725,22 +716,10 @@ public partial class App : Application
         await ActivateServiceAsync(instanceId);
     }
 
-    private static ServiceInstance? ResolveInstance(AppSettings settings, string requestedId, SettingsStore store)
-    {
-        var match = string.IsNullOrEmpty(requestedId)
+    private static ServiceInstance? ResolveInstance(AppSettings settings, string requestedId) =>
+        string.IsNullOrEmpty(requestedId)
             ? settings.Services.OrderBy(s => s.Order).FirstOrDefault()
             : settings.Services.FirstOrDefault(s => string.Equals(s.InstanceId, requestedId, StringComparison.OrdinalIgnoreCase));
-
-        if (match is not null || (!string.IsNullOrEmpty(requestedId) && !requestedId.Equals("whatsapp", StringComparison.OrdinalIgnoreCase)))
-        {
-            return match;
-        }
-
-        // The phase-0 gate needs exactly one real service; create it once, on request.
-        settings.Services.Add(WhatsAppSeed);
-        store.Save(settings);
-        return WhatsAppSeed;
-    }
 
     /// <summary>Raised by a second launch (a toast click or the shortcut) on the listener thread.</summary>
     private void OnShowRequested(object? sender, EventArgs e)
@@ -2911,7 +2890,7 @@ public partial class App : Application
             () =>
             {
                 CompleteFirstRun();
-                OpenPlugins();
+                OpenPlugins(browse: true);
             },
             DismissOnboarding);
 
@@ -3028,7 +3007,7 @@ public partial class App : Application
 
         if (_host?.IsPageOpen == true)
         {
-            Dispatcher.BeginInvoke(new Action(OpenPlugins));
+            Dispatcher.BeginInvoke(new Action(() => OpenPlugins()));
         }
     }
 
@@ -3043,7 +3022,7 @@ public partial class App : Application
         ShowPage(_aboutPage);
     }
 
-    private void OpenPlugins()
+    private void OpenPlugins(bool browse = false)
     {
         if (_host is null || _registry is null || _log is null || _catalog is null)
         {
@@ -3078,6 +3057,11 @@ public partial class App : Application
 
         ShowPage(_pluginsPage);
         _pluginsPage.Reload();
+
+        if (browse)
+        {
+            _pluginsPage.ShowBrowse();
+        }
     }
 
     private void ShowPage(FrameworkElement page)

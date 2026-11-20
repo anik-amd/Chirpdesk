@@ -107,8 +107,17 @@ try {
     $before = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
         Where-Object { $_.CommandLine -like '*Chirpdesk*' }).Count
 
-    $soak = Start-Process -FilePath $exe -ArgumentList '--open=whatsapp', '--hidden', '--quit-after=25' -PassThru -Wait
-    Write-Check 'warm-service-quit' ($soak.ExitCode -eq 0) "exit $($soak.ExitCode)"
+    $settingsFile = Join-Path $env:APPDATA 'Chirpdesk\settings.json'
+    $openService = 'whatsapp'
+    try {
+        $installed = Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json
+        if ($installed.services -and $installed.services.Count -gt 0) {
+            $openService = $installed.services[0].instanceId
+        }
+    } catch { }
+
+    $soak = Start-Process -FilePath $exe -ArgumentList "--open=$openService", '--hidden', '--quit-after=25' -PassThru -Wait
+    Write-Check 'warm-service-quit' ($soak.ExitCode -eq 0) "exit $($soak.ExitCode) ($openService)"
 
     Start-Sleep -Seconds 3
     $after = @(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |

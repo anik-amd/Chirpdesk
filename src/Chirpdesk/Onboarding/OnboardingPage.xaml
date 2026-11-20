@@ -53,11 +53,11 @@
                                        VerticalAlignment="Center" />
                         </Border>
                         <StackPanel Grid.Column="1" Margin="14,0,0,0">
-                            <TextBlock Text="Pick a chat"
+                            <TextBlock Text="Install a chat"
                                        FontSize="14"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource CdText}" />
-                            <TextBlock Text="Open Plugins &amp; services and activate WhatsApp, Telegram or Messenger. Add another account whenever you need a second login."
+                            <TextBlock Text="Open Plugins &amp; services, browse the signed repository and install the chats you use. Each installed chat gets its own account list."
                                        Style="{StaticResource MutedText}"
                                        TextWrapping="Wrap"
                                        Margin="0,2,0,0" />

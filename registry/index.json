@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "Chirpdesk Official",
-  "generated": "2026-11-20T13:29:40.1407533+00:00",
+  "generated": "2026-11-20T14:27:05.5047249+00:00",
   "keyFingerprint": "ecdsa-p256:569dd2be908bd358",
   "plugins": [
     {
@@ -51,6 +51,32 @@
       "size": 553,
       "url": "plugins/element-1.2.0.zip",
       "permissions": []
+    },
+    {
+      "id": "facebook",
+      "kind": "service",
+      "name": "Facebook",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "526fdc326160ef3c9af8ed8d6e324c417590fb740b2ea24b00505844536cdf16",
+      "size": 523,
+      "url": "plugins/facebook-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "filters-core",
+      "kind": "filter",
+      "name": "Ad and tracker blocking",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "9061f5a0322372f903ee58cd7b14fd85c0448bb9968d9eec34a25223fef6ee0a",
+      "size": 860,
+      "url": "plugins/filters-core-1.0.0.zip",
+      "permissions": [
+        "filters"
+      ]
     },
     {
       "id": "filters-extra",
@@ -103,6 +129,30 @@
       "permissions": []
     },
     {
+      "id": "messenger",
+      "kind": "service",
+      "name": "Messenger",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "cfd540c8febf80aedc55cad19ec1a5f0d55bd5f53775c56d928ed66f0cde6058",
+      "size": 525,
+      "url": "plugins/messenger-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "page-dark",
+      "kind": "theme",
+      "name": "Page dark mode",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "a436542be3909f329b1f46dcdffd62985285e3f70b3cc825bdb893b6b97dab55",
+      "size": 330,
+      "url": "plugins/page-dark-1.0.0.zip",
+      "permissions": []
+    },
+    {
       "id": "reddit",
       "kind": "service",
       "name": "Reddit",
@@ -112,6 +162,30 @@
       "sha256": "814a5f6b789344c48aa3119870d03d63b1712157b89c76c3cf8db18b458f5219",
       "size": 547,
       "url": "plugins/reddit-1.0.1.zip",
+      "permissions": []
+    },
+    {
+      "id": "telegram",
+      "kind": "service",
+      "name": "Telegram",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "e4d4fff0d833e417cabb1361e963a0745a14b479dcc544201112313ff66df855",
+      "size": 526,
+      "url": "plugins/telegram-1.0.0.zip",
+      "permissions": []
+    },
+    {
+      "id": "whatsapp",
+      "kind": "service",
+      "name": "WhatsApp",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "minAppVersion": "0.1.0",
+      "sha256": "bc8722ad94879abd690f4b59962aa4d1e948f72a28cabc79de7bd881e32cbc1a",
+      "size": 545,
+      "url": "plugins/whatsapp-1.0.0.zip",
       "permissions": []
     }
   ]

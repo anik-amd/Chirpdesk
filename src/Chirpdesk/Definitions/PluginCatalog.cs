@@ -7,8 +7,8 @@ using Chirpdesk.Core.Theming;
 namespace Chirpdesk.Definitions;
 
 /// <summary>
-/// Builds the catalogue from plugin folders: bundled first, then user-installed. A user plugin
-/// shadows a bundled one with the same id; one broken folder is logged and skipped.
+/// Builds the catalogue from plugin folders: the signed repository installs into the user folder,
+/// and nothing is bundled any more. The disk cleaner is a shell feature, not a plugin.
 /// </summary>
 internal static class PluginCatalog
 {
@@ -27,10 +27,67 @@ internal static class PluginCatalog
         return new ServiceCatalog(result.Definitions);
     }
 
-    public static IReadOnlyList<PanelDefinition> LoadPanels(ILog log) =>
-        PluginLoader.LoadPanels(
+    public static IReadOnlyList<PanelDefinition> LoadPanels(ILog log)
+    {
+        var panels = PluginLoader.LoadPanels(
             [new PluginScanRoot(AppPaths.BundledPluginsDirectory, Bundled: true)],
-            log);
+            log).ToList();
+
+        if (!panels.Any(panel => string.Equals(panel.Id, DiskCleanerId, StringComparison.Ordinal)))
+        {
+            panels.Insert(0, DiskCleanerPanel());
+        }
+
+        return panels;
+    }
+
+    private const string DiskCleanerId = "tool-cleaner";
+
+    /// <summary>
+    /// Disk cleaning is part of the shell. It used to be a bundled tool plugin, but the installer
+    /// no longer ships content; the panel only names host primitives that the host validates.
+    /// </summary>
+    private static PanelDefinition DiskCleanerPanel() => new()
+    {
+        Id = DiskCleanerId,
+        Title = "Disk cleaner",
+        Subtitle = "Reclaim cache space. Sessions are never touched.",
+        Sections =
+        [
+            new PanelSection
+            {
+                Type = "text",
+                Id = "note",
+                Text = "Cookies, Local Storage, IndexedDB and Service Worker are the session and are never trimmed.",
+            },
+        ],
+        Actions =
+        [
+            new PanelAction
+            {
+                Id = "trim",
+                Label = "Trim caches",
+                Primitive = "trimCache",
+                Style = "primary",
+                Args = new PanelActionArgs { BudgetMb = 60, Targets = "all" },
+            },
+            new PanelAction
+            {
+                Id = "scan",
+                Label = "Scan for leftovers",
+                Primitive = "scanOrphans",
+                Style = "secondary",
+            },
+            new PanelAction
+            {
+                Id = "reveal",
+                Label = "Open profile folder",
+                Primitive = "revealFolder",
+                Style = "ghost",
+                Args = new PanelActionArgs { Root = "profiles" },
+            },
+        ],
+    };
 
     public static IReadOnlyList<InstalledPlugin> LoadInstalled(ILog log) =>
         PluginLoader.LoadInstalledPlugins(
