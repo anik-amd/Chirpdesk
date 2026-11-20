@@ -498,7 +498,8 @@ public partial class App : Application
                 _log!),
             DateTimeOffset.UtcNow,
             dark,
-            filterPacks);
+            filterPacks,
+            () => FacebookChatsAreCoveredByMessenger(effective));
 
         service.ShortcutRequested += OnServiceShortcutRequested;
         service.NavigationStateChanged += (_, _) => UpdateBusyFor(_registry?.Active);
@@ -2851,6 +2852,23 @@ public partial class App : Application
         {
             _log?.Warn($"could not refresh the service rail: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Facebook and Messenger report the same conversations, and Facebook's unread title is
+    /// generic. When a Messenger tab is open its toast is the useful one, so skip Facebook's
+    /// title fallback to avoid two toasts for one message.
+    /// </summary>
+    private bool FacebookChatsAreCoveredByMessenger(ServiceInstance instance)
+    {
+        if (!string.Equals(instance.DefinitionId, "facebook", StringComparison.Ordinal)
+            || _registry is null)
+        {
+            return false;
+        }
+
+        return _registry.Order.Any(id =>
+            string.Equals(_registry.Find(id)?.DefinitionId, "messenger", StringComparison.Ordinal));
     }
 
     private void UpdateTrayStatus()

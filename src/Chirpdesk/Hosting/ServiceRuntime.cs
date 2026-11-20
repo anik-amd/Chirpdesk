@@ -50,6 +50,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
     private readonly IClock _clock;
     private readonly IToastSink _toast;
     private readonly DateTimeOffset _startedAt;
+    private readonly Func<bool>? _suppressTitleFallback;
     private readonly WebView2 _view = new();
     private IReadOnlyList<FilterPack> _filterPacks;
 
@@ -316,7 +317,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         IToastSink toast,
         DateTimeOffset startedAt,
         bool darkTheme,
-        IReadOnlyList<FilterPack> filterPacks)
+        IReadOnlyList<FilterPack> filterPacks,
+        Func<bool>? suppressTitleFallback)
     {
         _host = host;
         _instance = instance;
@@ -326,6 +328,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         _startedAt = startedAt;
         _darkTheme = darkTheme;
         _filterPacks = filterPacks;
+        _suppressTitleFallback = suppressTitleFallback;
         _view.MessageHook += OnMessageHook;
     }
 
@@ -525,7 +528,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         IToastSink toast,
         DateTimeOffset startedAt,
         bool darkTheme,
-        IReadOnlyList<FilterPack>? filterPacks = null)
+        IReadOnlyList<FilterPack>? filterPacks = null,
+        Func<bool>? suppressTitleFallback = null)
     {
         var runtime = new ServiceRuntime(
             host,
@@ -535,7 +539,8 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             toast,
             startedAt,
             darkTheme,
-            filterPacks ?? []);
+            filterPacks ?? [],
+            suppressTitleFallback);
         await runtime.InitializeAsync();
         return runtime;
     }
@@ -1032,10 +1037,11 @@ internal sealed class ServiceRuntime : IAsyncDisposable
         {
             // Require a quiet title first: a reconnect restores the backlog in bursts
             // (5, 6, 7 in a few seconds), and only the first increase would be mistaken for a
-            // message. Fifteen quiet seconds is enough to tell a real arrival from the replay.
-            var quietEnough = TimeSpan.FromSeconds(15);
+            // message. The policy also asks the gate instead of reading IsOpen: a service that
+            // never sends a page notification has nothing else to flip it open.
+            var gateOpen = !(_gate?.ShouldSuppress() ?? true);
 
-            if ((_gate?.IsOpen ?? false) && quietFor >= quietEnough)
+            if (TitleFallbackPolicy.ShouldStart(gateOpen, quietFor, _suppressTitleFallback?.Invoke() ?? false))
             {
                 _ = ShowTitleOnlyFallbackAsync();
             }
@@ -1070,6 +1076,7 @@ internal sealed class ServiceRuntime : IAsyncDisposable
             || UnreadCount <= 0
             || (_bridge?.Shown ?? 0) != shownBefore
             || (_gate?.ShouldSuppress() ?? true)
+            || (_suppressTitleFallback?.Invoke() ?? false)
             || _fallbackDedupe is null
             || !_fallbackDedupe.ShouldShow("title-only", _instance.InstanceId, string.Empty))
         {
